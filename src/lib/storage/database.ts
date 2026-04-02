@@ -3,7 +3,7 @@
  * SQLite based persistence for agents, tasks, and credits
  */
 
-import Database from 'better-sqlite3';
+import BetterSqlite3 from 'better-sqlite3';
 import { join } from 'path';
 import { existsSync, mkdirSync } from 'fs';
 
@@ -13,7 +13,7 @@ export interface DatabaseConfig {
 }
 
 export class Database {
-  private db: Database.Database;
+  private db: BetterSqlite3.Database;
 
   constructor(config: DatabaseConfig = {}) {
     const { path = join(process.cwd(), 'data', 'bounty.db'), memory = false } = config;
@@ -26,7 +26,7 @@ export class Database {
       }
     }
 
-    this.db = memory ? new Database.Database(':memory:') : new Database.Database(path);
+    this.db = memory ? new BetterSqlite3(':memory:') : new BetterSqlite3(path);
     this.db.pragma('journal_mode = WAL');
     this.initialize();
   }
@@ -143,7 +143,7 @@ export class Database {
     `);
   }
 
-  getDatabase(): Database.Database {
+  getDatabase(): BetterSqlite3.Database {
     return this.db;
   }
 
@@ -152,4 +152,5 @@ export class Database {
   }
 }
 
-export { Database as SQLiteDatabase };
+// Re-export for backwards compatibility
+export type { Database as SQLiteDatabase };

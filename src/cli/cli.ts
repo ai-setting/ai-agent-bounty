@@ -1,0 +1,54 @@
+/**
+ * @fileoverview Bounty CLI Main Entry
+ * 继承 roy-agent CLI 命令并扩展 bounty 特有命令
+ */
+
+import yargs from 'yargs';
+import { hideBin } from 'yargs/helpers';
+import { createContext } from './services/context.js';
+import chalk from 'chalk';
+import { readFileSync } from 'fs';
+import { join } from 'path';
+
+// TODO: 从 roy-agent-cli 导入继承的命令
+// import { ActCommand, InteractiveCommand, SessionsCommand, TasksCommand } from '@gddzhaokun/roy-agent-cli';
+
+/**
+ * Get package.json version
+ */
+function getVersion(): string {
+  try {
+    // package.json is in project root, go up one level from src/cli/
+    const pkgPath = join(process.cwd(), 'package.json');
+    const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8'));
+    return pkg.version;
+  } catch {
+    return '0.1.0';
+  }
+}
+
+export async function runBountyCli(): Promise<void> {
+  const version = getVersion();
+
+  await yargs(hideBin(process.argv))
+    .scriptName('bounty')
+    .version(version)
+    .usage('$0 <command> [options]')
+    .describe('h', 'show help')
+    .alias('h', 'help')
+
+    // TODO: 继承 roy-agent 命令
+    // .command(ActCommand)
+    // .command(InteractiveCommand)
+    // .command(SessionsCommand)
+    // .command(TasksCommand)
+
+    // TODO: 添加 bounty 特有命令
+    // .command(AgentCommands)
+    // .command(BountyCommands)
+    // .command(ComCommands)
+
+    .demandCommand(1, 'See --help for available commands')
+    .strict()
+    .parse();
+}
