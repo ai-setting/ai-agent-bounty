@@ -13,6 +13,9 @@ import { join } from 'path';
 // TODO: 从 roy-agent-cli 导入继承的命令
 // import { ActCommand, InteractiveCommand, SessionsCommand, TasksCommand } from '@gddzhaokun/roy-agent-cli';
 
+// 导入 bounty 特有命令
+import { agentCommands } from './commands/agent/index.js';
+
 /**
  * Get package.json version
  */
@@ -43,8 +46,10 @@ export async function runBountyCli(): Promise<void> {
     // .command(SessionsCommand)
     // .command(TasksCommand)
 
-    // TODO: 添加 bounty 特有命令
-    // .command(AgentCommands)
+    // 添加 bounty 特有命令
+    .command(agentCommands)
+
+    // TODO: 其他命令
     // .command(BountyCommands)
     // .command(ComCommands)
 

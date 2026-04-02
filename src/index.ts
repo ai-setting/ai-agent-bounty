@@ -25,5 +25,5 @@ export {
   type MailConfig 
 } from './lib/mail/index.js';
 
-// Tools exports
-export { createBountyTools, type ToolsContext } from './tools/index.js';
+// CLI exports
+export { runBountyCli, createContext, createMemoryContext, type BountyContext } from './cli/index.js';

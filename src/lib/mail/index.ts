@@ -247,7 +247,14 @@ export class MailService {
     }
 
     return new Promise((resolve, reject) => {
-      const imap = new Imap(this.config.imap!);
+      const imapConfig = this.config.imap!;
+      const imap = new Imap({
+        user: imapConfig.auth.user,
+        password: imapConfig.auth.pass,
+        host: imapConfig.host,
+        port: imapConfig.port,
+        tls: imapConfig.tls
+      });
       const messages: Message[] = [];
 
       const openInbox = (cb: (err: any, box: any) => void) => {

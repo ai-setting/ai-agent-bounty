@@ -1,22 +1,53 @@
 /**
  * Database storage for ai-agent-bounty
- * SQLite based persistence for agents, tasks, and credits
+ * SQLite based persistence using Bun's built-in bun:sqlite module
  */
 
-import BetterSqlite3 from 'better-sqlite3';
-import { join } from 'path';
-import { existsSync, mkdirSync } from 'fs';
+import { join } from "path";
+import { existsSync, mkdirSync } from "fs";
 
 export interface DatabaseConfig {
   path?: string;
   memory?: boolean;
 }
 
+// Use Bun's built-in sqlite
+import { Database as BunDatabase } from "bun:sqlite";
+
+/**
+ * Prepared statement wrapper for bun:sqlite
+ * Mimics better-sqlite3's PreparedStatement interface
+ */
+class PreparedStatement {
+  private db: any;
+  private sql: string;
+
+  constructor(db: any, sql: string) {
+    this.db = db;
+    this.sql = sql;
+  }
+
+  get(...params: any[]): any {
+    return this.db.prepare(this.sql).get(...params);
+  }
+
+  all(...params: any[]): any[] {
+    return this.db.prepare(this.sql).all(...params);
+  }
+
+  run(...params: any[]): any {
+    return this.db.prepare(this.sql).run(...params);
+  }
+}
+
 export class Database {
-  private db: BetterSqlite3.Database;
+  private db: any;
 
   constructor(config: DatabaseConfig = {}) {
-    const { path = join(process.cwd(), 'data', 'bounty.db'), memory = false } = config;
+    const { 
+      path = join(process.cwd(), 'data', 'bounty.db'), 
+      memory = false 
+    } = config;
 
     // Ensure data directory exists
     if (!memory) {
@@ -26,14 +57,14 @@ export class Database {
       }
     }
 
-    this.db = memory ? new BetterSqlite3(':memory:') : new BetterSqlite3(path);
-    this.db.pragma('journal_mode = WAL');
+    const dbPath = memory ? ":memory:" : path;
+    this.db = new BunDatabase(dbPath);
     this.initialize();
   }
 
   private initialize(): void {
     // Create agents table
-    this.db.exec(`
+    this.db.run(`
       CREATE TABLE IF NOT EXISTS agents (
         id TEXT PRIMARY KEY,
         name TEXT NOT NULL,
@@ -48,7 +79,7 @@ export class Database {
     `);
 
     // Create tasks table
-    this.db.exec(`
+    this.db.run(`
       CREATE TABLE IF NOT EXISTS tasks (
         id TEXT PRIMARY KEY,
         title TEXT NOT NULL,
@@ -73,7 +104,7 @@ export class Database {
     `);
 
     // Create escrow table (积分托管)
-    this.db.exec(`
+    this.db.run(`
       CREATE TABLE IF NOT EXISTS escrows (
         id TEXT PRIMARY KEY,
         task_id TEXT NOT NULL,
@@ -91,7 +122,7 @@ export class Database {
     `);
 
     // Create mail_addresses table
-    this.db.exec(`
+    this.db.run(`
       CREATE TABLE IF NOT EXISTS mail_addresses (
         id TEXT PRIMARY KEY,
         agent_id TEXT NOT NULL,
@@ -104,7 +135,7 @@ export class Database {
     `);
 
     // Create messages table
-    this.db.exec(`
+    this.db.run(`
       CREATE TABLE IF NOT EXISTS messages (
         id TEXT PRIMARY KEY,
         from_address TEXT NOT NULL,
@@ -118,7 +149,7 @@ export class Database {
     `);
 
     // Create credit_transactions table
-    this.db.exec(`
+    this.db.run(`
       CREATE TABLE IF NOT EXISTS credit_transactions (
         id TEXT PRIMARY KEY,
         agent_id TEXT NOT NULL,
@@ -133,17 +164,33 @@ export class Database {
     `);
 
     // Create indexes
-    this.db.exec(`
-      CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
-      CREATE INDEX IF NOT EXISTS idx_tasks_publisher ON tasks(publisher_id);
-      CREATE INDEX IF NOT EXISTS idx_tasks_assignee ON tasks(assignee_id);
-      CREATE INDEX IF NOT EXISTS idx_messages_to ON messages(to_address);
-      CREATE INDEX IF NOT EXISTS idx_escrows_task ON escrows(task_id);
-      CREATE INDEX IF NOT EXISTS idx_credit_transactions_agent ON credit_transactions(agent_id);
-    `);
+    this.db.run(`CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status)`);
+    this.db.run(`CREATE INDEX IF NOT EXISTS idx_tasks_publisher ON tasks(publisher_id)`);
+    this.db.run(`CREATE INDEX IF NOT EXISTS idx_tasks_assignee ON tasks(assignee_id)`);
+    this.db.run(`CREATE INDEX IF NOT EXISTS idx_messages_to ON messages(to_address)`);
+    this.db.run(`CREATE INDEX IF NOT EXISTS idx_escrows_task ON escrows(task_id)`);
+    this.db.run(`CREATE INDEX IF NOT EXISTS idx_credit_transactions_agent ON credit_transactions(agent_id)`);
   }
 
-  getDatabase(): BetterSqlite3.Database {
+  /**
+   * Prepare a SQL statement
+   * Returns a PreparedStatement with get(), all(), run() methods
+   */
+  prepare(sql: string): PreparedStatement {
+    return new PreparedStatement(this.db, sql);
+  }
+
+  /**
+   * Execute raw SQL without parameters
+   */
+  exec(sql: string): void {
+    this.db.exec(sql);
+  }
+
+  /**
+   * Get the underlying database instance
+   */
+  getDatabase(): any {
     return this.db;
   }
 
