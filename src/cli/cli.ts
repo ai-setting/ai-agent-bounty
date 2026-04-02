@@ -10,8 +10,8 @@ import chalk from 'chalk';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 
-// TODO: 从 roy-agent-cli 导入继承的命令
-// import { ActCommand, InteractiveCommand, SessionsCommand, TasksCommand } from '@gddzhaokun/roy-agent-cli';
+// 从 roy-agent-cli 导入命令
+import { ActCommand } from '@gddzhaokun/roy-agent-cli';
 
 // 导入 bounty 特有命令
 import { agentCommands } from './commands/agent/index.js';
@@ -42,11 +42,8 @@ export async function runBountyCli(): Promise<void> {
     .describe('h', 'show help')
     .alias('h', 'help')
 
-    // TODO: 继承 roy-agent 命令
-    // .command(ActCommand)
-    // .command(InteractiveCommand)
-    // .command(SessionsCommand)
-    // .command(TasksCommand)
+    // 继承 roy-agent 命令
+    .command(ActCommand)
 
     // 添加 bounty 特有命令
     .command(agentCommands)
