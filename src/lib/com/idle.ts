@@ -96,7 +96,8 @@ export class IdleService {
     if (!this.imap || !this.running) return;
 
     try {
-      this.imap.idle((err: Error | null) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (this.imap as any).idle((err: Error | null) => {
         if (err) {
           console.error("[IdleService] IDLE error:", err.message);
           this.scheduleReconnect(config, onNewMail);
@@ -121,7 +122,8 @@ export class IdleService {
 
     try {
       const box = await new Promise<any>((resolve, reject) => {
-        this.imap!.getBox((err: Error | null, data: any) => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (this.imap as any).getBox((err: Error | null, data: any) => {
           if (err) reject(err);
           else resolve(data);
         });

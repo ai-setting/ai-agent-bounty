@@ -41,7 +41,7 @@ class PreparedStatement {
 }
 
 export class Database {
-  private db: any;
+  private db: BunDatabase;
 
   constructor(config: DatabaseConfig = {}) {
     const { 
@@ -103,6 +103,13 @@ export class Database {
       )
     `);
 
+    // Create indexes for tasks table (performance optimization)
+    this.db.run(`CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status)`);
+    this.db.run(`CREATE INDEX IF NOT EXISTS idx_tasks_created_at ON tasks(created_at DESC)`);
+    this.db.run(`CREATE INDEX IF NOT EXISTS idx_tasks_publisher_id ON tasks(publisher_id)`);
+    this.db.run(`CREATE INDEX IF NOT EXISTS idx_tasks_assignee_id ON tasks(assignee_id)`);
+    this.db.run(`CREATE INDEX IF NOT EXISTS idx_tasks_status_created ON tasks(status, created_at DESC)`);
+
     // Create escrow table (积分托管)
     this.db.run(`
       CREATE TABLE IF NOT EXISTS escrows (
@@ -120,6 +127,12 @@ export class Database {
         FOREIGN KEY (provider_id) REFERENCES agents(id)
       )
     `);
+
+    // Create indexes for escrows table
+    this.db.run(`CREATE INDEX IF NOT EXISTS idx_escrows_task_id ON escrows(task_id)`);
+    this.db.run(`CREATE INDEX IF NOT EXISTS idx_escrows_status ON escrows(status)`);
+    this.db.run(`CREATE INDEX IF NOT EXISTS idx_escrows_issuer_id ON escrows(issuer_id)`);
+    this.db.run(`CREATE INDEX IF NOT EXISTS idx_escrows_provider_id ON escrows(provider_id)`);
 
     // Create mail_addresses table
     this.db.run(`
@@ -230,6 +243,23 @@ export class Database {
    */
   getDatabase(): any {
     return this.db;
+  }
+
+  /**
+   * Execute a transaction
+   * Wraps the callback in BEGIN/COMMIT with error handling
+   */
+  transaction<T>(callback: () => T): T {
+    // Manually handle transaction for compatibility
+    this.db.exec('BEGIN IMMEDIATE');
+    try {
+      const result = callback();
+      this.db.exec('COMMIT');
+      return result;
+    } catch (error) {
+      this.db.exec('ROLLBACK');
+      throw error;
+    }
   }
 
   close(): void {

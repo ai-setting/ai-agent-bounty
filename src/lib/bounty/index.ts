@@ -7,7 +7,25 @@ import { v4 as uuidv4 } from 'uuid';
 import { Database } from '../storage/database.js';
 import { AgentService } from '../agent/index.js';
 
-export type TaskStatus = 'open' | 'grabbed' | 'submitted' | 'completed' | 'cancelled' | 'disputed';
+// Task status constants
+export const TaskStatus = {
+  OPEN: 'open',
+  GRABBED: 'grabbed',
+  SUBMITTED: 'submitted',
+  COMPLETED: 'completed',
+  CANCELLED: 'cancelled',
+  DISPUTED: 'disputed',
+} as const;
+
+export type TaskStatus = typeof TaskStatus[keyof typeof TaskStatus];
+
+// Escrow status constants
+export const EscrowStatus = {
+  LOCKED: 'locked',
+  RELEASED: 'released',
+  CANCELLED: 'cancelled',
+  DISPUTED: 'disputed',
+} as const;
 
 export interface Task {
   id: string;
@@ -62,6 +80,21 @@ export interface CompleteResult {
   reason?: string;
 }
 
+/**
+ * Helper function to execute a transaction on a raw SQLite database
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function runTransaction(db: any, callback: () => void): void {
+  db.exec('BEGIN IMMEDIATE');
+  try {
+    callback();
+    db.exec('COMMIT');
+  } catch (err) {
+    db.exec('ROLLBACK');
+    throw err;
+  }
+}
+
 export class BountyService {
   private db: Database;
   private agentService: AgentService;
@@ -72,55 +105,98 @@ export class BountyService {
   }
 
   /**
-   * Publish a new bounty task
+   * Execute a transaction
+   */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  private runInTx(callback: () => void): void {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const rawDb = (this.db as any).db;
+    runTransaction(rawDb, callback);
+  }
+
+  /**
+   * Validate publish input
+   */
+  private validatePublishInput(input: PublishTaskInput): void {
+    if (!input.title || input.title.trim().length === 0) {
+      throw new Error('Title is required and cannot be empty');
+    }
+    if (input.title.length > 200) {
+      throw new Error('Title must be 200 characters or less');
+    }
+    if (!input.description || input.description.trim().length === 0) {
+      throw new Error('Description is required and cannot be empty');
+    }
+    if (!input.type || input.type.trim().length === 0) {
+      throw new Error('Type is required');
+    }
+    if (typeof input.reward !== 'number' || input.reward <= 0) {
+      throw new Error('Reward must be a positive number');
+    }
+    if (input.reward > 1000000) {
+      throw new Error('Reward exceeds maximum allowed (1,000,000)');
+    }
+    if (!input.publisherId || input.publisherId.trim().length === 0) {
+      throw new Error('Publisher ID is required');
+    }
+    if (!input.publisherEmail || !input.publisherEmail.includes('@')) {
+      throw new Error('Valid publisher email is required');
+    }
+    if (input.deadline && input.deadline <= Date.now()) {
+      throw new Error('Deadline must be in the future');
+    }
+  }
+
+  /**
+   * Publish a new bounty task (with transaction)
    */
   publish(input: PublishTaskInput): Task {
+    // Validate input first
+    this.validatePublishInput(input);
+
     const now = Date.now();
     const id = uuidv4();
     const escrowId = uuidv4();
 
-    // Deduct credits from publisher (创建托管)
-    try {
+    // Use transaction for atomicity
+    this.runInTx(() => {
+      // Deduct credits from publisher (创建托管)
       this.agentService.updateCredits(
-        input.publisherId, 
-        input.reward, 
-        'deduct', 
+        input.publisherId,
+        input.reward,
+        'deduct',
         `Publish task: ${input.title}`
       );
-    } catch (error: any) {
-      throw new Error(`Failed to lock reward: ${error.message}`);
-    }
 
-    // Create task
-    const stmt = this.db.prepare(`
-      INSERT INTO tasks (
-        id, title, description, type, reward, publisher_id, publisher_email,
-        status, tags, requirements, deadline, created_at, updated_at
-      )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `);
+      // Create task
+      this.db.prepare(`
+        INSERT INTO tasks (
+          id, title, description, type, reward, publisher_id, publisher_email,
+          status, tags, requirements, deadline, created_at, updated_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        id,
+        input.title.trim(),
+        input.description.trim(),
+        input.type.trim(),
+        input.reward,
+        input.publisherId,
+        input.publisherEmail,
+        TaskStatus.OPEN,
+        JSON.stringify(input.tags || []),
+        JSON.stringify(input.requirements || []),
+        input.deadline || null,
+        now,
+        now
+      );
 
-    stmt.run(
-      id,
-      input.title,
-      input.description,
-      input.type,
-      input.reward,
-      input.publisherId,
-      input.publisherEmail,
-      'open',
-      JSON.stringify(input.tags || []),
-      JSON.stringify(input.requirements || []),
-      input.deadline || null,
-      now,
-      now
-    );
-
-    // Create escrow
-    this.db.prepare(`
-      INSERT INTO escrows (id, task_id, issuer_id, amount, status, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-    `).run(escrowId, id, input.publisherId, input.reward, 'locked', now, now);
+      // Create escrow
+      this.db.prepare(`
+        INSERT INTO escrows (id, task_id, issuer_id, amount, status, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `).run(escrowId, id, input.publisherId, input.reward, EscrowStatus.LOCKED, now, now);
+    });
 
     return this.getById(id)!;
   }
@@ -179,207 +255,256 @@ export class BountyService {
   }
 
   /**
-   * Grab a task (抢单)
+   * Grab a task (抢单) - with transaction and concurrency safety
    */
   grab(taskId: string, agentId: string, agentEmail: string): GrabResult {
-    const task = this.getById(taskId);
-    if (!task) {
-      return { success: false, reason: 'Task not found' };
-    }
-
-    if (task.status !== 'open') {
-      return { success: false, reason: `Task is not open (current status: ${task.status})` };
-    }
-
-    if (task.publisherId === agentId) {
-      return { success: false, reason: 'Cannot grab your own task' };
+    if (!agentId || !agentEmail) {
+      return { success: false, reason: 'Agent ID and email are required' };
     }
 
     const now = Date.now();
-    
-    // Update task
-    this.db.prepare(`
-      UPDATE tasks SET 
-        status = 'grabbed',
-        assignee_id = ?,
-        assignee_email = ?,
-        updated_at = ?
-      WHERE id = ?
-    `).run(agentId, agentEmail, now, taskId);
 
-    // Update escrow
-    this.db.prepare(`
-      UPDATE escrows SET 
-        provider_id = ?,
-        updated_at = ?
-      WHERE task_id = ? AND status = 'locked'
-    `).run(agentId, now, taskId);
+    // Use transaction with optimistic locking
+    try {
+      let grabbedTaskId: string | null = null;
+      this.runInTx(() => {
+        // Use conditional update to prevent race conditions
+        // Only update if status is still 'open' (乐观锁)
+        const updateResult = this.db.prepare(`
+          UPDATE tasks SET 
+            status = ?,
+            assignee_id = ?,
+            assignee_email = ?,
+            updated_at = ?
+          WHERE id = ? AND status = ?
+        `).run(TaskStatus.GRABBED, agentId, agentEmail, now, taskId, TaskStatus.OPEN);
 
-    return { success: true, escrowId: taskId };
+        if (updateResult.changes === 0) {
+          // Either task doesn't exist or already grabbed
+          const currentTask = this.getById(taskId);
+          if (!currentTask) {
+            throw new Error('Task not found');
+          }
+          throw new Error(`Task is not open (current status: ${currentTask.status})`);
+        }
+
+        // Cannot grab your own task (double check)
+        const task = this.getById(taskId);
+        if (task && task.publisherId === agentId) {
+          throw new Error('Cannot grab your own task');
+        }
+
+        // Update escrow
+        this.db.prepare(`
+          UPDATE escrows SET 
+            provider_id = ?,
+            updated_at = ?
+          WHERE task_id = ? AND status = ?
+        `).run(agentId, now, taskId, EscrowStatus.LOCKED);
+
+        grabbedTaskId = taskId;
+      });
+
+      return { success: true, escrowId: grabbedTaskId! };
+    } catch (error: any) {
+      return { success: false, reason: error.message };
+    }
   }
 
   /**
    * Submit task result (提交完成)
    */
   submit(taskId: string, agentId: string, result: string): CompleteResult {
-    const task = this.getById(taskId);
-    if (!task) {
-      return { success: false, reason: 'Task not found' };
+    if (!result || result.trim().length === 0) {
+      return { success: false, reason: 'Result is required' };
     }
 
-    if (task.status !== 'grabbed') {
-      return { success: false, reason: `Task cannot be submitted (current status: ${task.status})` };
+    try {
+      this.runInTx(() => {
+        const task = this.getById(taskId);
+        if (!task) {
+          throw new Error('Task not found');
+        }
+
+        if (task.status !== TaskStatus.GRABBED) {
+          throw new Error(`Task cannot be submitted (current status: ${task.status})`);
+        }
+
+        if (task.assigneeId !== agentId) {
+          throw new Error('You are not the assignee of this task');
+        }
+
+        const now = Date.now();
+
+        this.db.prepare(`
+          UPDATE tasks SET 
+            status = ?,
+            result = ?,
+            updated_at = ?
+          WHERE id = ?
+        `).run(TaskStatus.SUBMITTED, result.trim(), now, taskId);
+      });
+
+      return { success: true };
+    } catch (error: any) {
+      return { success: false, reason: error.message };
     }
-
-    if (task.assigneeId !== agentId) {
-      return { success: false, reason: 'You are not the assignee of this task' };
-    }
-
-    const now = Date.now();
-    
-    this.db.prepare(`
-      UPDATE tasks SET 
-        status = 'submitted',
-        result = ?,
-        updated_at = ?
-      WHERE id = ?
-    `).run(result, now, taskId);
-
-    return { success: true };
   }
 
   /**
-   * Complete task (验收通过，释放积分)
+   * Complete task (验收通过，释放积分) - with transaction
    */
   complete(taskId: string, publisherId: string): CompleteResult {
-    const task = this.getById(taskId);
-    if (!task) {
-      return { success: false, reason: 'Task not found' };
+    try {
+      this.runInTx(() => {
+        const task = this.getById(taskId);
+        if (!task) {
+          throw new Error('Task not found');
+        }
+
+        if (task.status !== TaskStatus.SUBMITTED) {
+          throw new Error(`Task cannot be completed (current status: ${task.status})`);
+        }
+
+        if (task.publisherId !== publisherId) {
+          throw new Error('Only the publisher can complete the task');
+        }
+
+        const now = Date.now();
+
+        // Update task
+        this.db.prepare(`
+          UPDATE tasks SET 
+            status = ?,
+            completed_at = ?,
+            updated_at = ?
+          WHERE id = ?
+        `).run(TaskStatus.COMPLETED, now, now, taskId);
+
+        // Release escrow to assignee
+        if (task.assigneeId) {
+          this.agentService.updateCredits(
+            task.assigneeId,
+            task.reward,
+            'reward',
+            `Task completed: ${task.title}`
+          );
+        }
+
+        // Update escrow
+        this.db.prepare(`
+          UPDATE escrows SET 
+            status = ?,
+            released_at = ?,
+            updated_at = ?
+          WHERE task_id = ? AND status = ?
+        `).run(EscrowStatus.RELEASED, now, now, taskId, EscrowStatus.LOCKED);
+      });
+
+      return { success: true };
+    } catch (error: any) {
+      return { success: false, reason: error.message };
     }
-
-    if (task.status !== 'submitted') {
-      return { success: false, reason: `Task cannot be completed (current status: ${task.status})` };
-    }
-
-    if (task.publisherId !== publisherId) {
-      return { success: false, reason: 'Only the publisher can complete the task' };
-    }
-
-    const now = Date.now();
-
-    // Update task
-    this.db.prepare(`
-      UPDATE tasks SET 
-        status = 'completed',
-        completed_at = ?,
-        updated_at = ?
-      WHERE id = ?
-    `).run(now, now, taskId);
-
-    // Release escrow to assignee
-    if (task.assigneeId) {
-      this.agentService.updateCredits(
-        task.assigneeId,
-        task.reward,
-        'reward',
-        `Task completed: ${task.title}`
-      );
-    }
-
-    // Update escrow
-    this.db.prepare(`
-      UPDATE escrows SET 
-        status = 'released',
-        released_at = ?,
-        updated_at = ?
-      WHERE task_id = ? AND status = 'locked'
-    `).run(now, now, taskId);
-
-    return { success: true };
   }
 
   /**
-   * Cancel task
+   * Cancel task - with transaction
    */
   cancel(taskId: string, agentId: string): CompleteResult {
-    const task = this.getById(taskId);
-    if (!task) {
-      return { success: false, reason: 'Task not found' };
+    try {
+      this.runInTx(() => {
+        const task = this.getById(taskId);
+        if (!task) {
+          throw new Error('Task not found');
+        }
+
+        if (task.publisherId !== agentId) {
+          throw new Error('Only the publisher can cancel the task');
+        }
+
+        if (task.status === TaskStatus.COMPLETED || task.status === TaskStatus.CANCELLED) {
+          throw new Error(`Task cannot be cancelled (current status: ${task.status})`);
+        }
+
+        const now = Date.now();
+
+        // Update task
+        this.db.prepare(`
+          UPDATE tasks SET 
+            status = ?,
+            updated_at = ?
+          WHERE id = ?
+        `).run(TaskStatus.CANCELLED, now, taskId);
+
+        // Refund escrow to publisher (if no assignee)
+        if (task.status === TaskStatus.OPEN) {
+          this.agentService.updateCredits(
+            task.publisherId,
+            task.reward,
+            'reward',
+            `Task cancelled: ${task.title} - refund`
+          );
+
+          this.db.prepare(`
+            UPDATE escrows SET 
+              status = ?,
+              updated_at = ?
+            WHERE task_id = ? AND status = ?
+          `).run(EscrowStatus.CANCELLED, now, taskId, EscrowStatus.LOCKED);
+        }
+      });
+
+      return { success: true };
+    } catch (error: any) {
+      return { success: false, reason: error.message };
     }
-
-    if (task.publisherId !== agentId) {
-      return { success: false, reason: 'Only the publisher can cancel the task' };
-    }
-
-    if (task.status === 'completed' || task.status === 'cancelled') {
-      return { success: false, reason: `Task cannot be cancelled (current status: ${task.status})` };
-    }
-
-    const now = Date.now();
-
-    // Update task
-    this.db.prepare(`
-      UPDATE tasks SET 
-        status = 'cancelled',
-        updated_at = ?
-      WHERE id = ?
-    `).run(now, taskId);
-
-    // Refund escrow to publisher (if no assignee)
-    if (task.status === 'open') {
-      this.agentService.updateCredits(
-        task.publisherId,
-        task.reward,
-        'reward',
-        `Task cancelled: ${task.title} - refund`
-      );
-
-      this.db.prepare(`
-        UPDATE escrows SET 
-          status = 'cancelled',
-          updated_at = ?
-        WHERE task_id = ? AND status = 'locked'
-      `).run(now, taskId);
-    }
-
-    return { success: true };
   }
 
   /**
-   * Dispute task (发起争议)
+   * Dispute task (发起争议) - with transaction
    */
   dispute(taskId: string, agentId: string, reason: string): CompleteResult {
-    const task = this.getById(taskId);
-    if (!task) {
-      return { success: false, reason: 'Task not found' };
+    if (!reason || reason.trim().length === 0) {
+      return { success: false, reason: 'Dispute reason is required' };
     }
 
-    if (task.status !== 'submitted') {
-      return { success: false, reason: `Task cannot be disputed (current status: ${task.status})` };
+    try {
+      this.runInTx(() => {
+        const task = this.getById(taskId);
+        if (!task) {
+          throw new Error('Task not found');
+        }
+
+        if (task.status !== TaskStatus.SUBMITTED) {
+          throw new Error(`Task cannot be disputed (current status: ${task.status})`);
+        }
+
+        if (task.publisherId !== agentId) {
+          throw new Error('Only the publisher can dispute the task');
+        }
+
+        const now = Date.now();
+
+        this.db.prepare(`
+          UPDATE tasks SET 
+            status = ?,
+            result = ? || '\n[Dispute]: ' || ?,
+            updated_at = ?
+          WHERE id = ?
+        `).run(TaskStatus.DISPUTED, task.result || '', reason.trim(), now, taskId);
+
+        this.db.prepare(`
+          UPDATE escrows SET 
+            status = ?,
+            updated_at = ?
+          WHERE task_id = ? AND status = ?
+        `).run(EscrowStatus.DISPUTED, now, taskId, EscrowStatus.LOCKED);
+      });
+
+      return { success: true };
+    } catch (error: any) {
+      return { success: false, reason: error.message };
     }
-
-    if (task.publisherId !== agentId) {
-      return { success: false, reason: 'Only the publisher can dispute the task' };
-    }
-
-    const now = Date.now();
-
-    this.db.prepare(`
-      UPDATE tasks SET 
-        status = 'disputed',
-        result = ? || '\n[Dispute]: ' || ?,
-        updated_at = ?
-      WHERE id = ?
-    `).run(task.result || '', reason, now, taskId);
-
-    this.db.prepare(`
-      UPDATE escrows SET 
-        status = 'disputed',
-        updated_at = ?
-      WHERE task_id = ? AND status = 'locked'
-    `).run(now, taskId);
-
-    return { success: true };
   }
 
   private mapRow(row: any): Task {

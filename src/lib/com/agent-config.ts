@@ -1,10 +1,12 @@
 /**
  * Agent Configuration Service
  * Manages SMTP/IMAP configuration per agent
+ * Passwords are encrypted before storage
  */
 
 import { randomUUID } from "crypto";
 import { Database } from "../storage/database.js";
+import { encrypt, decrypt } from "../utils/crypto.js";
 
 export interface AgentConfig {
   agentId: string;
@@ -29,9 +31,14 @@ export class AgentConfigService {
 
   /**
    * Save or update agent configuration
+   * Passwords are encrypted before storage
    */
   saveConfig(config: AgentConfig): void {
     const now = Date.now();
+    
+    // Encrypt passwords before storage
+    const encryptedSmtpPassword = config.smtpPassword ? encrypt(config.smtpPassword) : null;
+    const encryptedImapPassword = config.imapPassword ? encrypt(config.imapPassword) : null;
     
     // Check if config exists
     const existing = this.db.prepare(
@@ -58,12 +65,12 @@ export class AgentConfigService {
         config.smtpHost || null,
         config.smtpPort,
         config.smtpUser || null,
-        config.smtpPassword || null,
+        encryptedSmtpPassword,
         config.smtpSecure ? 1 : 0,
         config.imapHost || null,
         config.imapPort,
         config.imapUser || null,
-        config.imapPassword || null,
+        encryptedImapPassword,
         config.imapTls ? 1 : 0,
         now,
         config.agentId
@@ -81,12 +88,12 @@ export class AgentConfigService {
         config.smtpHost || null,
         config.smtpPort,
         config.smtpUser || null,
-        config.smtpPassword || null,
+        encryptedSmtpPassword,
         config.smtpSecure ? 1 : 0,
         config.imapHost || null,
         config.imapPort,
         config.imapUser || null,
-        config.imapPassword || null,
+        encryptedImapPassword,
         config.imapTls ? 1 : 0,
         now,
         now
@@ -96,6 +103,7 @@ export class AgentConfigService {
 
   /**
    * Get agent configuration
+   * Passwords are decrypted when retrieved
    */
   getConfig(agentId: string): AgentConfig | null {
     const row = this.db.prepare(
@@ -104,17 +112,33 @@ export class AgentConfigService {
     
     if (!row) return null;
     
+    // Decrypt passwords when retrieving
+    let decryptedSmtpPassword: string | undefined;
+    let decryptedImapPassword: string | undefined;
+    
+    try {
+      decryptedSmtpPassword = row.smtp_password ? decrypt(row.smtp_password) : undefined;
+    } catch (e) {
+      console.warn('[AgentConfig] Failed to decrypt SMTP password');
+    }
+    
+    try {
+      decryptedImapPassword = row.imap_password ? decrypt(row.imap_password) : undefined;
+    } catch (e) {
+      console.warn('[AgentConfig] Failed to decrypt IMAP password');
+    }
+    
     return {
       agentId: row.agent_id,
       smtpHost: row.smtp_host,
       smtpPort: row.smtp_port,
       smtpUser: row.smtp_user,
-      smtpPassword: row.smtp_password,
+      smtpPassword: decryptedSmtpPassword,
       smtpSecure: row.smtp_secure === 1,
       imapHost: row.imap_host,
       imapPort: row.imap_port,
       imapUser: row.imap_user,
-      imapPassword: row.imap_password,
+      imapPassword: decryptedImapPassword,
       imapTls: row.imap_tls === 1,
     };
   }
@@ -123,7 +147,7 @@ export class AgentConfigService {
    * Delete agent configuration
    */
   deleteConfig(agentId: string): boolean {
-    const result = this.db.prepare(
+    this.db.prepare(
       'DELETE FROM agent_configs WHERE agent_id = ?'
     ).run(agentId);
     return true;
