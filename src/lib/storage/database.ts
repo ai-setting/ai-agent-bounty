@@ -163,6 +163,41 @@ export class Database {
       )
     `);
 
+    // Create agent_configs table (SMTP/IMAP configuration per agent)
+    this.db.run(`
+      CREATE TABLE IF NOT EXISTS agent_configs (
+        id TEXT PRIMARY KEY,
+        agent_id TEXT NOT NULL UNIQUE,
+        smtp_host TEXT,
+        smtp_port INTEGER DEFAULT 587,
+        smtp_user TEXT,
+        smtp_password TEXT,
+        smtp_secure INTEGER DEFAULT 0,
+        imap_host TEXT,
+        imap_port INTEGER DEFAULT 993,
+        imap_user TEXT,
+        imap_password TEXT,
+        imap_tls INTEGER DEFAULT 1,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL,
+        FOREIGN KEY (agent_id) REFERENCES agents(id)
+      )
+    `);
+
+    // Create mail_channels table (通信通道)
+    this.db.run(`
+      CREATE TABLE IF NOT EXISTS mail_channels (
+        id TEXT PRIMARY KEY,
+        agent_id TEXT NOT NULL,
+        address TEXT NOT NULL,
+        status TEXT DEFAULT 'disconnected',
+        last_checked_at INTEGER,
+        created_at INTEGER NOT NULL,
+        FOREIGN KEY (agent_id) REFERENCES agents(id),
+        FOREIGN KEY (address) REFERENCES mail_addresses(address)
+      )
+    `);
+
     // Create indexes
     this.db.run(`CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status)`);
     this.db.run(`CREATE INDEX IF NOT EXISTS idx_tasks_publisher ON tasks(publisher_id)`);
@@ -170,6 +205,9 @@ export class Database {
     this.db.run(`CREATE INDEX IF NOT EXISTS idx_messages_to ON messages(to_address)`);
     this.db.run(`CREATE INDEX IF NOT EXISTS idx_escrows_task ON escrows(task_id)`);
     this.db.run(`CREATE INDEX IF NOT EXISTS idx_credit_transactions_agent ON credit_transactions(agent_id)`);
+    this.db.run(`CREATE INDEX IF NOT EXISTS idx_agent_configs_agent ON agent_configs(agent_id)`);
+    this.db.run(`CREATE INDEX IF NOT EXISTS idx_mail_channels_agent ON mail_channels(agent_id)`);
+    this.db.run(`CREATE INDEX IF NOT EXISTS idx_mail_channels_address ON mail_channels(address)`);
   }
 
   /**
