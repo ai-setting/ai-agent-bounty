@@ -15,6 +15,7 @@ import { join } from 'path';
 
 // 导入 bounty 特有命令
 import { agentCommands } from './commands/agent/index.js';
+import { bountyCommands } from './commands/bounty/index.js';
 
 /**
  * Get package.json version
@@ -48,9 +49,9 @@ export async function runBountyCli(): Promise<void> {
 
     // 添加 bounty 特有命令
     .command(agentCommands)
+    .command(bountyCommands)
 
     // TODO: 其他命令
-    // .command(BountyCommands)
     // .command(ComCommands)
 
     .demandCommand(1, 'See --help for available commands')
