@@ -1,9 +1,9 @@
 /**
  * Tools for AI Agent natural language interaction
- * These tools can be registered with @roy-agent/core ToolComponent
+ * These tools can be registered with @gddzhaokun/roy-agent-core ToolComponent
  */
 
-import { Tool, ToolResult } from '@roy-agent/core';
+import { Tool, ToolResult } from '@gddzhaokun/roy-agent-core';
 import { AgentService } from '../lib/agent/index.js';
 import { BountyService } from '../lib/bounty/index.js';
 import { MailService } from '../lib/mail/index.js';
