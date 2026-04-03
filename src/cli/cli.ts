@@ -5,13 +5,17 @@
 
 import yargs from 'yargs';
 import { hideBin } from 'yargs/helpers';
-import { createContext } from './services/context.js';
-import chalk from 'chalk';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 
-// 从 roy-agent-cli 导入命令
-import { ActCommand } from '@gddzhaokun/roy-agent-cli';
+// 从 roy-agent-cli 导入所有内置命令
+import {
+  ActCommand,
+  InteractiveCommand,
+  SessionsCommand,
+  TasksCommand,
+  CommandsCommand,
+} from '@gddzhaokun/roy-agent-cli';
 
 // 导入 bounty 特有命令
 import { agentCommands } from './commands/agent/index.js';
@@ -42,8 +46,12 @@ export async function runBountyCli(): Promise<void> {
     .describe('h', 'show help')
     .alias('h', 'help')
 
-    // 继承 roy-agent 命令
+    // 继承 roy-agent 所有内置命令
     .command(ActCommand)
+    .command(InteractiveCommand)
+    .command(SessionsCommand)
+    .command(TasksCommand)
+    .command(CommandsCommand)
 
     // 添加 bounty 特有命令
     .command(agentCommands)
