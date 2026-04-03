@@ -1,6 +1,6 @@
 {
   "name": "@ai-setting/agent-bounty",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "type": "module",
   "description": "AI Agent Bounty System - Task publishing, grabbing, and communication platform",
   "main": "./dist/index.js",
