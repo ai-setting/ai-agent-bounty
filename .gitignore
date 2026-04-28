@@ -35,3 +35,7 @@ coverage/
 # Temp
 *.tmp
 *.temp
+
+# Worktrees
+.worktrees/
+worktrees/
