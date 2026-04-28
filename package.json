@@ -41,7 +41,9 @@
     "roy-plugin.js"
   ],
   "scripts": {
-    "build": "tsc",
+    "build": "bun run build:cli && bun run build:plugin",
+    "build:cli": "bun build ./src/cli/cli.ts --outdir=./dist --target=bun",
+    "build:plugin": "bun build ./src/plugin/index.ts --outdir=./dist/plugin --target=bun",
     "dev": "bun run src/bin/bounty.ts",
     "test": "bun test",
     "typecheck": "tsc --noEmit",
@@ -49,8 +51,9 @@
     "prepublishOnly": "npm run build"
   },
   "dependencies": {
-    "@gddzhaokun/roy-agent-cli": "^1.1.2",
-    "@gddzhaokun/roy-agent-core": "^1.1.0",
+    "@gddzhaokun/roy-agent-cli": "link:../../../roy-agent/packages/cli",
+    "@gddzhaokun/roy-agent-core": "link:../../../roy-agent/packages/core",
+    "@types/ws": "^8.18.1",
     "chalk": "^5.3.0",
     "imap": "^0.8.17",
     "mailparser": "^3.6.5",
