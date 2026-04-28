@@ -41,7 +41,7 @@
     "roy-plugin.js"
   ],
   "scripts": {
-    "build": "bun run build:cli && bun run build:bin",
+    "build": "bun run build:cli && bun run build:bin && bun run build:plugin",
     "build:cli": "bun build ./src/cli/cli.ts --outdir=./dist --target=bun",
     "build:bin": "bun build ./src/bin/bounty.ts --outdir=./dist/bin --target=bun",
     "build:plugin": "bun build ./src/plugin/index.ts --outdir=./dist/plugin --target=bun",
