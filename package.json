@@ -51,8 +51,8 @@
     "prepublishOnly": "npm run build"
   },
   "dependencies": {
-    "@gddzhaokun/roy-agent-cli": "link:../../../roy-agent/packages/cli",
-    "@gddzhaokun/roy-agent-core": "link:../../../roy-agent/packages/core",
+    "@gddzhaokun/roy-agent-cli": "link:@gddzhaokun/roy-agent-cli",
+    "@gddzhaokun/roy-agent-core": "link:@gddzhaokun/roy-agent-core",
     "@types/ws": "^8.18.1",
     "chalk": "^5.3.0",
     "imap": "^0.8.17",
