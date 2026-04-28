@@ -15,7 +15,18 @@ import {
   SessionsCommand,
   TasksCommand,
   CommandsCommand,
+  MemoryCommand,
+  SkillsCommand,
+  ToolsCommand,
+  McpCommand,
 } from '@gddzhaokun/roy-agent-cli';
+
+// 导入其他 roy 命令（单独导出）
+import { ConfigCommand } from '@gddzhaokun/roy-agent-cli/cli/commands/config';
+import { DebugCommand } from '@gddzhaokun/roy-agent-cli/cli/commands/debug';
+import { LspCommand } from '@gddzhaokun/roy-agent-cli/cli/commands/lsp';
+import { WorkflowCommand } from '@gddzhaokun/roy-agent-cli/cli/commands/workflow';
+import { EventSourceCommand } from '@gddzhaokun/roy-agent-cli/cli/commands/eventsource';
 
 // 导入 bounty 特有命令
 import { agentCommands } from './commands/agent/index.js';
@@ -52,6 +63,15 @@ export async function runBountyCli(): Promise<void> {
     .command(SessionsCommand)
     .command(TasksCommand)
     .command(CommandsCommand)
+    .command(MemoryCommand)
+    .command(SkillsCommand)
+    .command(ToolsCommand)
+    .command(McpCommand)
+    .command(ConfigCommand)
+    .command(DebugCommand)
+    .command(LspCommand)
+    .command(WorkflowCommand)
+    .command(EventSourceCommand)
 
     // 添加 bounty 特有命令
     .command(agentCommands)
