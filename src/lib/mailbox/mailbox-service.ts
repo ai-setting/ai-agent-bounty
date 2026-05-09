@@ -4,15 +4,18 @@ import { ChannelManager } from './channel-manager';
 import { EventBus } from './event-bus';
 import type { MailAddress, Message, Channel, SendMessageInput } from './types';
 
+type MessageHandler = (message: Message) => void;
+
 export class MailboxService {
   private addressManager: AddressManager;
   private messageStore: MessageStore;
   private channelManager: ChannelManager;
   private eventBus: EventBus;
   private domain: string;
+  private messageHandlers: MessageHandler[] = [];
 
   constructor(
-    private db: any,
+    db: any,
     eventBus: EventBus,
     domain = 'local'
   ) {
@@ -21,6 +24,11 @@ export class MailboxService {
     this.channelManager = new ChannelManager(db);
     this.eventBus = eventBus;
     this.domain = domain;
+  }
+
+  // Subscribe to message sent events (for WebSocket push)
+  onMessageSent(handler: MessageHandler): void {
+    this.messageHandlers.push(handler);
   }
 
   // Address operations
@@ -49,6 +57,9 @@ export class MailboxService {
       fromAddress: message.fromAddress,
       toAddress: message.toAddress,
     });
+
+    // Notify handlers (for WebSocket push)
+    this.messageHandlers.forEach(handler => handler(message));
 
     return message;
   }
