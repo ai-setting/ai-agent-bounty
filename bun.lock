@@ -5,9 +5,9 @@
     "": {
       "name": "@ai-setting/agent-bounty",
       "dependencies": {
-        "@ai-setting/roy-agent-cli": "^1.4.18",
-        "@ai-setting/roy-agent-coder-harness": "^1.1.13",
-        "@ai-setting/roy-agent-core": "^1.4.16",
+        "@ai-setting/roy-agent-cli": "^1.4.19",
+        "@ai-setting/roy-agent-coder-harness": "^1.1.14",
+        "@ai-setting/roy-agent-core": "^1.4.17",
         "@types/ws": "^8.18.1",
         "chalk": "^5.3.0",
         "imap": "^0.8.17",
@@ -43,11 +43,11 @@
 
     "@ai-sdk/provider-utils": ["@ai-sdk/provider-utils@4.0.26", "", { "dependencies": { "@ai-sdk/provider": "3.0.10", "@standard-schema/spec": "^1.1.0", "eventsource-parser": "^3.0.8" }, "peerDependencies": { "zod": "^3.25.76 || ^4.1.8" } }, "sha512-CsKNLKsOpvPujRlIYvoz+Ybw+kGn7J4/fIZa/58+R7iWLLfwn6ifE2G6Yq8K9XvH/I/3bzaDAJ3NhRwEMsLBKQ=="],
 
-    "@ai-setting/roy-agent-cli": ["@ai-setting/roy-agent-cli@1.4.18", "", { "dependencies": { "@ai-setting/roy-agent-coder-harness": "1.1.13", "@ai-setting/roy-agent-core": "1.4.16", "chalk": "^5.6.2", "commander": "^14.0.3", "pyright": "^1.1.409", "typescript-language-server": "^5.1.3", "vscode-css-languageserver-bin": "^1.4.0", "vscode-html-languageserver-bin": "^1.4.0", "vscode-json-languageserver": "^1.3.4", "yargs": "^17.7.2", "zod-to-json-schema": "^3.25.2" }, "bin": { "roy-agent": "dist/bin/roy-agent.js" } }, "sha512-OGhDKwsTmJ0T30Awn9+NR77zAETZER9E8H9bdAmZkPu/5dpDBabl3m8bgS4GpColk/bZyWWRogVuuZX9bkcuPA=="],
+    "@ai-setting/roy-agent-cli": ["@ai-setting/roy-agent-cli@1.4.19", "", { "dependencies": { "@ai-setting/roy-agent-coder-harness": "1.1.14", "@ai-setting/roy-agent-core": "1.4.17", "chalk": "^5.6.2", "commander": "^14.0.3", "pyright": "^1.1.409", "typescript-language-server": "^5.1.3", "vscode-css-languageserver-bin": "^1.4.0", "vscode-html-languageserver-bin": "^1.4.0", "vscode-json-languageserver": "^1.3.4", "yargs": "^17.7.2", "zod-to-json-schema": "^3.25.2" }, "bin": { "roy-agent": "dist/bin/roy-agent.js" } }, "sha512-/4ylrreibARpfFnJNXNNJPTf4MDh6SzkGtTG76An3ryMr8sKFVpdhwn1nnjqZU5XmDt9iy2UTEq0fuyMr5lF2A=="],
 
-    "@ai-setting/roy-agent-coder-harness": ["@ai-setting/roy-agent-coder-harness@1.1.13", "", { "dependencies": { "@ai-setting/roy-agent-core": "1.4.16", "minimatch": "^10.0.0", "vscode-jsonrpc": "^8.2.0", "vscode-languageserver-protocol": "^3.17.5", "vscode-languageserver-types": "^3.17.5", "vscode-uri": "^3.0.8" } }, "sha512-EevAjDQW61os/aByykpfazLrp3D4j26Pzz/wI2NNIBoJWnmpKrq9U5Recb+ZYt0h5lqQt2Hdm5H7WBkfb/vvMQ=="],
+    "@ai-setting/roy-agent-coder-harness": ["@ai-setting/roy-agent-coder-harness@1.1.14", "", { "dependencies": { "@ai-setting/roy-agent-core": "1.4.17", "minimatch": "^10.0.0", "vscode-jsonrpc": "^8.2.0", "vscode-languageserver-protocol": "^3.17.5", "vscode-languageserver-types": "^3.17.5", "vscode-uri": "^3.0.8" } }, "sha512-6fzRWUIv7ADbqufKK4r7jyrKX/494qgaJFiOtDfZo8qnCSs5C1eFmqe7DUUFzxt100TbPmDejEvKyw0OSLuKTw=="],
 
-    "@ai-setting/roy-agent-core": ["@ai-setting/roy-agent-core@1.4.16", "", { "dependencies": { "@ai-sdk/anthropic": "^3.0.0", "@ai-sdk/google": "^3.0.0", "@ai-sdk/openai": "^3.0.0", "@ai-sdk/openai-compatible": "^2.0.0", "@modelcontextprotocol/sdk": "^1.29.0", "ai": "^6.0.0", "glob": "^13.0.6", "jsonc-parser": "^3.2.0", "reflect-metadata": "^0.2.2", "ws": "^8.16.0", "xdg-basedir": "^5.1.0", "yaml": "^2.3.0", "zod": "^3.25.0", "zod-to-json-schema": "^3.25.0" } }, "sha512-7kCV4bvonLc3EYBe8l8G89cg53btUsAoAWm7k/kEnc0U7tg7U8zuOgLrreiBi5mRibDHonJfNtZnOKF83kCnaQ=="],
+    "@ai-setting/roy-agent-core": ["@ai-setting/roy-agent-core@1.4.17", "", { "dependencies": { "@ai-sdk/anthropic": "^3.0.0", "@ai-sdk/google": "^3.0.0", "@ai-sdk/openai": "^3.0.0", "@ai-sdk/openai-compatible": "^2.0.0", "@modelcontextprotocol/sdk": "^1.29.0", "ai": "^6.0.0", "glob": "^13.0.6", "jsonc-parser": "^3.2.0", "reflect-metadata": "^0.2.2", "ws": "^8.16.0", "xdg-basedir": "^5.1.0", "yaml": "^2.3.0", "zod": "^3.25.0", "zod-to-json-schema": "^3.25.0" } }, "sha512-RGRyeFxn2puYD0sKXXFN2u8GVhc9gnyVo1rTjk+brFGXnm66EgsIB6PW/jcKd8UuZRIU598itoAn3mZTahl7hA=="],
 
     "@hono/node-server": ["@hono/node-server@1.19.14", "", { "peerDependencies": { "hono": "^4" } }, "sha512-GwtvgtXxnWsucXvbQXkRgqksiH2Qed37H9xHZocE5sA3N8O8O8/8FA3uclQXxXVzc9XBZuEOMK7+r02FmSpHtw=="],
 

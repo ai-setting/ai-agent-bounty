@@ -56,6 +56,12 @@ import { agentCommands } from './commands/agent/index.js';
 import { bountyCommands } from './commands/bounty/index.js';
 import { comCommands } from './commands/com/index.js';
 
+// 注册 Bounty Prompt Hook
+import { registerBountyPromptHook } from './hooks/bounty-prompt-hook.js';
+
+// 初始化 Hook（提前注册，确保 Environment 创建时 Hook 已就绪）
+registerBountyPromptHook();
+
 /**
  * Get package.json version
  */
