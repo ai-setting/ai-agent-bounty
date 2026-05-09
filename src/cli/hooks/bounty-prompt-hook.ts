@@ -110,3 +110,6 @@ export function registerBountyPromptHook(): void {
   globalHookManager.register('prompt.after-render', bountyPromptHook);
   console.log('[Bounty] Prompt hook registered');
 }
+
+// 导出 hook 对象供测试使用
+export { bountyPromptHook };
