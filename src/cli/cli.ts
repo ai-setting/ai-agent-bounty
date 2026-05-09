@@ -19,14 +19,37 @@ import {
   SkillsCommand,
   ToolsCommand,
   McpCommand,
-} from '@gddzhaokun/roy-agent-cli';
-
-// 导入其他 roy 命令（单独导出）
-import { ConfigCommand } from '@gddzhaokun/roy-agent-cli/cli/commands/config';
-import { DebugCommand } from '@gddzhaokun/roy-agent-cli/cli/commands/debug';
-import { LspCommand } from '@gddzhaokun/roy-agent-cli/cli/commands/lsp';
-import { WorkflowCommand } from '@gddzhaokun/roy-agent-cli/cli/commands/workflow';
-import { EventSourceCommand } from '@gddzhaokun/roy-agent-cli/cli/commands/eventsource';
+  ConfigCommand,
+  ConfigListCommand,
+  ConfigExportCommand,
+  ConfigImportCommand,
+  DebugCommand,
+  LspCommand,
+  LspListCommand,
+  LspInstallCommand,
+  LspCheckCommand,
+  WorkflowCommand,
+  WorkflowListCommand,
+  WorkflowGetCommand,
+  WorkflowAddCommand,
+  WorkflowRunCommand,
+  WorkflowStatusCommand,
+  WorkflowStopCommand,
+  WorkflowRemoveCommand,
+  WorkflowNodesCommand,
+  WorkflowUpdateCommand,
+  WorkflowValidateCommand,
+  EventSourceCommand,
+  EventSourceListCommand,
+  EventSourceAddCommand,
+  EventSourceStartCommand,
+  EventSourceStopCommand,
+  EventSourceStatusCommand,
+  EventSourceRemoveCommand,
+  LogCommand,
+  TraceCommand,
+  SpanCommand,
+} from '@ai-setting/roy-agent-cli';
 
 // 导入 bounty 特有命令
 import { agentCommands } from './commands/agent/index.js';
@@ -67,11 +90,46 @@ export async function runBountyCli(): Promise<void> {
     .command(SkillsCommand)
     .command(ToolsCommand)
     .command(McpCommand)
+
+    // Config 命令组
     .command(ConfigCommand)
-    .command(DebugCommand)
+    .command(ConfigListCommand)
+    .command(ConfigExportCommand)
+    .command(ConfigImportCommand)
+
+    // Lsp 命令组
     .command(LspCommand)
+    .command(LspListCommand)
+    .command(LspInstallCommand)
+    .command(LspCheckCommand)
+
+    // Workflow 命令组
     .command(WorkflowCommand)
+    .command(WorkflowListCommand)
+    .command(WorkflowGetCommand)
+    .command(WorkflowAddCommand)
+    .command(WorkflowRunCommand)
+    .command(WorkflowStatusCommand)
+    .command(WorkflowStopCommand)
+    .command(WorkflowRemoveCommand)
+    .command(WorkflowNodesCommand)
+    .command(WorkflowUpdateCommand)
+    .command(WorkflowValidateCommand)
+
+    // EventSource 命令组
     .command(EventSourceCommand)
+    .command(EventSourceListCommand)
+    .command(EventSourceAddCommand)
+    .command(EventSourceStartCommand)
+    .command(EventSourceStopCommand)
+    .command(EventSourceStatusCommand)
+    .command(EventSourceRemoveCommand)
+
+    // 其他命令
+    .command(LogCommand)
+    .command(TraceCommand)
+    .command(SpanCommand)
+    .command(DebugCommand)
 
     // 添加 bounty 特有命令
     .command(agentCommands)
