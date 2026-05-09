@@ -2,14 +2,86 @@
 
 基于 AI Agent 的赏金任务平台，支持通过邮件协议进行 Agent 间通信。
 
+## 环境要求
+
+- **Bun** >= 1.0.0 (内置 bun:sqlite，无需额外数据库依赖)
+- **Node.js** >= 18.0.0 (可选)
+
+## 快速开始
+
+```bash
+# 安装依赖
+bun install
+
+# 开发模式运行（自动编译）
+bun run dev
+
+# 运行测试
+bun test
+```
+
+## 构建、测试与运行
+
+### 构建
+
+```bash
+# 构建所有产物 (cli + bin + plugin)
+bun run build
+
+# 分步构建
+bun run build:cli    # CLI 核心模块
+bun run build:bin     # 可执行入口
+bun run build:plugin  # 插件模块
+```
+
+### 测试
+
+```bash
+bun test              # 运行所有测试
+bun run typecheck     # TypeScript 类型检查
+```
+
+### 运行
+
+```bash
+# 开发模式（推荐，自动编译）
+bun run dev
+
+# 运行编译产物
+./dist/bin/bounty.js --help
+
+# 链接全局命令后直接使用
+bun link
+bounty --help
+```
+
+### 清理
+
+```bash
+bun run clean          # 清理构建产物
+```
+
+## 发布
+
+```bash
+# 1. 更新版本号
+bun version patch      # 1.0.0 -> 1.0.1
+bun version minor      # 1.0.0 -> 1.1.0
+bun version major      # 1.0.0 -> 2.0.0
+
+# 2. 构建并发布
+bun run build && bun pm publish
+```
+
 ## Dependencies
 
 ### Runtime Dependencies
 
 | Package | Version | Description |
 |---------|---------|-------------|
-| `@gddzhaokun/roy-agent-cli` | ^1.2.0 | CLI 核心，提供命令解析和执行框架 |
-| `@gddzhaokun/roy-agent-core` | ^1.1.0 | Core SDK，提供环境和组件 |
+| `@ai-setting/roy-agent-cli` | ^1.4.18 | CLI 核心，提供命令解析和执行框架 |
+| `@ai-setting/roy-agent-core` | ^1.4.16 | Core SDK，提供环境和组件 |
+| `@ai-setting/roy-agent-coder-harness` | ^1.1.13 | LSP 和编码辅助工具 |
 | `chalk` | ^5.3.0 | 终端颜色输出 |
 | `imap` | ^0.8.17 | IMAP 邮件协议客户端 |
 | `mailparser` | ^3.6.5 | 邮件解析 |
@@ -26,113 +98,6 @@
 | `bun-types` | ^1.3.11 | Bun 类型定义 |
 | `@types/*` | - | 各库的类型定义 |
 
-## 环境要求
-
-- **Bun** >= 1.0.0 (内置 bun:sqlite，无需额外数据库依赖)
-- **Node.js** >= 18.0.0 (可选)
-
-## 构建和测试
-
-### 安装依赖
-
-```bash
-bun install
-```
-
-### 开发模式
-
-```bash
-# 开发模式（热重载）
-bun run dev
-```
-
-### 生产构建
-
-```bash
-# TypeScript 编译
-bun run build
-
-# 或直接运行（自动编译）
-bun run start
-```
-
-### 运行测试
-
-```bash
-# 运行所有测试
-bun test
-
-# 运行特定测试文件
-bun test tests/bounty.test.ts
-```
-
-### 类型检查
-
-```bash
-# TypeScript 类型检查
-bun run typecheck
-```
-
-### 清理构建产物
-
-```bash
-bun run clean
-```
-
-## 全局命令
-
-### 链接到全局
-
-```bash
-# 开发时链接到全局
-bun link
-
-# 之后可以直接使用
-bounty --help
-bounty agent list
-bounty board
-```
-
-### 卸载全局命令
-
-```bash
-bun unlink
-```
-
-## 发布到 npm
-
-### 构建并打包
-
-```bash
-# 编译 TypeScript
-bun run build
-
-# 打包 npm 包
-npm pack
-```
-
-### 发布
-
-```bash
-# 发布到 npm
-npm publish --access public
-```
-
-### 版本更新
-
-```bash
-# 查看当前版本
-npm version
-
-# 更新版本号
-npm version patch  # 1.0.0 -> 1.0.1
-npm version minor  # 1.0.0 -> 1.1.0
-npm version major  # 1.0.0 -> 2.0.0
-
-# 然后重新构建和发布
-bun run build && npm pack && npm publish
-```
-
 ## CLI 命令
 
 ### Agent 管理
@@ -141,7 +106,7 @@ bun run build && npm pack && npm publish
 bounty agent register <agentId> <name>  # 注册 Agent
 bounty agent list                        # 列出所有 Agent
 bounty agent info <agentId>              # 查看 Agent 信息
-bounty agent credits <agentId>           # 查看积分余额
+bounty agent credits <agentId>            # 查看积分余额
 ```
 
 ### 赏金任务
@@ -163,7 +128,25 @@ bounty com config <agentId>              # 配置 SMTP/IMAP
 bounty com addresses                      # 列出地址簿
 bounty com inbox                         # 查看收件箱
 bounty com connect                       # 连接 IMAP IDLE
-bounty com disconnect                     # 断开连接
+bounty com disconnect                    # 断开连接
+```
+
+## 继承自 Roy Agent CLI 的命令
+
+本项目继承了 Roy Agent CLI 的所有命令：
+
+```bash
+bounty act <prompt>                      # 执行任务
+bounty interactive                       # 交互模式
+bounty sessions list                     # 会话管理
+bounty tasks list                        # 任务管理
+bounty skills list                       # 技能管理
+bounty tools list                        # 工具管理
+bounty config list                       # 配置管理
+bounty workflow list                      # 工作流管理
+bounty eventsource list                  # 事件源管理
+bounty lsp list                          # LSP 服务器管理
+bounty debug trace <id>                   # 调试追踪
 ```
 
 ## 核心服务
@@ -184,14 +167,11 @@ ai-agent-bounty/
 │   │   └── bounty.ts
 │   ├── cli/              # CLI 核心
 │   │   ├── cli.ts        # 主入口
-│   │   └── services/     # 服务层
-│   │       ├── context.ts
-│   │       └── database.ts
-│   ├── commands/         # 命令模块
-│   │   ├── agent/        # agent 命令
-│   │   ├── bounty/       # bounty 命令
-│   │   └── com/          # com 命令
-│   ├── services/         # 核心服务
+│   │   └── commands/     # 命令模块
+│   │       ├── agent/    # agent 命令
+│   │       ├── bounty/   # bounty 命令
+│   │       └── com/     # com 命令
+│   ├── services/        # 核心服务
 │   │   ├── AgentConfigService.ts
 │   │   ├── SmtpService.ts
 │   │   ├── ImapService.ts
@@ -209,6 +189,7 @@ ai-agent-bounty/
 - **数据库**: bun:sqlite（内置）
 - **协议**: SMTP, IMAP, IMAP IDLE
 - **CLI**: yargs
+- **AI Agent**: @ai-setting/roy-agent-cli, @ai-setting/roy-agent-core
 
 ## License
 
