@@ -9,3 +9,4 @@ export * from './mailbox-service';
 export * from './smtp-gateway';
 export * from './http-server';
 export * from './websocket-server';
+export * from './imap-poll-service';

@@ -1,5 +1,7 @@
 import { WebSocket, WebSocketServer as WS } from 'ws';
 import type { MailboxService } from './mailbox-service';
+import type { EventBus } from './event-bus';
+import { EventType } from './event-bus';
 import type { Message } from './types';
 
 interface WSMessage {
@@ -16,13 +18,25 @@ export class WebSocketServer {
   constructor(
     mailbox: MailboxService,
     private port = 3002,
-    private heartbeatIntervalMs = 30000
+    private heartbeatIntervalMs = 30000,
+    private eventBus?: EventBus
   ) {
     this.mailbox = mailbox;
-    // Subscribe to message events
+    // Subscribe to message sent events
     mailbox.onMessageSent((message) => {
       this.pushMessageToRecipient(message);
     });
+    
+    // Subscribe to MESSAGE_RECEIVED events (from IMAP polling)
+    if (this.eventBus) {
+      this.eventBus.on(EventType.MESSAGE_RECEIVED, (data) => {
+        // Get the message from mailbox and push to recipient
+        const message = mailbox.getMessage(data.messageId);
+        if (message) {
+          this.pushMessageToRecipient(message);
+        }
+      });
+    }
   }
 
   async start(): Promise<void> {

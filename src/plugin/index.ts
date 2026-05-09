@@ -10,7 +10,7 @@
  */
 
 // @ts-ignore - 类型在构建时从 node_modules 加载
-import type { RoyCliPlugin } from "@gddzhaokun/roy-agent-cli/plugin";
+import type { RoyCliPlugin } from "@ai-setting/roy-agent-cli/plugin";
 
 // 导入现有命令
 import { agentCommands } from "../cli/commands/agent/index.js";

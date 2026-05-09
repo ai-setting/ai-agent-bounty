@@ -8,6 +8,16 @@ export interface SmtpOutboundConfig {
   fromName?: string;    // Optional sender name
 }
 
+export interface ImapInboundConfig {
+  host: string;
+  port: number;
+  tls: boolean;
+  username: string;
+  password: string;
+  pollInterval: number;  // milliseconds, default 30000 (30s)
+  enabled: boolean;      // whether to enable IMAP polling
+}
+
 export interface MailboxConfig {
   domain: string;
   httpPort: number;
@@ -19,6 +29,7 @@ export interface MailboxConfig {
   smtpQueueInterval: number;
   databasePath: string;
   smtpOutbound?: SmtpOutboundConfig;  // Optional external SMTP for sending
+  imapInbound?: ImapInboundConfig;     // Optional IMAP for receiving emails
 }
 
 export const defaultConfig: MailboxConfig = {

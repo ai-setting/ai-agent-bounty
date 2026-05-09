@@ -46,6 +46,7 @@
     "build:bin": "bun build ./src/bin/bounty.ts --outdir=./dist/bin --target=bun --external @ai-setting/roy-agent-cli --external @ai-setting/roy-agent-core",
     "build:plugin": "bun build ./src/plugin/index.ts --outdir=./dist/plugin --target=bun",
     "dev": "bun run src/bin/bounty.ts",
+    "demo:imap-poll": "bun run scripts/imap-poll-demo.ts",
     "test": "bun test",
     "typecheck": "tsc --noEmit",
     "clean": "rm -rf dist",
