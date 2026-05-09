@@ -1,10 +1,10 @@
+import nodemailer from 'nodemailer';
 import { Database } from '../storage/database';
 import { MessageStore } from './message-store';
 import { AddressManager } from './address-manager';
 import { MessageQueue } from './message-queue';
 import { EventBus, EventType } from './event-bus';
-import type { MailboxConfig } from './config';
-import type { Message } from './types';
+import type { MailboxConfig, SmtpOutboundConfig } from './config';
 
 export interface SmtpGatewayConfig {
   db: Database;
@@ -26,13 +26,40 @@ export interface InboundEmailInput {
  * 
  * Inbound: Receives emails from external sources and delivers them to local mailboxes
  * Outbound: Queues local messages for delivery to external email addresses
+ *          via configured SMTP server (e.g., gddzhaokun@163.com)
  */
 export class SmtpGateway {
   private messageQueue: MessageQueue;
   private queueProcessorInterval?: ReturnType<typeof setInterval>;
+  private transporter?: nodemailer.Transporter;
 
   constructor(private deps: SmtpGatewayConfig) {
     this.messageQueue = new MessageQueue(deps.db);
+    this.initTransporter();
+  }
+
+  /**
+   * Initialize nodemailer transporter from config
+   */
+  private initTransporter(): void {
+    const smtpConfig = this.deps.config.smtpOutbound;
+    
+    if (!smtpConfig) {
+      console.log('[SmtpGateway] No outbound SMTP configured, outbound emails will be queued but not sent');
+      return;
+    }
+
+    this.transporter = nodemailer.createTransport({
+      host: smtpConfig.host,
+      port: smtpConfig.port,
+      secure: smtpConfig.secure,
+      auth: {
+        user: smtpConfig.username,
+        pass: smtpConfig.password,
+      },
+    });
+
+    console.log(`[SmtpGateway] Transporter initialized: ${smtpConfig.username} -> ${smtpConfig.fromAddress}`);
   }
 
   /**
@@ -76,7 +103,7 @@ export class SmtpGateway {
    * Queue a message for outbound delivery to external address
    */
   async queueOutboundEmail(messageId: string): Promise<void> {
-    const { messageStore, addressManager } = this.deps;
+    const { messageStore } = this.deps;
     const localDomain = this.deps.config.domain;
 
     // Get the message
@@ -111,9 +138,6 @@ export class SmtpGateway {
    * Get all queue items (for debugging/monitoring)
    */
   getAllQueueItems() {
-    const items = this.messageQueue.getPending();
-    
-    // Also get non-pending items by querying directly
     const rows = this.deps.db.prepare(`
       SELECT * FROM mailbox_outbound_queue 
       WHERE status != 'completed'
@@ -136,6 +160,22 @@ export class SmtpGateway {
    * Mark a delivery as completed
    */
   async markDeliveryCompleted(queueItemId: string): Promise<void> {
+    const { eventBus, messageStore } = this.deps;
+    
+    const item = this.messageQueue.getById(queueItemId);
+    if (!item) return;
+
+    // Update message status to sent
+    messageStore.updateStatus(item.messageId, 'sent');
+
+    // Emit sent event
+    eventBus.emit(EventType.MESSAGE_SENT, {
+      messageId: item.messageId,
+      fromAddress: this.deps.config.smtpOutbound?.fromAddress || 'unknown',
+      toAddress: item.externalTo,
+    });
+
+    // Mark queue item as completed
     this.messageQueue.markAsCompleted(queueItemId);
   }
 
@@ -177,9 +217,11 @@ export class SmtpGateway {
 
     const { config } = this.deps;
     
+    console.log(`[SmtpGateway] Starting queue processor (interval: ${config.smtpQueueInterval}ms)`);
+    
     this.queueProcessorInterval = setInterval(() => {
       this.processQueue().catch(err => {
-        console.error('Queue processing error:', err);
+        console.error('[SmtpGateway] Queue processing error:', err);
       });
     }, config.smtpQueueInterval);
   }
@@ -191,49 +233,97 @@ export class SmtpGateway {
     if (this.queueProcessorInterval) {
       clearInterval(this.queueProcessorInterval);
       this.queueProcessorInterval = undefined;
+      console.log('[SmtpGateway] Queue processor stopped');
     }
   }
 
   /**
    * Process pending items in the queue
-   * In a real implementation, this would connect to external SMTP servers
    */
   private async processQueue(): Promise<void> {
     const pending = this.messageQueue.getPending();
     
+    if (pending.length === 0) return;
+
+    console.log(`[SmtpGateway] Processing ${pending.length} pending delivery(ies)`);
+
     for (const item of pending) {
       // Mark as sending
       this.messageQueue.markAsSending(item.id);
 
-      // In a real implementation, this would:
-      // 1. Connect to external SMTP server
-      // 2. Send the email
-      // 3. Handle success/failure responses
-      
-      // For now, we simulate successful delivery
       try {
-        // Simulate SMTP send
-        await this.simulateSend(item.externalTo);
-        this.messageQueue.markAsCompleted(item.id);
+        // Get the original message
+        const { messageStore } = this.deps;
+        const message = messageStore.getById(item.messageId);
+        
+        if (!message) {
+          throw new Error(`Message not found: ${item.messageId}`);
+        }
+
+        // Send via SMTP
+        await this.sendEmail({
+          to: item.externalTo,
+          subject: message.subject || 'No Subject',
+          body: message.body,
+          from: message.fromAddress,
+        });
+
+        // Success
+        console.log(`[SmtpGateway] Email sent to ${item.externalTo}`);
+        await this.markDeliveryCompleted(item.id);
+        
       } catch (error) {
         const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+        console.error(`[SmtpGateway] Failed to send to ${item.externalTo}: ${errorMsg}`);
         await this.markDeliveryFailed(item.id, errorMsg);
       }
     }
   }
 
   /**
-   * Simulate SMTP send (placeholder for real implementation)
+   * Send email via configured SMTP server
    */
-  private async simulateSend(to: string): Promise<void> {
-    // In production, this would:
-    // 1. Look up MX records for the domain
-    // 2. Connect to the mail server
-    // 3. Send via SMTP protocol
-    
-    // For now, just validate the email format
-    if (!to.includes('@')) {
-      throw new Error('Invalid email address');
+  private async sendEmail(input: {
+    to: string;
+    subject: string;
+    body: string;
+    from: string;
+  }): Promise<void> {
+    const smtpConfig = this.deps.config.smtpOutbound;
+
+    if (!this.transporter) {
+      throw new Error('SMTP not configured');
+    }
+
+    const mailOptions = {
+      from: smtpConfig?.fromName 
+        ? `"${smtpConfig.fromName}" <${smtpConfig.fromAddress}>`
+        : smtpConfig?.fromAddress,
+      to: input.to,
+      subject: `[Bounty Mailbox] ${input.subject}`,
+      text: `From: ${input.from}\n\n${input.body}`,
+      html: `<p><strong>From:</strong> ${input.from}</p><p>${input.body.replace(/\n/g, '<br>')}</p>`,
+    };
+
+    const result = await this.transporter.sendMail(mailOptions);
+    console.log(`[SmtpGateway] SMTP send result: ${result.messageId}`);
+  }
+
+  /**
+   * Verify SMTP connection
+   */
+  async verifyConnection(): Promise<boolean> {
+    if (!this.transporter) {
+      return false;
+    }
+
+    try {
+      await this.transporter.verify();
+      console.log('[SmtpGateway] SMTP connection verified');
+      return true;
+    } catch (error) {
+      console.error('[SmtpGateway] SMTP connection failed:', error);
+      return false;
     }
   }
 

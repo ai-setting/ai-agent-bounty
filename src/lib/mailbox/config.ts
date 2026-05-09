@@ -1,3 +1,13 @@
+export interface SmtpOutboundConfig {
+  host: string;
+  port: number;
+  secure: boolean;      // true for 465 (SSL), false for 587 (STARTTLS)
+  username: string;
+  password: string;
+  fromAddress: string;  // The sender address (e.g., gddzhaokun@163.com)
+  fromName?: string;    // Optional sender name
+}
+
 export interface MailboxConfig {
   domain: string;
   httpPort: number;
@@ -8,6 +18,7 @@ export interface MailboxConfig {
   smtpInboundPort: number;
   smtpQueueInterval: number;
   databasePath: string;
+  smtpOutbound?: SmtpOutboundConfig;  // Optional external SMTP for sending
 }
 
 export const defaultConfig: MailboxConfig = {
