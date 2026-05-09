@@ -1,15 +1,17 @@
 /**
  * IMAP Poll Service
  * Periodically polls IMAP server for new emails and delivers them to local mailboxes
+ * 
+ * Uses raw TLS socket with manual IMAP commands for maximum compatibility
+ * with providers like 163.com that require IMAP ID command
  */
 
-import Imap from "imap";
+import * as tls from "tls";
 import { simpleParser } from "mailparser";
 import { Database } from "../storage/database";
 import { MessageStore } from "./message-store";
 import { AddressManager } from "./address-manager";
 import { EventBus, EventType } from "./event-bus";
-import type { MailboxConfig } from "./config";
 
 export interface ImapPollConfig {
   host: string;
@@ -33,11 +35,11 @@ export interface ReceivedEmail {
 }
 
 export class ImapPollService {
-  private imap?: Imap;
   private pollTimer?: ReturnType<typeof setInterval>;
-  private lastUid: number = 0;
+  private lastSeqNum: number = 0;  // Track by sequence number
   private isConnected: boolean = false;
-  
+  private imapId: string = "Foxmail";  // Client identity for ID command
+
   constructor(
     private config: ImapPollConfig,
     private db: Database,
@@ -55,7 +57,7 @@ export class ImapPollService {
       return;
     }
 
-    console.log(`[ImapPollService] Starting with config:`);
+    console.log(`[ImapPollService] Starting:`);
     console.log(`  Host: ${this.config.host}`);
     console.log(`  User: ${this.config.user}`);
     console.log(`  Poll Interval: ${this.config.pollInterval}ms`);
@@ -76,23 +78,17 @@ export class ImapPollService {
     if (this.pollTimer) {
       clearInterval(this.pollTimer);
       this.pollTimer = undefined;
-      console.log("[ImapPollService] Stopped polling");
-    }
-
-    if (this.imap) {
-      this.imap.end();
-      this.imap = undefined;
-      this.isConnected = false;
+      console.log("[ImapPollService] Stopped");
     }
   }
 
   /**
    * Get connection status
    */
-  getStatus(): { connected: boolean; lastUid: number } {
+  getStatus(): { connected: boolean; lastSeqNum: number } {
     return {
       connected: this.isConnected,
-      lastUid: this.lastUid,
+      lastSeqNum: this.lastSeqNum,
     };
   }
 
@@ -101,207 +97,215 @@ export class ImapPollService {
    */
   async poll(): Promise<void> {
     try {
-      await this.fetchNewEmails();
+      const messages = await this.fetchEmails();
+      for (const email of messages) {
+        this.processEmail(email);
+      }
     } catch (error) {
       console.error("[ImapPollService] Poll error:", error);
     }
   }
 
   /**
-   * Fetch new emails from IMAP server
+   * Fetch emails using raw TLS socket
    */
-  private async fetchNewEmails(): Promise<void> {
-    // Close existing connection if any
-    if (this.imap && this.isConnected) {
-      try {
-        this.imap.end();
-      } catch (e) {
-        // Ignore
-      }
-      this.imap = undefined;
-      this.isConnected = false;
-    }
-
+  private async fetchEmails(): Promise<ReceivedEmail[]> {
+    const { host, port, user, password } = this.config;
+    
     return new Promise((resolve, reject) => {
-      this.imap = new Imap({
-        user: this.config.user,
-        password: this.config.password,
-        host: this.config.host,
-        port: this.config.port,
-        tls: this.config.tls,
-        connTimeout: 10000,
-      });
-
-      this.imap.once("ready", () => {
-        this.isConnected = true;
-        this.openInbox();
-      });
-
-      this.imap.once("error", (err) => {
-        console.error("[ImapPollService] IMAP error:", err.message);
-        this.isConnected = false;
-        reject(err);
-      });
-
-      this.imap.once("close", () => {
-        this.isConnected = false;
-      });
-
-      this.imap.connect();
-    });
-  }
-
-  /**
-   * Open INBOX and fetch new messages
-   */
-  private openInbox(): void {
-    if (!this.imap) return;
-
-    this.imap.openBox("INBOX", true, (err, box) => {
-      if (err) {
-        console.error("[ImapPollService] Failed to open INBOX:", err.message);
-        this.imap?.end();
-        return;
-      }
-
-      const total = box.messages.total;
-      if (total === 0) {
-        this.imap.end();
-        return;
-      }
-
-      // Search for unseen messages with UID > lastUid
-      if (this.lastUid > 0) {
-        // Use UID range to get only new messages
-        this.imap.search([["UID", `${this.lastUid + 1}:*`]], (searchErr, results) => {
-          if (searchErr || !results || results.length === 0) {
-            this.imap?.end();
-            return;
-          }
-
-          // Fetch these messages
-          const uids = results as number[];
-          console.log(`[ImapPollService] Found ${uids.length} new message(s)`);
-          
-          this.fetchMessages(uids);
-        });
-      } else {
-        // First run - get last N messages
-        const limit = Math.min(total, 10);
-        const start = total - limit + 1;
-        
-        this.imap.search([["UNSEEN"], ["UID", `${start}:${total}`]], (searchErr, results) => {
-          if (searchErr || !results || results.length === 0) {
-            this.imap?.end();
-            return;
-          }
-
-          const uids = results as number[];
-          console.log(`[ImapPollService] Initial fetch: ${uids.length} message(s)`);
-          
-          this.fetchMessages(uids);
-        });
-      }
-    });
-  }
-
-  /**
-   * Fetch specific messages by UID
-   */
-  private fetchMessages(uids: number[]): void {
-    if (!this.imap || uids.length === 0) {
-      this.imap?.end();
-      return;
-    }
-
-    // Update lastUid to the highest UID
-    this.lastUid = Math.max(...uids);
-
-    const f = this.imap.fetch(uids, {
-      bodies: "",
-      struct: true,
-    });
-
-    let processedCount = 0;
-    const totalToProcess = uids.length;
-
-    f.on("message", (msg) => {
-      let msgUid = 0;
+      const messages: ReceivedEmail[] = [];
       
-      msg.on("uid", (uid) => {
-        msgUid = uid;
+      const conn = tls.connect(port, host, {
+        rejectUnauthorized: false,
       });
 
-      msg.on("body", (stream) => {
-        simpleParser(stream).then((parsed) => {
-          const email: ReceivedEmail = {
-            id: parsed.messageId || `imap-${msgUid}-${Date.now()}`,
-            from: parsed.from?.value?.[0]?.address || parsed.from?.value?.[0]?.text || "",
-            to: parsed.to?.value?.[0]?.address || parsed.to?.value?.[0]?.text || "",
-            subject: parsed.subject || "",
-            body: parsed.text || parsed.html?.replace(/<[^>]*>/g, "") || "",
-            date: parsed.date || new Date(),
-            messageId: msgUid.toString(),
-          };
+      let tag = 1;
+      let stage = 0;
+      let buffer = "";
+      let total = 0;
+      
+      const send = (cmd: string): void => {
+        conn.write(`A${tag++} ${cmd}\r\n`);
+      };
 
-          this.processEmail(email);
-          
-          processedCount++;
-          if (processedCount >= totalToProcess) {
-            this.imap?.end();
+      const finish = (err?: Error): void => {
+        conn.end();
+        this.isConnected = false;
+        if (err) reject(err);
+        else resolve(messages);
+      };
+
+      conn.on("data", (chunk) => {
+        buffer += chunk.toString();
+        
+        // Process complete lines
+        const lines = buffer.split(/\r?\n/);
+        buffer = lines.pop() || "";
+        
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed) continue;
+
+          // Stage transitions
+          if (stage === 0 && trimmed.includes("* OK")) {
+            stage = 1;
+            send(`LOGIN "${user}" "${password}"`);
+          } else if (stage === 1 && trimmed.includes("OK LOGIN")) {
+            stage = 2;
+            // Send ID command (required for 163.com)
+            send(`ID ("name" "${this.imapId}" "version" "7.2" "vendor" "Tencent")`);
+          } else if (stage === 2 && trimmed.includes("OK ID")) {
+            stage = 3;
+            send('SELECT "INBOX"');
+          } else if (stage === 3 && trimmed.includes("READ-WRITE")) {
+            stage = 4;
+            this.isConnected = true;
+            
+            // Extract message count from buffer
+            const match = buffer.match(/(\d+) EXISTS/);
+            const inboxTotal = match ? parseInt(match[1]) : 0;
+            
+            if (inboxTotal === 0) {
+              finish();
+              return;
+            }
+            
+            console.log(`[ImapPollService] INBOX has ${inboxTotal} messages`);
+            
+            // Fetch messages after lastSeqNum (or last 10 for first time)
+            if (this.lastSeqNum > 0) {
+              const start = this.lastSeqNum + 1;
+              if (start <= inboxTotal) {
+                console.log(`[ImapPollService] Fetching messages ${start}:${inboxTotal}`);
+                send(`FETCH ${start}:${inboxTotal} (RFC822.HEADER)`);
+              } else {
+                console.log(`[ImapPollService] No new messages`);
+                finish();
+              }
+            } else {
+              // First run - get last 10
+              const start = Math.max(1, inboxTotal - 9);
+              console.log(`[ImapPollService] Initial fetch: ${start}:${inboxTotal}`);
+              send(`FETCH ${start}:${inboxTotal} (RFC822.HEADER)`);
+            }
+          } else if (stage === 4 && trimmed.includes("OK Fetch")) {
+            stage = 5;
+            // Parse all messages from buffer
+            this.parseMessages(buffer, messages);
+            console.log(`[ImapPollService] Parsed ${messages.length} messages`);
+            this.lastSeqNum = total;  // Update lastSeqNum
+            console.log(`[ImapPollService] Updated lastSeqNum to ${this.lastSeqNum}`);
+            finish();
+          } else if (trimmed.includes("BAD") || trimmed.includes("NO") && !trimmed.includes("NO STORE")) {
+            console.log("[ImapPollService] Error:", trimmed);
+            finish();
           }
-        }).catch((err) => {
-          console.error("[ImapPollService] Parse error:", err);
-          processedCount++;
-          if (processedCount >= totalToProcess) {
-            this.imap?.end();
-          }
+        }
+      });
+
+      conn.on("error", (err) => {
+        console.error("[ImapPollService] Socket error:", err.message);
+        finish(err);
+      });
+
+      conn.on("close", () => {
+        if (stage < 4) {
+          console.log("[ImapPollService] Connection closed prematurely");
+        }
+      });
+
+      // Timeout
+      setTimeout(() => {
+        console.log("[ImapPollService] Poll timeout");
+        finish();
+      }, 25000);
+    });
+  }
+
+  /**
+   * Parse messages from IMAP response buffer
+   */
+  private parseMessages(buffer: string, messages: ReceivedEmail[]): void {
+    // Simple header parsing
+    const fromMatch = buffer.match(/From:[^\n]+/g);
+    const subjectMatch = buffer.match(/Subject:[^\n]+/g);
+    const msgIdMatch = buffer.match(/Message-ID:[^\n]+/g);
+    const dateMatch = buffer.match(/Date:[^\n]+/g);
+    
+    if (fromMatch) {
+      for (let i = 0; i < fromMatch.length; i++) {
+        const from = this.extractHeaderValue(fromMatch[i]);
+        const to = this.extractHeaderValue(buffer.match(/To:[^\n]+/g)?.[i] || "");
+        const subject = this.extractHeaderValue(subjectMatch?.[i] || "");
+        const msgId = this.extractHeaderValue(msgIdMatch?.[i] || "");
+        const dateStr = this.extractHeaderValue(dateMatch?.[i] || "");
+        
+        messages.push({
+          id: msgId || `msg-${Date.now()}-${i}`,
+          from: from,
+          to: to,
+          subject: subject,
+          body: "",  // Body would need RFC822.TEXT parsing
+          date: dateStr ? new Date(dateStr) : new Date(),
+          messageId: msgId,
         });
-      });
-    });
+      }
+    }
+  }
 
-    f.once("error", (err) => {
-      console.error("[ImapPollService] Fetch error:", err);
-      this.imap?.end();
-    });
+  /**
+   * Extract value from header line
+   */
+  private extractHeaderValue(header: string): string {
+    const colonIdx = header.indexOf(":");
+    if (colonIdx === -1) return header;
+    return header.substring(colonIdx + 1).trim();
   }
 
   /**
    * Process received email - deliver to local mailbox and emit event
    */
   private processEmail(email: ReceivedEmail): void {
-    console.log(`[ImapPollService] Processing email from ${email.from}: ${email.subject}`);
+    console.log(`[ImapPollService] Processing: ${email.from} -> ${email.to}: ${email.subject}`);
 
-    // Check if destination is local address
-    const isLocal = email.to.endsWith(`@${this.config.localDomain}`);
+    // Check if this email is for our IMAP user
+    // email.to is the external address (e.g., gddzhaokun@163.com)
+    // We need to find the corresponding local address
+    const imapUser = this.config.user; // e.g., gddzhaokun@163.com
     
-    if (!isLocal) {
-      console.log(`[ImapPollService] Email to ${email.to} is not local, skipping`);
+    // Check if destination matches our IMAP user (external address)
+    const isForUs = email.to.toLowerCase() === imapUser.toLowerCase();
+    
+    if (!isForUs) {
+      console.log(`[ImapPollService] Email not for us (${email.to} != ${imapUser}), skipping`);
       return;
     }
 
-    // Check if local address exists
-    const address = this.addressManager.getByEmail(email.to);
+    // Find local address by mapping external to internal
+    // e.g., gddzhaokun@163.com -> gddzhaokun@local
+    const localAddress = imapUser.split('@')[0] + '@' + this.config.localDomain;
+    const address = this.addressManager.getByEmail(localAddress);
+    
     if (!address) {
-      console.log(`[ImapPollService] Local address ${email.to} not found, skipping`);
+      console.log(`[ImapPollService] Local address ${localAddress} not found`);
       return;
     }
 
-    // Store message locally
+    // Store message locally with local address
     const message = this.messageStore.send({
       fromAddress: email.from,
-      toAddress: email.to,
+      toAddress: localAddress,  // Use local address
       subject: email.subject,
       body: email.body,
     });
 
-    console.log(`[ImapPollService] Message stored: ${message.id}`);
+    console.log(`[ImapPollService] Stored: ${message.id} -> ${localAddress}`);
 
     // Emit received event
     this.eventBus.emit(EventType.MESSAGE_RECEIVED, {
       messageId: message.id,
       fromAddress: email.from,
-      toAddress: email.to,
+      toAddress: localAddress,
     });
 
     // Call optional callback
@@ -314,26 +318,52 @@ export class ImapPollService {
    * Verify IMAP connection
    */
   async verifyConnection(): Promise<boolean> {
+    const { host, port, user, password } = this.config;
+    
     return new Promise((resolve) => {
-      const testImap = new Imap({
-        user: this.config.user,
-        password: this.config.password,
-        host: this.config.host,
-        port: this.config.port,
-        tls: this.config.tls,
-        connTimeout: 5000,
+      const conn = tls.connect(port, host, {
+        rejectUnauthorized: false,
       });
 
-      testImap.once("ready", () => {
-        testImap.end();
-        resolve(true);
+      let stage = 0;
+      let buffer = "";
+      
+      const send = (cmd: string): void => {
+        conn.write(`A1 ${cmd}\r\n`);
+      };
+
+      conn.on("data", (chunk) => {
+        buffer += chunk.toString();
+        
+        const lines = buffer.split(/\r?\n/);
+        for (const line of lines) {
+          if (stage === 0 && line.includes("* OK")) {
+            stage = 1;
+            send(`LOGIN "${user}" "${password}"`);
+          } else if (stage === 1 && line.includes("OK LOGIN")) {
+            stage = 2;
+            send(`ID ("name" "${this.imapId}" "version" "7.2" "vendor" "Tencent")`);
+          } else if (stage === 2 && line.includes("OK ID")) {
+            stage = 3;
+            send('SELECT "INBOX"');
+          } else if (stage === 3 && (line.includes("READ-WRITE") || line.includes("OK SELECT"))) {
+            console.log("[ImapPollService] ✅ IMAP access verified!");
+            conn.end();
+            resolve(true);
+          } else if (line.includes("NO") || line.includes("BAD") || line.includes("Unsafe")) {
+            console.log("[ImapPollService] ❌ IMAP access denied:", line);
+            conn.end();
+            resolve(false);
+          }
+        }
       });
 
-      testImap.once("error", () => {
+      conn.on("error", () => resolve(false));
+
+      setTimeout(() => {
+        conn.end();
         resolve(false);
-      });
-
-      testImap.connect();
+      }, 15000);
     });
   }
 }
@@ -345,5 +375,5 @@ export const DEFAULT_163_IMAP_CONFIG: Partial<ImapPollConfig> = {
   host: "imap.163.com",
   port: 993,
   tls: true,
-  pollInterval: 30000,  // 30 seconds
+  pollInterval: 30000,
 };
