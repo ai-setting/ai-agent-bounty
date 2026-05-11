@@ -1,47 +1,44 @@
 /**
  * com addresses command
- * List communication addresses for an agent
+ * List registered addresses for an agent
  */
 
 import type { CommandModule } from 'yargs';
 import chalk from 'chalk';
-import { createContext } from '../../services/context.js';
 
-export const addressesCommand: CommandModule = {
-  command: 'addresses',
-  describe: 'List communication addresses for an agent',
+interface AddressesOptions {
+  agentId?: string;
+}
+
+export const addressesCommand: CommandModule<object, AddressesOptions> = {
+  command: ['addresses', 'addr'],
+  describe: 'List registered IM addresses',
   
   builder: (yargs) =>
     yargs
       .option('agent-id', {
         alias: 'a',
         type: 'string',
-        demandOption: true,
-        description: 'Agent ID',
+        description: 'Agent ID (optional, uses default if not specified)',
       }),
 
-  handler: async (argv) => {
-    const ctx = createContext();
-
-    try {
-      const mail = ctx.mailService.getAddressByAgent(argv['agent-id'] as string);
-
-      console.log(chalk.bold('\nCommunication Addresses:\n'));
-      
-      if (mail) {
-        console.log(chalk.cyan('  Internal:'), mail.address);
-        console.log(chalk.cyan('  Provider:'), mail.provider);
-        console.log(chalk.cyan('  Created:'), new Date(mail.createdAt).toLocaleString());
-      } else {
-        console.log(chalk.yellow('  No address found for this agent'));
-      }
+  handler: async (args) => {
+    const { agentId } = args;
+    
+    // In the new Agent IM system, addresses are just strings (agent-id@host)
+    // No registration is needed - agents can use any address format
+    console.log(chalk.bold('\nAgent IM Addresses\n'));
+    console.log(chalk.gray('  Format: agent-id@host\n'));
+    console.log(chalk.cyan('  Example addresses:'));
+    console.log(chalk.gray('    alice@server.com'));
+    console.log(chalk.gray('    bob@production.local'));
+    console.log(chalk.gray('    worker-001@localhost'));
+    console.log();
+    
+    if (agentId) {
+      console.log(chalk.cyan('  Agent ID:'), agentId);
+      console.log(chalk.cyan('  Default Address:'), `${agentId}@localhost`);
       console.log();
-
-      ctx.db.close();
-    } catch (error: any) {
-      console.error(chalk.red('\n✗ Error:'), error.message);
-      ctx.db.close();
-      process.exit(1);
     }
   },
 };

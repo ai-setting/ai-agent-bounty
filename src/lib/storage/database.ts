@@ -134,33 +134,6 @@ export class Database {
     this.db.run(`CREATE INDEX IF NOT EXISTS idx_escrows_issuer_id ON escrows(issuer_id)`);
     this.db.run(`CREATE INDEX IF NOT EXISTS idx_escrows_provider_id ON escrows(provider_id)`);
 
-    // Create mail_addresses table
-    this.db.run(`
-      CREATE TABLE IF NOT EXISTS mail_addresses (
-        id TEXT PRIMARY KEY,
-        agent_id TEXT NOT NULL,
-        address TEXT UNIQUE NOT NULL,
-        provider TEXT DEFAULT 'internal',
-        config TEXT,
-        created_at INTEGER NOT NULL,
-        FOREIGN KEY (agent_id) REFERENCES agents(id)
-      )
-    `);
-
-    // Create messages table
-    this.db.run(`
-      CREATE TABLE IF NOT EXISTS messages (
-        id TEXT PRIMARY KEY,
-        from_address TEXT NOT NULL,
-        to_address TEXT NOT NULL,
-        subject TEXT,
-        body TEXT NOT NULL,
-        status TEXT DEFAULT 'pending',
-        read_at INTEGER,
-        created_at INTEGER NOT NULL
-      )
-    `);
-
     // Create credit_transactions table
     this.db.run(`
       CREATE TABLE IF NOT EXISTS credit_transactions (
@@ -175,100 +148,6 @@ export class Database {
         FOREIGN KEY (task_id) REFERENCES tasks(id)
       )
     `);
-
-    // Create agent_configs table (SMTP/IMAP configuration per agent)
-    this.db.run(`
-      CREATE TABLE IF NOT EXISTS agent_configs (
-        id TEXT PRIMARY KEY,
-        agent_id TEXT NOT NULL UNIQUE,
-        smtp_host TEXT,
-        smtp_port INTEGER DEFAULT 587,
-        smtp_user TEXT,
-        smtp_password TEXT,
-        smtp_secure INTEGER DEFAULT 0,
-        imap_host TEXT,
-        imap_port INTEGER DEFAULT 993,
-        imap_user TEXT,
-        imap_password TEXT,
-        imap_tls INTEGER DEFAULT 1,
-        created_at INTEGER NOT NULL,
-        updated_at INTEGER NOT NULL,
-        FOREIGN KEY (agent_id) REFERENCES agents(id)
-      )
-    `);
-
-    // Create mail_channels table (通信通道)
-    this.db.run(`
-      CREATE TABLE IF NOT EXISTS mail_channels (
-        id TEXT PRIMARY KEY,
-        agent_id TEXT NOT NULL,
-        address TEXT NOT NULL,
-        status TEXT DEFAULT 'disconnected',
-        last_checked_at INTEGER,
-        created_at INTEGER NOT NULL,
-        FOREIGN KEY (agent_id) REFERENCES agents(id),
-        FOREIGN KEY (address) REFERENCES mail_addresses(address)
-      )
-    `);
-
-    // Create mailbox_addresses table (new mailbox service)
-    this.db.run(`
-      CREATE TABLE IF NOT EXISTS mailbox_addresses (
-        id TEXT PRIMARY KEY,
-        agent_id TEXT NOT NULL,
-        address TEXT UNIQUE NOT NULL,
-        type TEXT DEFAULT 'internal',
-        created_at INTEGER NOT NULL
-      )
-    `);
-
-    // Create mailbox_messages table (new mailbox service)
-    this.db.run(`
-      CREATE TABLE IF NOT EXISTS mailbox_messages (
-        id TEXT PRIMARY KEY,
-        from_address TEXT NOT NULL,
-        to_address TEXT NOT NULL,
-        subject TEXT,
-        body TEXT NOT NULL,
-        status TEXT DEFAULT 'pending',
-        read_at INTEGER,
-        created_at INTEGER NOT NULL
-      )
-    `);
-
-    // Create mailbox_channels table (new mailbox service)
-    this.db.run(`
-      CREATE TABLE IF NOT EXISTS mailbox_channels (
-        id TEXT PRIMARY KEY,
-        agent_id TEXT NOT NULL,
-        type TEXT NOT NULL,
-        status TEXT DEFAULT 'disconnected',
-        last_heartbeat INTEGER,
-        created_at INTEGER NOT NULL
-      )
-    `);
-
-    // Create mailbox_outbound_queue table (new mailbox service)
-    this.db.run(`
-      CREATE TABLE IF NOT EXISTS mailbox_outbound_queue (
-        id TEXT PRIMARY KEY,
-        message_id TEXT NOT NULL,
-        external_to TEXT NOT NULL,
-        attempts INTEGER DEFAULT 0,
-        next_retry_at INTEGER,
-        status TEXT DEFAULT 'pending',
-        error TEXT,
-        created_at INTEGER NOT NULL
-      )
-    `);
-
-    // Create indexes for mailbox tables
-    this.db.run(`CREATE INDEX IF NOT EXISTS idx_mailbox_addresses_agent ON mailbox_addresses(agent_id)`);
-    this.db.run(`CREATE INDEX IF NOT EXISTS idx_mailbox_addresses_address ON mailbox_addresses(address)`);
-    this.db.run(`CREATE INDEX IF NOT EXISTS idx_mailbox_messages_to ON mailbox_messages(to_address)`);
-    this.db.run(`CREATE INDEX IF NOT EXISTS idx_mailbox_messages_status ON mailbox_messages(status)`);
-    this.db.run(`CREATE INDEX IF NOT EXISTS idx_mailbox_channels_agent ON mailbox_channels(agent_id)`);
-    this.db.run(`CREATE INDEX IF NOT EXISTS idx_mailbox_channels_status ON mailbox_channels(status)`);
   }
 
   /**

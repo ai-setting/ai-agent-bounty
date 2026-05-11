@@ -1,131 +1,83 @@
 /**
  * com inbox command
- * Check inbox messages (internal or IMAP)
+ * Check inbox messages via Agent IM
  */
 
 import type { CommandModule } from 'yargs';
 import chalk from 'chalk';
-import { createContext } from '../../services/context.js';
-import { AgentConfigService } from '../../../lib/com/agent-config.js';
-import { ImapService } from '../../../lib/com/imap.js';
 
-const INTERNAL_DOMAIN = 'agent-mail.local';
+interface InboxOptions {
+  address: string;
+  host?: string;
+  port?: number;
+  limit?: number;
+}
 
-export const inboxCommand: CommandModule = {
-  command: 'inbox',
-  describe: 'Check inbox messages',
+export const inboxCommand: CommandModule<object, InboxOptions> = {
+  command: ['inbox', 'i'],
+  describe: 'Check inbox messages via Agent IM',
   
   builder: (yargs) =>
     yargs
-      .option('agent-id', {
+      .option('address', {
         alias: 'a',
         type: 'string',
         demandOption: true,
-        description: 'Agent ID',
+        description: 'Agent address (format: agent-id@host)',
+      })
+      .option('host', {
+        alias: 'H',
+        type: 'string',
+        description: 'IM server host',
+        default: 'localhost',
+      })
+      .option('port', {
+        alias: 'p',
+        type: 'number',
+        description: 'IM server port',
+        default: 3001,
       })
       .option('limit', {
         alias: 'l',
         type: 'number',
+        description: 'Number of messages to show',
         default: 10,
-        description: 'Number of messages',
-      })
-      .option('unread', {
-        alias: 'u',
-        type: 'boolean',
-        default: false,
-        description: 'Show only unread',
       }),
 
-  handler: async (argv) => {
-    const ctx = createContext();
-    const configService = new AgentConfigService(ctx.db);
-    const imapService = new ImapService();
-
+  handler: async (args) => {
+    const { address, host, port, limit } = args;
+    const url = `http://${host}:${port}/messages?address=${encodeURIComponent(address)}`;
+    
     try {
-      // Get agent's mail address
-      const mailAddress = ctx.mailService.getAddressByAgent(argv['agent-id'] as string);
+      const response = await fetch(url);
       
-      if (!mailAddress) {
-        console.error(chalk.red('\n✗ Error: No mail address found for this agent'));
-        console.error(chalk.gray('  Please register the agent first.\n'));
-        ctx.db.close();
-        process.exit(1);
-      }
-
-      // Check if it's an internal address
-      if (mailAddress.address.endsWith(`@${INTERNAL_DOMAIN}`)) {
-        // Use internal mail system
-        console.log(chalk.gray(`  [Internal mail: ${mailAddress.address}]\n`));
+      if (response.ok) {
+        const messages = await response.json() as any[];
         
-        const messages = ctx.mailService.getMessages(mailAddress.address, {
-          limit: argv.limit as number,
-          unreadOnly: argv.unread as boolean,
-        });
-
         if (messages.length === 0) {
-          console.log(chalk.yellow('No messages found.\n'));
+          console.log(chalk.yellow('\nNo messages in inbox.\n'));
         } else {
-          console.log(chalk.bold(`Inbox (${messages.length} messages):\n`));
+          const displayMessages = messages.slice(0, limit || 10);
+          console.log(chalk.bold(`\nInbox (${messages.length} messages, showing ${displayMessages.length}):\n`));
           
-          messages.forEach((msg, i) => {
-            const statusIcon = msg.status === 'read' ? ' ' : '●';
-            console.log(chalk.cyan(`[${statusIcon}] From: ${msg.fromAddress}`));
-            console.log(chalk.cyan(`    Subject: ${msg.subject || '(no subject)'}`));
-            console.log(chalk.gray(`    Date: ${new Date(msg.createdAt).toLocaleString()}`));
-            const preview = msg.body.substring(0, 100).replace(/\n/g, ' ');
-            console.log(chalk.gray(`    Preview: ${preview}...`));
+          displayMessages.forEach((msg: any) => {
+            const statusIcon = msg.status === 'acked' ? '✓' : msg.status === 'delivered' ? '●' : '○';
+            console.log(chalk.cyan(`[${statusIcon}] From: ${msg.from}`));
+            console.log(chalk.cyan(`    To: ${msg.to}`));
+            if (msg.content?.type === 'text') {
+              const preview = msg.content.body.substring(0, 100).replace(/\n/g, ' ');
+              console.log(chalk.gray(`    ${preview}...`));
+            }
+            console.log(chalk.gray(`    Status: ${msg.status} | ${new Date(msg.createdAt).toLocaleString()}`));
             console.log();
           });
         }
       } else {
-        // Use external IMAP
-        const config = configService.getConfig(argv['agent-id'] as string);
-        
-        if (!config || !config.imapHost || !config.imapUser || !config.imapPassword) {
-          console.error(chalk.red('\n✗ Error: IMAP not configured for this agent'));
-          console.error(chalk.gray('  Run: bounty com config --agent-id <id> --imap-host <host> ...\n'));
-          ctx.db.close();
-          process.exit(1);
-        }
-
-        console.log(chalk.cyan('\nFetching messages via IMAP...\n'));
-
-        const messages = await imapService.fetchMessages(
-          {
-            host: config.imapHost,
-            port: config.imapPort,
-            user: config.imapUser,
-            password: config.imapPassword,
-            tls: config.imapTls,
-          },
-          {
-            limit: argv.limit as number,
-            unreadOnly: argv.unread as boolean,
-          }
-        );
-
-        if (messages.length === 0) {
-          console.log(chalk.yellow('No messages found.\n'));
-        } else {
-          console.log(chalk.bold(`Inbox (${messages.length} messages):\n`));
-          
-          messages.forEach((msg, i) => {
-            console.log(chalk.cyan(`[${i + 1}] From: ${msg.from}`));
-            console.log(chalk.cyan(`    Subject: ${msg.subject}`));
-            console.log(chalk.gray(`    Date: ${msg.date.toLocaleString()}`));
-            if (msg.body) {
-              const preview = msg.body.substring(0, 100).replace(/\n/g, ' ');
-              console.log(chalk.gray(`    Preview: ${preview}...`));
-            }
-            console.log();
-          });
-        }
+        console.error(chalk.red(`\n✗ Failed to get inbox (${response.status})\n`));
+        process.exit(1);
       }
-
-      ctx.db.close();
-    } catch (error: any) {
-      console.error(chalk.red('\n✗ Error:'), error.message);
-      ctx.db.close();
+    } catch (error) {
+      console.error(chalk.red('\n✗ Error getting inbox:'), error instanceof Error ? error.message : String(error));
       process.exit(1);
     }
   },

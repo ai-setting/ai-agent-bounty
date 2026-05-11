@@ -1,107 +1,87 @@
 /**
  * com connect command
- * Start IMAP IDLE monitoring in background
+ * Connect to Agent IM server via WebSocket
  */
 
 import type { CommandModule } from 'yargs';
 import chalk from 'chalk';
-import { createContext } from '../../services/context.js';
-import { AgentConfigService } from '../../../lib/com/agent-config.js';
-import { IdleService } from '../../../lib/com/idle.js';
 
-// Store active idle services
-export const activeIdleServices: Map<string, IdleService> = new Map();
+interface ConnectOptions {
+  address: string;
+  host?: string;
+  port?: number;
+}
 
-export const connectCommand: CommandModule = {
-  command: 'connect',
-  describe: 'Start IMAP IDLE monitoring for real-time email notifications',
+export const connectCommand: CommandModule<object, ConnectOptions> = {
+  command: ['connect', 'conn'],
+  describe: 'Connect to Agent IM server via WebSocket',
   
   builder: (yargs) =>
     yargs
-      .option('agent-id', {
+      .option('address', {
         alias: 'a',
         type: 'string',
         demandOption: true,
-        description: 'Agent ID',
+        description: 'Your address (format: agent-id@host)',
       })
-      .option('daemon', {
-        alias: 'd',
-        type: 'boolean',
-        default: false,
-        description: 'Run as background daemon',
+      .option('host', {
+        alias: 'H',
+        type: 'string',
+        description: 'IM server host',
+        default: 'localhost',
+      })
+      .option('port', {
+        alias: 'p',
+        type: 'number',
+        description: 'IM server port',
+        default: 3001,
       }),
 
-  handler: async (argv) => {
-    const ctx = createContext();
-    const configService = new AgentConfigService(ctx.db);
-
+  handler: async (args) => {
+    const { address, host, port } = args;
+    const wsUrl = `ws://${host}:${port}/ws?address=${encodeURIComponent(address)}`;
+    
+    console.log(chalk.bold('\nConnecting to Agent IM server...\n'));
+    console.log(chalk.gray('  Address:'), address);
+    console.log(chalk.gray('  Server:'), `${host}:${port}`);
+    console.log();
+    
     try {
-      const config = configService.getConfig(argv['agent-id'] as string);
+      // In a real CLI, this would establish a persistent WebSocket connection
+      // For now, we just verify the connection is possible
+      const ws = new WebSocket(wsUrl);
       
-      if (!config || !config.imapHost || !config.imapUser || !config.imapPassword) {
-        console.error(chalk.red('\n✗ Error: IMAP not configured for this agent'));
-        console.error(chalk.gray('  Run: bounty com config --agent-id <id> --imap-host <host> ...\n'));
-        ctx.db.close();
-        process.exit(1);
-      }
-
-      // Check if already connected
-      if (activeIdleServices.has(argv['agent-id'] as string)) {
-        console.log(chalk.yellow('\n⚠ Already connected for this agent\n'));
-        ctx.db.close();
-        return;
-      }
-
-      const idleService = new IdleService();
-
-      await idleService.start(
-        {
-          host: config.imapHost,
-          port: config.imapPort,
-          user: config.imapUser,
-          password: config.imapPassword,
-          tls: config.imapTls,
-        },
-        (mail) => {
-          console.log(chalk.green('\n📧 [NEW MAIL]'));
-          console.log(chalk.cyan(`  From: ${mail.from}`));
-          console.log(chalk.cyan(`  Subject: ${mail.subject}`));
-          console.log(chalk.cyan(`  Date: ${mail.date.toLocaleString()}`));
-          if (mail.body) {
-            const preview = mail.body.substring(0, 200).replace(/\n/g, ' ');
-            console.log(chalk.gray(`  Preview: ${preview}...`));
-          }
-          console.log();
-        }
-      );
-
-      activeIdleServices.set(argv['agent-id'] as string, idleService);
-
-      console.log(chalk.green('\n✓ Connected and listening for emails\n'));
-      console.log(chalk.cyan('  Agent ID:'), argv['agent-id']);
-      console.log(chalk.cyan('  IMAP:'), `${config.imapHost}:${config.imapPort}`);
-      console.log();
-
-      if (!argv['daemon']) {
-        console.log(chalk.gray('Press Ctrl+C to stop...\n'));
-
-        // Handle shutdown
-        const shutdown = () => {
-          idleService.stop();
-          activeIdleServices.delete(argv['agent-id'] as string);
-          ctx.db.close();
-          process.exit(0);
+      const connected = await new Promise<boolean>((resolve) => {
+        const timeout = setTimeout(() => {
+          ws.close();
+          resolve(false);
+        }, 5000);
+        
+        ws.onopen = () => {
+          clearTimeout(timeout);
+          ws.close();
+          resolve(true);
         };
-
-        process.on('SIGINT', shutdown);
-        process.on('SIGTERM', shutdown);
+        
+        ws.onerror = () => {
+          clearTimeout(timeout);
+        };
+      });
+      
+      if (connected) {
+        console.log(chalk.green('✓ Connected successfully\n'));
       } else {
-        ctx.db.close();
+        console.log(chalk.yellow('⚠ Connection timed out or failed\n'));
+        console.log(chalk.gray('  The server may be unreachable or the address format may be invalid.\n'));
       }
-    } catch (error: any) {
-      console.error(chalk.red('\n✗ Error:'), error.message);
-      ctx.db.close();
+    } catch (error) {
+      console.error(chalk.red('\n✗ Error:'), error instanceof Error ? error.message : String(error));
       process.exit(1);
     }
   },
 };
+
+/**
+ * Active WebSocket connections (for reference)
+ */
+export const activeIdleServices: Map<string, WebSocket> = new Map();

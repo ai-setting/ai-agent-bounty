@@ -1,6 +1,6 @@
 /**
  * Com Commands
- * Communication commands for email operations
+ * Communication commands using Agent IM (WebSocket + HTTP)
  */
 
 import type { CommandModule } from 'yargs';
@@ -13,7 +13,7 @@ import { disconnectCommand } from './disconnect.js';
 
 export const comCommands: CommandModule = {
   command: 'com',
-  describe: 'Communication commands (email)',
+  describe: 'Communication commands (Agent IM)',
   
   builder: (yargs) =>
     yargs
@@ -37,4 +37,3 @@ export { addressesCommand } from './addresses.js';
 export { inboxCommand } from './inbox.js';
 export { connectCommand } from './connect.js';
 export { disconnectCommand } from './disconnect.js';
-export { activeIdleServices } from './connect.js';

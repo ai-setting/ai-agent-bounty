@@ -1,10 +1,9 @@
 /**
- * com send command
- * Send message via Agent IM
+ * IM CLI - Send Message Command
  */
 
 import type { CommandModule } from 'yargs';
-import chalk from 'chalk';
+import { v4 as uuidv4 } from 'uuid';
 
 interface SendOptions {
   from: string;
@@ -14,43 +13,41 @@ interface SendOptions {
   port?: number;
 }
 
-export const sendCommand: CommandModule<object, SendOptions> = {
+export const SendCommand: CommandModule<object, SendOptions> = {
   command: ['send', 's'],
-  describe: 'Send a message via Agent IM',
-  
+  describe: 'Send a message to another agent',
   builder: (yargs) =>
     yargs
       .option('from', {
         alias: 'f',
         type: 'string',
-        demandOption: true,
         description: 'Sender address (format: agent-id@host)',
+        demandOption: true,
       })
       .option('to', {
         alias: 't',
         type: 'string',
-        demandOption: true,
         description: 'Recipient address (format: agent-id@host)',
+        demandOption: true,
       })
       .option('body', {
         alias: 'b',
         type: 'string',
-        demandOption: true,
         description: 'Message body',
+        demandOption: true,
       })
       .option('host', {
         alias: 'H',
         type: 'string',
-        description: 'IM server host',
+        description: 'Server host',
         default: 'localhost',
       })
       .option('port', {
         alias: 'p',
         type: 'number',
-        description: 'IM server port',
-        default: 3001,
+        description: 'Server port',
+        default: 8080,
       }),
-
   handler: async (args) => {
     const { from, to, body, host, port } = args;
     const url = `http://${host}:${port}/messages`;
@@ -62,27 +59,30 @@ export const sendCommand: CommandModule<object, SendOptions> = {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
+          id: uuidv4(),
           from,
           to,
           content: { type: 'text', body },
+          status: 'pending',
+          createdAt: new Date().toISOString(),
         }),
       });
       
       if (response.ok) {
         const message = await response.json() as any;
-        console.log(chalk.green('\n✓ Message sent successfully\n'));
-        console.log(chalk.cyan('  ID:'), message.id);
-        console.log(chalk.cyan('  From:'), message.from);
-        console.log(chalk.cyan('  To:'), message.to);
-        console.log();
+        console.log('✓ Message sent successfully');
+        console.log(`  ID: ${message.id}`);
+        console.log(`  From: ${message.from}`);
+        console.log(`  To: ${message.to}`);
       } else {
         const error = await response.text();
-        console.error(chalk.red(`\n✗ Failed to send message (${response.status})`));
+        console.error(`✗ Failed to send message (${response.status})`);
         console.error(error);
         process.exit(1);
       }
     } catch (error) {
-      console.error(chalk.red('\n✗ Error sending message:'), error instanceof Error ? error.message : String(error));
+      console.error(`✗ Error sending message`);
+      console.error(error instanceof Error ? error.message : String(error));
       process.exit(1);
     }
   },

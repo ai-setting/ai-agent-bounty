@@ -17,13 +17,14 @@ export {
   type GrabResult,
   type CompleteResult 
 } from './lib/bounty/index.js';
-export { 
-  MailService, 
-  type MailAddress, 
-  type Message, 
-  type SendMessageInput,
-  type MailConfig 
-} from './lib/mail/index.js';
+
+// Agent IM 模块
+export { createIMServer, type IMServerConfig } from './im/server/index.js';
+export { IMHTTPServer } from './im/server/http.js';
+export { IMWebSocketServer } from './im/server/ws.js';
+export { IMDatabase } from './im/db/index.js';
+export { Mailbox, type MailboxConfig } from './im/client/index.js';
+export type { Message, Agent as IMAgent, Content } from './im/types.js';
 
 // CLI exports
 export { runBountyCli, createContext, createMemoryContext, type BountyContext } from './cli/index.js';

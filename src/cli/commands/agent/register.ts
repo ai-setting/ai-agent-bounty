@@ -48,9 +48,6 @@ export const registerCommand: CommandModule = {
         publicKey: argv['public-key'] as string | undefined,
       });
 
-      // 自动注册邮件地址
-      const mailAddress = ctx.mailService.registerAddress(agent.id, agent.name);
-
       console.log(chalk.green('\n✓ Agent registered successfully\n'));
       console.log(chalk.cyan('  ID:'), agent.id);
       console.log(chalk.cyan('  Name:'), agent.name);
@@ -60,7 +57,6 @@ export const registerCommand: CommandModule = {
       }
       console.log(chalk.cyan('  Credits:'), agent.credits);
       console.log(chalk.cyan('  Status:'), agent.status);
-      console.log(chalk.cyan('  Mail:'), mailAddress.address);
       console.log();
 
       ctx.db.close();

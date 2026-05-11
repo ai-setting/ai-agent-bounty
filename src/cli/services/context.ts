@@ -7,7 +7,7 @@
 import { Database } from '../../lib/storage/database.js';
 import { AgentService } from '../../lib/agent/index.js';
 import { BountyService } from '../../lib/bounty/index.js';
-import { MailService } from '../../lib/mail/index.js';
+import { IMDatabase } from '../../im/db/index.js';
 
 /**
  * BountyContext - Service container interface
@@ -19,7 +19,7 @@ export interface BountyContext {
   db: Database;
   agentService: AgentService;
   bountyService: BountyService;
-  mailService: MailService;
+  imDb: IMDatabase;
 }
 
 /**
@@ -29,13 +29,13 @@ export function createContext(): BountyContext {
   const db = new Database({ path: './data/bounty.db' });
   const agentService = new AgentService(db);
   const bountyService = new BountyService(db, agentService);
-  const mailService = new MailService(db);
+  const imDb = new IMDatabase({ path: './data/im.db' });
 
   return {
     db,
     agentService,
     bountyService,
-    mailService,
+    imDb,
   };
 }
 
@@ -46,12 +46,12 @@ export function createMemoryContext(): BountyContext {
   const db = new Database({ memory: true });
   const agentService = new AgentService(db);
   const bountyService = new BountyService(db, agentService);
-  const mailService = new MailService(db);
+  const imDb = new IMDatabase({ memory: true });
 
   return {
     db,
     agentService,
     bountyService,
-    mailService,
+    imDb,
   };
 }

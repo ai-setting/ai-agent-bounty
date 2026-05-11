@@ -6,7 +6,7 @@
  * 本插件提供以下扩展：
  * - agent 命令：Agent 注册和管理
  * - bounty 命令：赏金任务管理
- * - com 命令：邮件通信功能
+ * - im 命令：Agent IM 通信功能
  */
 
 // @ts-ignore - 类型在构建时从 node_modules 加载
@@ -15,7 +15,7 @@ import type { RoyCliPlugin } from "@ai-setting/roy-agent-cli/plugin";
 // 导入现有命令
 import { agentCommands } from "../cli/commands/agent/index.js";
 import { bountyCommands } from "../cli/commands/bounty/index.js";
-import { comCommands } from "../cli/commands/com/index.js";
+import { imCommands } from "../cli/commands/im/index.js";
 
 /**
  * 插件元信息
@@ -35,7 +35,7 @@ export const bountyPluginInfo = {
  * # 安装插件后，通过 roy 使用
  * roy agent register --name "My Agent" --email "agent@example.com"
  * roy bounty publish --title "Fix bug" --reward 100
- * roy com send --to "user@example.com" --subject "Hello"
+ * roy im send --from "agent@host" --to "other@host" --body "Hello"
  * ```
  */
 export const bountyPlugin: RoyCliPlugin = {
@@ -48,7 +48,7 @@ export const bountyPlugin: RoyCliPlugin = {
     return [
       { command: agentCommands },
       { command: bountyCommands },
-      { command: comCommands },
+      { command: imCommands },
     ];
   },
 
