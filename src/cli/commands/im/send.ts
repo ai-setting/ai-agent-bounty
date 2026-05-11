@@ -46,7 +46,7 @@ export const SendCommand: CommandModule<object, SendOptions> = {
         alias: 'p',
         type: 'number',
         description: 'Server port',
-        default: 8080,
+        default: 3001,
       }),
   handler: async (args) => {
     const { from, to, body, host, port } = args;

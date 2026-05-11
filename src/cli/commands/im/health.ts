@@ -24,7 +24,7 @@ export const HealthCommand: CommandModule<object, HealthOptions> = {
         alias: 'p',
         type: 'number',
         description: 'Server port',
-        default: 8080,
+        default: 3001,
       }),
   handler: async (args) => {
     const { host, port } = args;

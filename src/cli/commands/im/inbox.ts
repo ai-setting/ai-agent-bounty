@@ -31,7 +31,7 @@ export const InboxCommand: CommandModule<object, InboxOptions> = {
         alias: 'p',
         type: 'number',
         description: 'Server port',
-        default: 8080,
+        default: 3001,
       }),
   handler: async (args) => {
     const { address, host, port } = args;
