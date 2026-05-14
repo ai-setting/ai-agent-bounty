@@ -56,6 +56,7 @@ import { agentCommands } from './commands/agent/index.js';
 import { bountyCommands } from './commands/bounty/index.js';
 import { imCommands } from './commands/im/index.js';
 import { comCommands } from './commands/com/index.js';
+import { bountyEsCommands } from './commands/es/index.js';
 
 /**
  * Get package.json version
@@ -137,6 +138,7 @@ export async function runBountyCli(): Promise<void> {
     .command(bountyCommands)
     .command(imCommands)
     .command(comCommands)
+    .command(bountyEsCommands)
 
     .demandCommand(1, 'See --help for available commands')
     .strict()
