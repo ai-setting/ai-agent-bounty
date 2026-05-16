@@ -141,13 +141,15 @@ export class BountyIMInstance implements EventSourceInstance {
 
   private handleMessage(data: string): void {
     this.buffer += data;
-    const lines = this.buffer.split("\n");
-    this.buffer = lines.pop() || "";
 
-    for (const line of lines) {
-      if (line.trim()) {
-        this.processLine(line);
-      }
+    // Try to parse as complete JSON
+    try {
+      JSON.parse(this.buffer);
+      // Complete JSON, process it
+      this.processLine(this.buffer);
+      this.buffer = "";
+    } catch {
+      // Not complete JSON yet, wait for more data
     }
   }
 
