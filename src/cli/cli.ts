@@ -60,7 +60,6 @@ import {
 // 导入 bounty 特有命令
 import { agentCommands } from './commands/agent/index.js';
 import { bountyCommands } from './commands/bounty/index.js';
-import { imCommands } from './commands/im/index.js';
 import { comCommands } from './commands/com/index.js';
 
 // 环境变量
@@ -204,7 +203,6 @@ export async function runBountyCli(): Promise<void> {
     // 添加 bounty 特有命令
     .command(agentCommands)
     .command(bountyCommands)
-    .command(imCommands)
     .command(comCommands)
 
     .demandCommand(1, 'See --help for available commands')

@@ -38,8 +38,6 @@ export const infoCommand: CommandModule = {
         process.exit(1);
       }
 
-      const mailAddress = ctx.mailService.getAddressByAgent(agent.id);
-
       console.log(chalk.bold('\nAgent Info:\n'));
       console.log(chalk.cyan('  ID:'), agent.id);
       console.log(chalk.cyan('  Name:'), agent.name);
@@ -53,9 +51,6 @@ export const infoCommand: CommandModule = {
         chalk.cyan('  Created:'),
         new Date(agent.createdAt).toLocaleString()
       );
-      if (mailAddress) {
-        console.log(chalk.cyan('  Mail:'), mailAddress.address);
-      }
       console.log();
 
       ctx.db.close();

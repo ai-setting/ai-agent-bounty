@@ -157,6 +157,34 @@ export class IMWebSocketServer {
           }
           break;
 
+        case 'message':
+          // 转发消息给接收者
+          if (msg.data && msg.data.to) {
+            const imMessage: Message = {
+              id: crypto.randomUUID(),
+              from: address,
+              to: msg.data.to,
+              content: msg.data.content || { type: 'text', body: '' },
+              status: 'pending',
+              createdAt: new Date().toISOString(),
+            };
+            
+            // 保存消息到数据库
+            this.db.saveMessage(imMessage);
+            
+            // 尝试直接推送给接收者（如果在线）
+            const recipient = this.clients.get(msg.data.to);
+            if (recipient) {
+              recipient.socket.send(JSON.stringify({
+                event: 'message',
+                data: imMessage,
+              }));
+              // 更新状态为已送达
+              this.db.updateMessageStatus(imMessage.id, 'delivered');
+            }
+          }
+          break;
+
         default:
           socket.send(JSON.stringify({
             event: 'error',

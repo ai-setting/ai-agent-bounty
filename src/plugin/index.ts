@@ -15,7 +15,6 @@ import type { RoyCliPlugin } from "@ai-setting/roy-agent-cli/plugin";
 // 导入现有命令
 import { agentCommands } from "../cli/commands/agent/index.js";
 import { bountyCommands } from "../cli/commands/bounty/index.js";
-import { imCommands } from "../cli/commands/im/index.js";
 
 /**
  * 插件元信息
@@ -48,7 +47,6 @@ export const bountyPlugin: RoyCliPlugin = {
     return [
       { command: agentCommands },
       { command: bountyCommands },
-      { command: imCommands },
     ];
   },
 

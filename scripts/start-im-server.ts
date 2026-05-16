@@ -3,21 +3,21 @@
  * 使用方式: bun run scripts/start-im-server.ts
  */
 
-import { Database } from '../src/lib/storage/database.js';
+import { IMDatabase } from '../src/im/db/index.js';
 import { IMWebSocketServer } from '../src/im/server/ws.js';
 import { IMHTTPServer } from '../src/im/server/http.js';
 
 async function main() {
-  const port = parseInt(process.env.IM_PORT || '3001');
+  const port = parseInt(process.env.IM_PORT || '4001');
 
   console.log(`🚀 启动 Bounty IM Server...`);
   console.log(`   HTTP: http://localhost:${port}`);
   console.log(`   WebSocket: ws://localhost:${port + 1}/ws`);
 
-  // 初始化数据库（Database 构造函数中已自动初始化）
-  const dbPath = process.env.DATABASE_PATH || './data/bounty.db';
-  const db = new Database({ path: dbPath });
-  console.log(`✅ 数据库初始化完成: ${dbPath}`);
+  // 初始化 IM 数据库
+  const dbPath = process.env.IM_DATABASE_PATH || './data/im.db';
+  const db = new IMDatabase({ path: dbPath });
+  console.log(`✅ IM 数据库初始化完成: ${dbPath}`);
 
   // 启动 WebSocket 服务器（与 IMServer 保持一致，使用 port+1）
   const wsServer = new IMWebSocketServer(db, port + 1);
