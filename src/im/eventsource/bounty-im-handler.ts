@@ -15,6 +15,17 @@ import {
   type EventSourceStatus,
 } from "@ai-setting/roy-agent-core";
 
+// 导入全局 env 实例获取函数（由 bounty cli 提供）
+// 注意：这里通过动态导入避免循环依赖
+async function getGlobalEnv(): Promise<any> {
+  try {
+    const { getGlobalEnv } = await import('../../cli/cli.js');
+    return getGlobalEnv();
+  } catch {
+    return null;
+  }
+}
+
 // ============================================================================
 // 环境变量配置
 // ============================================================================
@@ -193,10 +204,38 @@ export class BountyIMInstance implements EventSourceInstance {
         },
       };
 
+      // 调用 EventSourceEventHandler（供其他组件使用）
       this.eventHandler?.(event);
+
+      // 推送 EnvEvent 到环境事件系统（event-source 类型，匹配 interactive 监听）
+      this.pushEnvEvent(event);
     } catch (err) {
       console.error(`[BountyIM] Error processing message:`, err);
     }
+  }
+
+  /**
+   * 推送 EnvEvent 到环境事件系统
+   * 使用 event-source.event 类型前缀，匹配 interactive 的监听
+   */
+  private async pushEnvEvent(event: EventSourceEvent): Promise<void> {
+    const env = await getGlobalEnv();
+    if (!env) {
+      console.log(`[BountyIM] 全局 env 未设置，无法推送 EnvEvent`);
+      return;
+    }
+
+    if (typeof env.pushEnvEvent !== "function") {
+      console.log(`[BountyIM] env.pushEnvEvent 不存在`);
+      return;
+    }
+
+    // 推送事件到 EnvEvent 系统（event-source.event 前缀匹配 interactive 监听）
+    env.pushEnvEvent({
+      type: `event-source.event.${event.type}`,
+      payload: event.payload,
+    });
+    console.log(`[BountyIM] 已推送 EnvEvent: event-source.event.${event.type}`);
   }
 
   private formatMessage(rawEvent: unknown): string {

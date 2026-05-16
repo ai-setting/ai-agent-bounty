@@ -14,8 +14,8 @@ import '../im/eventsource/index.js';
 
 // 从 roy-agent-cli 导入所有内置命令
 import {
-  ActCommand,
-  InteractiveCommand,
+  createActCommand,
+  createInteractiveCommand,
   SessionsCommand,
   TasksCommand,
   CommandsCommand,
@@ -79,133 +79,200 @@ function getVersion(): string {
 }
 
 /**
- * CLI 启动时初始化
- * 检查环境变量，自动添加/更新 bounty-im EventSource
- * 使用方式：BOUNTY_IM_ADDRESS=xxx bounty interactive --event-source bounty-im-auto
+ * 全局 EnvironmentService 实例
+ * 用于 act/interactive 命令，生命周期贯穿整个 CLI
  */
-async function initializeCli(): Promise<void> {
+let globalEnvService: EnvironmentService | null = null;
+
+/**
+ * 全局 Environment 实例引用
+ * bounty-im-handler 需要通过此引用调用 pushEnvEvent 发布事件
+ */
+let globalEnvInstance: any = null;
+
+/**
+ * 设置全局 Environment 实例
+ * 在 envService.create() 后调用，供 bounty-im-handler 使用
+ */
+export function setGlobalEnv(env: any): void {
+  globalEnvInstance = env;
+}
+
+/**
+ * 获取全局 Environment 实例
+ * bounty-im-handler 调用此方法获取 env 并推送 EnvEvent
+ */
+export function getGlobalEnv(): any {
+  return globalEnvInstance;
+}
+
+/**
+ * 获取或创建全局 EnvironmentService
+ * 
+ * bounty-im EventSource 需要 env 来 pushEnvEvent，
+ * 所以需要保持 envService 的生命周期与 CLI 一致
+ */
+export function getOrCreateEnvService(): EnvironmentService {
+  if (!globalEnvService) {
+    const output = new OutputService();
+    globalEnvService = new EnvironmentService(output);
+  }
+  return globalEnvService;
+}
+
+/**
+ * 释放全局 EnvironmentService
+ */
+export async function disposeEnvService(): Promise<void> {
+  if (globalEnvService) {
+    await globalEnvService.dispose();
+    globalEnvService = null;
+  }
+}
+
+/**
+ * 初始化 Bounty CLI 环境
+ * 
+ * 1. 创建/获取全局 envService
+ * 2. 自动注册 bounty-im EventSource（如果设置了 BOUNTY_IM_ADDRESS）
+ */
+async function initializeBountyEnv(): Promise<void> {
   const address = process.env.BOUNTY_IM_ADDRESS;
+  const envService = getOrCreateEnvService();
+
+  // 创建环境（即使没有配置也会初始化组件）
+  await envService.create({});
+  
+  // 设置全局 env 实例，供 bounty-im-handler 使用
+  const env = envService.getEnvironment();
+  if (env) {
+    setGlobalEnv(env);
+  }
+
+  // 如果没有设置 BOUNTY_IM_ADDRESS，不需要注册 EventSource
   if (!address) {
     return;
   }
 
-  const output = new OutputService();
-  const envService = new EnvironmentService(output);
-
-  try {
-    await envService.create({});
-    const env = envService.getEnvironment();
-    if (!env) {
-      return;
-    }
-
-    const eventSourceComponent = env.getComponent('event-source') as any;
-    if (!eventSourceComponent || typeof eventSourceComponent.register !== 'function') {
-      return;
-    }
-
-    const imServerUrl = process.env.BOUNTY_IM_SERVER_URL || 'ws://localhost:3001/ws';
-    const config = {
-      id: BOUNTY_IM_AUTO_ES_NAME,
-      name: 'Bounty IM (Auto)',
-      type: 'bounty-im',
-      options: {
-        address,
-        imServerUrl,
-      },
-    };
-
-    // 检查是否已存在同名实例，如果存在则先移除再重新注册（确保使用最新配置）
-    const existing = eventSourceComponent.get(BOUNTY_IM_AUTO_ES_NAME);
-    if (existing) {
-      // 检查配置是否变化
-      const existingUrl = existing.options?.imServerUrl;
-      if (existingUrl !== imServerUrl) {
-        eventSourceComponent.unregister(BOUNTY_IM_AUTO_ES_NAME);
-        eventSourceComponent.register(config);
-        console.log(`✅ 已更新 bounty-im EventSource: ${BOUNTY_IM_AUTO_ES_NAME} (${address})`);
-      }
-      return;
-    }
-
-    // 注册新实例（会持久化到 event-sources.json）
-    eventSourceComponent.register(config);
-    console.log(`✅ 已自动添加 bounty-im EventSource: ${BOUNTY_IM_AUTO_ES_NAME} (${address})`);
-  } finally {
-    await envService.dispose();
+  // 设置了 BOUNTY_IM_ADDRESS，需要注册 EventSource
+  if (!env) {
+    return;
   }
+
+  const eventSourceComponent = env.getComponent('event-source') as any;
+  if (!eventSourceComponent || typeof eventSourceComponent.register !== 'function') {
+    return;
+  }
+
+  const imServerUrl = process.env.BOUNTY_IM_SERVER_URL || 'ws://localhost:3001/ws';
+  const config = {
+    id: BOUNTY_IM_AUTO_ES_NAME,
+    name: 'Bounty IM (Auto)',
+    type: 'bounty-im',
+    options: {
+      address,
+      imServerUrl,
+    },
+  };
+
+  // 检查是否已存在同名实例，如果存在则先移除再重新注册（确保使用最新配置）
+  const existing = eventSourceComponent.get(BOUNTY_IM_AUTO_ES_NAME);
+  if (existing) {
+    // 检查配置是否变化
+    const existingUrl = existing.options?.imServerUrl;
+    if (existingUrl !== imServerUrl) {
+      eventSourceComponent.unregister(BOUNTY_IM_AUTO_ES_NAME);
+      eventSourceComponent.register(config);
+      console.log(`✅ 已更新 bounty-im EventSource: ${BOUNTY_IM_AUTO_ES_NAME} (${address})`);
+    }
+    return;
+  }
+
+  // 注册新实例（会持久化到 event-sources.json）
+  eventSourceComponent.register(config);
+  console.log(`✅ 已自动添加 bounty-im EventSource: ${BOUNTY_IM_AUTO_ES_NAME} (${address})`);
 }
 
 export async function runBountyCli(): Promise<void> {
-  // CLI 启动时初始化（自动添加 bounty-im EventSource）
-  await initializeCli();
+  try {
+    // CLI 启动时初始化（自动注册 bounty-im EventSource）
+    await initializeBountyEnv();
 
-  const version = getVersion();
+    // 使用全局 envService 创建 act/interactive 命令
+    const envService = getOrCreateEnvService();
+    const ActCommand = createActCommand(envService);
+    const InteractiveCommand = createInteractiveCommand(envService);
 
-  await yargs(hideBin(process.argv))
-    .scriptName('bounty')
-    .version(version)
-    .usage('$0 <command> [options]')
-    .describe('h', 'show help')
-    .alias('h', 'help')
+    const version = getVersion();
 
-    // 继承 roy-agent 所有内置命令
-    .command(ActCommand)
-    .command(InteractiveCommand)
-    .command(SessionsCommand)
-    .command(TasksCommand)
-    .command(CommandsCommand)
-    .command(MemoryCommand)
-    .command(SkillsCommand)
-    .command(ToolsCommand)
-    .command(McpCommand)
+    await yargs(hideBin(process.argv))
+      .scriptName('bounty')
+      .version(version)
+      .usage('$0 <command> [options]')
+      .describe('h', 'show help')
+      .alias('h', 'help')
 
-    // Config 命令组
-    .command(ConfigCommand)
-    .command(ConfigListCommand)
-    .command(ConfigExportCommand)
-    .command(ConfigImportCommand)
+      // 使用传入 envService 创建的 act/interactive 命令
+      .command(ActCommand)
+      .command(InteractiveCommand)
+      .command(SessionsCommand)
+      .command(TasksCommand)
+      .command(CommandsCommand)
+      .command(MemoryCommand)
+      .command(SkillsCommand)
+      .command(ToolsCommand)
+      .command(McpCommand)
 
-    // Lsp 命令组
-    .command(LspCommand)
-    .command(LspListCommand)
-    .command(LspInstallCommand)
-    .command(LspCheckCommand)
+      // Config 命令组
+      .command(ConfigCommand)
+      .command(ConfigListCommand)
+      .command(ConfigExportCommand)
+      .command(ConfigImportCommand)
 
-    // Workflow 命令组
-    .command(WorkflowCommand)
-    .command(WorkflowListCommand)
-    .command(WorkflowGetCommand)
-    .command(WorkflowAddCommand)
-    .command(WorkflowRunCommand)
-    .command(WorkflowStatusCommand)
-    .command(WorkflowStopCommand)
-    .command(WorkflowRemoveCommand)
-    .command(WorkflowNodesCommand)
-    .command(WorkflowUpdateCommand)
-    .command(WorkflowValidateCommand)
+      // Lsp 命令组
+      .command(LspCommand)
+      .command(LspListCommand)
+      .command(LspInstallCommand)
+      .command(LspCheckCommand)
 
-    // EventSource 命令组
-    .command(EventSourceCommand)
-    .command(EventSourceListCommand)
-    .command(EventSourceAddCommand)
-    .command(EventSourceStartCommand)
-    .command(EventSourceStopCommand)
-    .command(EventSourceStatusCommand)
-    .command(EventSourceRemoveCommand)
+      // Workflow 命令组
+      .command(WorkflowCommand)
+      .command(WorkflowListCommand)
+      .command(WorkflowGetCommand)
+      .command(WorkflowAddCommand)
+      .command(WorkflowRunCommand)
+      .command(WorkflowStatusCommand)
+      .command(WorkflowStopCommand)
+      .command(WorkflowRemoveCommand)
+      .command(WorkflowNodesCommand)
+      .command(WorkflowUpdateCommand)
+      .command(WorkflowValidateCommand)
 
-    // 其他命令
-    .command(LogCommand)
-    .command(TraceCommand)
-    .command(SpanCommand)
-    .command(DebugCommand)
+      // EventSource 命令组
+      .command(EventSourceCommand)
+      .command(EventSourceListCommand)
+      .command(EventSourceAddCommand)
+      .command(EventSourceStartCommand)
+      .command(EventSourceStopCommand)
+      .command(EventSourceStatusCommand)
+      .command(EventSourceRemoveCommand)
 
-    // 添加 bounty 特有命令
-    .command(agentCommands)
-    .command(bountyCommands)
-    .command(comCommands)
+      // 其他命令
+      .command(LogCommand)
+      .command(TraceCommand)
+      .command(SpanCommand)
+      .command(DebugCommand)
 
-    .demandCommand(1, 'See --help for available commands')
-    .strict()
-    .parse();
+      // 添加 bounty 特有命令
+      .command(agentCommands)
+      .command(bountyCommands)
+      .command(comCommands)
+
+      .demandCommand(1, 'See --help for available commands')
+      .strict()
+      .parse();
+  } finally {
+    // CLI 退出时清理全局 envService
+    await disposeEnvService();
+  }
 }
