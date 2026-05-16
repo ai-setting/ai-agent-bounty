@@ -72,7 +72,7 @@ export class BountyIMInstance implements EventSourceInstance {
     this.setStatus("starting");
 
     const address = this.config.options?.address as string | undefined;
-    const imServerUrl = (this.config.options?.imServerUrl as string) || "ws://localhost:3001/ws";
+    const imServerUrl = (this.config.options?.imServerUrl as string) || "ws://localhost:4002/ws";
     
     const wsUrl = new URL(imServerUrl);
     if (address) {
@@ -276,7 +276,7 @@ export const bountyIMHandler: EventSourceHandler = {
       errors.push("Address format invalid (expected: agent-id@host)");
     }
 
-    const imServerUrl = (config.options?.imServerUrl as string) || getEnvConfig().imServerUrl;
+    const imServerUrl = (config.options?.imServerUrl as string) || getEnvConfig().imServerUrl || "ws://localhost:4002/ws";
     if (imServerUrl && !imServerUrl.startsWith("ws://") && !imServerUrl.startsWith("wss://")) {
       errors.push("imServerUrl must start with ws:// or wss://");
     }

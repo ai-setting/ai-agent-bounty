@@ -164,7 +164,7 @@ async function initializeBountyEnv(): Promise<void> {
     return;
   }
 
-  const imServerUrl = process.env.BOUNTY_IM_SERVER_URL || 'ws://localhost:3001/ws';
+  const imServerUrl = process.env.BOUNTY_IM_SERVER_URL || 'ws://localhost:4002/ws';
   const config = {
     id: BOUNTY_IM_AUTO_ES_NAME,
     name: 'Bounty IM (Auto)',
