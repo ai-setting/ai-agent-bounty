@@ -5,15 +5,38 @@
 import { v4 as uuidv4 } from 'uuid';
 import { Database } from '../storage/database.js';
 
+/**
+ * Agent entity representing a registered agent in the Bounty Platform.
+ */
 export interface Agent {
+  /** Unique identifier for the agent */
   id: string;
+  /** Display name of the agent */
   name: string;
+  /** Email address of the agent */
   email: string;
+  /** Optional description/bio of the agent */
   description?: string;
+  /** Optional public key for cryptographic operations */
   publicKey?: string;
+  /** Current credit balance of the agent */
   credits: number;
-  status: 'active' | 'suspended' | 'pending';
+  /**
+   * Agent status indicating verification state:
+   * - 'pending': Awaiting email verification after registration
+   * - 'active': Verified and fully operational
+   * - 'suspended': Account disabled, cannot perform operations
+   */
+  status: 'pending' | 'active' | 'suspended';
+  /**
+   * Agent address in email-like format: {agent_id}@{BOUNTY_DOMAIN}
+   * Example: "abc123@agent.example.com"
+   * Used for messaging and identification within the platform
+   */
+  address?: string;
+  /** Timestamp when the agent was created (milliseconds since epoch) */
   createdAt: number;
+  /** Timestamp when the agent was last updated (milliseconds since epoch) */
   updatedAt: number;
 }
 
@@ -28,7 +51,8 @@ export interface UpdateAgentInput {
   name?: string;
   description?: string;
   publicKey?: string;
-  status?: 'active' | 'suspended';
+  status?: 'active' | 'suspended' | 'pending';
+  address?: string;
 }
 
 export class AgentService {
@@ -201,6 +225,7 @@ export class AgentService {
       publicKey: row.public_key,
       credits: row.credits,
       status: row.status,
+      address: row.address,
       createdAt: row.created_at,
       updatedAt: row.updated_at,
     };
