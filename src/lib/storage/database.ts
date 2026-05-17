@@ -63,7 +63,7 @@ export class Database {
   }
 
   private initialize(): void {
-    // Create agents table
+    // Create agents table with new schema (status default 'pending', address)
     this.db.run(`
       CREATE TABLE IF NOT EXISTS agents (
         id TEXT PRIMARY KEY,
@@ -72,11 +72,15 @@ export class Database {
         description TEXT,
         public_key TEXT,
         credits INTEGER DEFAULT 0,
-        status TEXT DEFAULT 'active',
+        status TEXT DEFAULT 'pending',
+        address TEXT,
         created_at INTEGER NOT NULL,
         updated_at INTEGER NOT NULL
       )
     `);
+
+    // Run migrations for backward compatibility
+    this.runMigrations();
 
     // Create tasks table
     this.db.run(`
@@ -148,6 +152,43 @@ export class Database {
         FOREIGN KEY (task_id) REFERENCES tasks(id)
       )
     `);
+  }
+
+  /**
+   * Run database migrations for backward compatibility
+   * Handles adding new columns to existing tables and creating new tables
+   */
+  private runMigrations(): void {
+    // Migration: Add status column to agents table (if not exists)
+    // SQLite doesn't support IF NOT EXISTS for ALTER TABLE ADD COLUMN
+    // so we check if column exists first
+    const agentsColumns = this.db.prepare("PRAGMA table_info(agents)").all() as Array<{name: string}>;
+    const agentColumnNames = agentsColumns.map(col => col.name);
+
+    if (!agentColumnNames.includes('status')) {
+      this.db.run(`ALTER TABLE agents ADD COLUMN status TEXT DEFAULT 'pending'`);
+    }
+
+    if (!agentColumnNames.includes('address')) {
+      this.db.run(`ALTER TABLE agents ADD COLUMN address TEXT`);
+    }
+
+    // Migration: Create verifications table
+    this.db.run(`
+      CREATE TABLE IF NOT EXISTS verifications (
+        id TEXT PRIMARY KEY,
+        agent_id TEXT NOT NULL,
+        email TEXT NOT NULL,
+        code TEXT NOT NULL,
+        type TEXT DEFAULT 'register',
+        expires_at INTEGER NOT NULL,
+        verified_at INTEGER,
+        created_at INTEGER NOT NULL
+      )
+    `);
+
+    // Migration: Create indexes
+    this.db.run(`CREATE INDEX IF NOT EXISTS idx_verifications_email ON verifications(email)`);
   }
 
   /**
