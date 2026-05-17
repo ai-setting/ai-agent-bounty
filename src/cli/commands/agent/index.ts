@@ -5,6 +5,8 @@
 
 import type { CommandModule } from 'yargs';
 import { registerCommand } from './register.js';
+import { verifyCommand } from './verify.js';
+import { loginCommand } from './login.js';
 import { listCommand } from './list.js';
 import { infoCommand } from './info.js';
 import { creditsCommand } from './credits.js';
@@ -16,6 +18,8 @@ export const agentCommands: CommandModule = {
   builder: (yargs) =>
     yargs
       .command(registerCommand)
+      .command(verifyCommand)
+      .command(loginCommand)
       .command(listCommand)
       .command(infoCommand)
       .command(creditsCommand)

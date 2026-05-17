@@ -5,7 +5,7 @@
 
 import type { CommandModule } from 'yargs';
 import chalk from 'chalk';
-import { createContext } from '../../services/context.js';
+import { API_BASE } from '../../config.js';
 
 export const registerCommand: CommandModule = {
   command: 'register',
@@ -29,40 +29,41 @@ export const registerCommand: CommandModule = {
         alias: 'd',
         type: 'string',
         description: 'Agent description (optional)',
-      })
-      .option('public-key', {
-        alias: 'k',
-        type: 'string',
-        description: 'Public key for verification (optional)',
       }),
 
   handler: async (argv) => {
-    const ctx = createContext();
-
     try {
-      // 注册新 Agent
-      const agent = ctx.agentService.register({
-        name: argv.name as string,
-        email: argv.email as string,
-        description: argv.description as string | undefined,
-        publicKey: argv['public-key'] as string | undefined,
+      const response = await fetch(`${API_BASE}/api/auth/register`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: argv.email,
+          name: argv.name,
+          description: argv.description
+        })
       });
 
-      console.log(chalk.green('\n✓ Agent registered successfully\n'));
-      console.log(chalk.cyan('  ID:'), agent.id);
-      console.log(chalk.cyan('  Name:'), agent.name);
-      console.log(chalk.cyan('  Email:'), agent.email);
-      if (agent.description) {
-        console.log(chalk.cyan('  Description:'), agent.description);
-      }
-      console.log(chalk.cyan('  Credits:'), agent.credits);
-      console.log(chalk.cyan('  Status:'), agent.status);
-      console.log();
+      const data = await response.json() as {
+        agent_id?: string;
+        status?: string;
+        message?: string;
+        error?: string;
+      };
 
-      ctx.db.close();
-    } catch (error: any) {
-      console.error(chalk.red('\n✗ Error:'), error.message);
-      ctx.db.close();
+      if (!response.ok) {
+        console.error(chalk.red(`\n✗ Error: ${data.error || 'Registration failed'}\n`));
+        process.exit(1);
+      }
+
+      console.log(chalk.green('\n✓ Registration initiated!'));
+      console.log(chalk.cyan('  Agent ID:'), data.agent_id);
+      console.log(chalk.cyan('  Status:'), data.status);
+      console.log('\n' + (data.message || ''));
+      console.log('\nNext: Check your email and verify with:');
+      console.log(chalk.cyan(`  bounty agent verify --email ${argv.email} --code <code>`));
+      console.log();
+    } catch (error) {
+      console.error(chalk.red(`\n✗ Error: ${error instanceof Error ? error.message : 'Registration failed'}\n`));
       process.exit(1);
     }
   },
