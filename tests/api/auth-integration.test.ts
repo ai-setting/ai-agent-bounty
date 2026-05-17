@@ -3,7 +3,7 @@ import { IMHTTPServer } from '../../src/im/server/http';
 import { IMDatabase } from '../../src/im/db';
 import { Database } from '../../src/lib/storage/database';
 
-// Set up test environment before importing auth modules
+// Set up test environment at file load time
 process.env.JWT_SECRET = 'test-secret-key';
 process.env.BOUNTY_DOMAIN = 'test.local';
 
@@ -13,7 +13,7 @@ describe('Auth Integration', () => {
   let server: IMHTTPServer;
   let baseUrl: string;
 
-  beforeAll(async () => {
+  beforeAll(() => {
     // Initialize both databases
     imDb = new IMDatabase({ memory: true });
     bountyDb = new Database({ memory: true });
