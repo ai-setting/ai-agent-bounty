@@ -1,16 +1,19 @@
 /**
  * Auth Routes for Bounty Platform
  * 
- * Express route handlers for authentication endpoints:
+ * Route handlers for authentication endpoints:
  * - POST /api/auth/register - Register a new agent
  * - POST /api/auth/verify - Verify email and activate account
  * - POST /api/auth/login - Login and get authentication token
  * - POST /api/auth/send-code - Resend verification code
  */
 
-import type { Request, Response } from 'express';
-import type Database from 'better-sqlite3';
+import type { Database } from '../lib/storage/database';
 import { register, verify, login, sendVerificationCode } from './service.js';
+
+export interface RouteContext {
+  db: Database;
+}
 
 /**
  * Create auth route handlers
@@ -19,30 +22,38 @@ import { register, verify, login, sendVerificationCode } from './service.js';
  * @param db - Database instance
  * @returns Object containing all route handlers
  */
-export function createAuthRoutes(db: Database.Database) {
+export function createAuthRoutes(db: Database) {
   /**
    * POST /api/auth/register
    * Register a new agent with email verification
    */
-  const registerRoute = async (req: Request, res: Response) => {
+  const registerRoute = async (req: Request): Promise<Response> => {
     try {
-      const input = req.body;
+      let input: { email?: string; name?: string; description?: string };
+      try {
+        const text = await req.text();
+        input = JSON.parse(text || '{}');
+      } catch {
+        return Response.json({ error: 'Invalid JSON' }, { status: 400 });
+      }
       
       if (!input.email || !input.name) {
-        res.status(400).json({ error: 'Email and name are required' });
-        return;
+        return Response.json({ error: 'Email and name are required' }, { status: 400 });
       }
       
       if (!/^[\w.-]+@[\w.-]+\.\w+$/.test(input.email)) {
-        res.status(400).json({ error: 'Invalid email format' });
-        return;
+        return Response.json({ error: 'Invalid email format' }, { status: 400 });
       }
       
-      const result = await register(db, input);
-      res.json(result);
+      const result = await register(db, {
+        email: input.email!,
+        name: input.name!,
+        description: input.description
+      });
+      return Response.json(result);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Registration failed';
-      res.status(400).json({ error: message });
+      return Response.json({ error: message }, { status: 400 });
     }
   };
   
@@ -50,20 +61,28 @@ export function createAuthRoutes(db: Database.Database) {
    * POST /api/auth/verify
    * Verify email with code and activate agent account
    */
-  const verifyRoute = async (req: Request, res: Response) => {
+  const verifyRoute = async (req: Request): Promise<Response> => {
     try {
-      const input = req.body;
-      
-      if (!input.email || !input.code) {
-        res.status(400).json({ error: 'Email and code are required' });
-        return;
+      let input: { email?: string; code?: string };
+      try {
+        const text = await req.text();
+        input = JSON.parse(text || '{}');
+      } catch {
+        return Response.json({ error: 'Invalid JSON' }, { status: 400 });
       }
       
-      const result = await verify(db, input);
-      res.json(result);
+      if (!input.email || !input.code) {
+        return Response.json({ error: 'Email and code are required' }, { status: 400 });
+      }
+      
+      const result = await verify(db, {
+        email: input.email!,
+        code: input.code!
+      });
+      return Response.json(result);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Verification failed';
-      res.status(400).json({ error: message });
+      return Response.json({ error: message }, { status: 400 });
     }
   };
   
@@ -71,20 +90,28 @@ export function createAuthRoutes(db: Database.Database) {
    * POST /api/auth/login
    * Login with email or agent_id and get authentication token
    */
-  const loginRoute = async (req: Request, res: Response) => {
+  const loginRoute = async (req: Request): Promise<Response> => {
     try {
-      const input = req.body;
-      
-      if (!input.email && !input.agent_id) {
-        res.status(400).json({ error: 'Email or agent_id is required' });
-        return;
+      let input: { email?: string; agent_id?: string };
+      try {
+        const text = await req.text();
+        input = JSON.parse(text || '{}');
+      } catch {
+        return Response.json({ error: 'Invalid JSON' }, { status: 400 });
       }
       
-      const result = await login(db, input);
-      res.json(result);
+      if (!input.email && !input.agent_id) {
+        return Response.json({ error: 'Email or agent_id is required' }, { status: 400 });
+      }
+      
+      const result = await login(db, {
+        email: input.email,
+        agent_id: input.agent_id
+      });
+      return Response.json(result);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Login failed';
-      res.status(401).json({ error: message });
+      return Response.json({ error: message }, { status: 401 });
     }
   };
   
@@ -92,20 +119,25 @@ export function createAuthRoutes(db: Database.Database) {
    * POST /api/auth/send-code
    * Resend verification code to email
    */
-  const sendCodeRoute = async (req: Request, res: Response) => {
+  const sendCodeRoute = async (req: Request): Promise<Response> => {
     try {
-      const { email } = req.body;
-      
-      if (!email) {
-        res.status(400).json({ error: 'Email is required' });
-        return;
+      let input: { email?: string };
+      try {
+        const text = await req.text();
+        input = JSON.parse(text || '{}');
+      } catch {
+        return Response.json({ error: 'Invalid JSON' }, { status: 400 });
       }
       
-      await sendVerificationCode(db, email);
-      res.json({ message: 'Verification code sent' });
+      if (!input.email) {
+        return Response.json({ error: 'Email is required' }, { status: 400 });
+      }
+      
+      await sendVerificationCode(db, input.email);
+      return Response.json({ message: 'Verification code sent' });
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to send code';
-      res.status(400).json({ error: message });
+      return Response.json({ error: message }, { status: 400 });
     }
   };
   
