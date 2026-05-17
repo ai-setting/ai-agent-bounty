@@ -93,6 +93,27 @@ export class IMHTTPServer {
           return this.handleGetCurrentAgentCredits(req, authResult.agentId!);
         }
 
+        // GET /api/agents - list all agents (protected)
+        if (method === 'GET' && path === '/api/agents') {
+          return this.handleListAgents();
+        }
+
+        // GET /api/agents/:id - get single agent (protected)
+        if (method === 'GET' && path.startsWith('/api/agents/')) {
+          const id = path.slice('/api/agents/'.length);
+          if (id && id !== 'me') {
+            return this.handleGetAgentById(id);
+          }
+        }
+
+        // DELETE /api/agents/:id - delete agent (protected)
+        if (method === 'DELETE' && path.startsWith('/api/agents/')) {
+          const id = path.slice('/api/agents/'.length);
+          if (id && id !== 'me') {
+            return this.handleDeleteAgent(id, authResult.agentId!);
+          }
+        }
+
         // Protected /api/messages routes
         if (method === 'GET' && path === '/api/messages') {
           return this.handleGetMessages(url);
@@ -235,6 +256,70 @@ export class IMHTTPServer {
       credits: (agent as any).credits,
       transactions
     });
+  }
+
+  /**
+   * Handle GET /api/agents - list all agents (protected)
+   */
+  private handleListAgents(): Response {
+    if (!this.bountyDb) {
+      return Response.json({ error: 'Bounty database not configured' }, { status: 500 });
+    }
+
+    const agents = this.bountyDb.prepare(`
+      SELECT id, name, email, status, credits, address, description, created_at, updated_at
+      FROM agents
+      ORDER BY created_at DESC
+    `).all();
+
+    return Response.json(agents);
+  }
+
+  /**
+   * Handle GET /api/agents/:id - get single agent (protected)
+   */
+  private handleGetAgentById(id: string): Response {
+    if (!this.bountyDb) {
+      return Response.json({ error: 'Bounty database not configured' }, { status: 500 });
+    }
+
+    const agent = this.bountyDb.prepare(`
+      SELECT id, name, email, status, credits, address, description, created_at, updated_at
+      FROM agents WHERE id = ?
+    `).get(id);
+
+    if (!agent) {
+      return Response.json({ error: 'Agent not found' }, { status: 404 });
+    }
+
+    return Response.json(agent);
+  }
+
+  /**
+   * Handle DELETE /api/agents/:id - delete agent (protected)
+   */
+  private handleDeleteAgent(id: string, requesterId: string): Response {
+    if (!this.bountyDb) {
+      return Response.json({ error: 'Bounty database not configured' }, { status: 500 });
+    }
+
+    // Check if agent exists
+    const agent = this.bountyDb.prepare('SELECT * FROM agents WHERE id = ?').get(id);
+    if (!agent) {
+      return Response.json({ error: 'Agent not found' }, { status: 404 });
+    }
+
+    // Prevent self-deletion
+    if (id === requesterId) {
+      return Response.json({ error: 'Cannot delete yourself' }, { status: 400 });
+    }
+
+    // Delete agent (cascade delete related records via foreign key or manually)
+    this.bountyDb.prepare('DELETE FROM credit_transactions WHERE agent_id = ?').run(id);
+    this.bountyDb.prepare('DELETE FROM verifications WHERE agent_id = ?').run(id);
+    this.bountyDb.prepare('DELETE FROM agents WHERE id = ?').run(id);
+
+    return Response.json({ message: 'Agent deleted successfully' });
   }
 
   /**
