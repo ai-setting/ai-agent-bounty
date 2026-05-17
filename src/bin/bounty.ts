@@ -7,6 +7,9 @@
  * Usage: bun run src/bin/bounty.ts <command>
  */
 
+// Load environment variables from .env file
+import 'dotenv/config';
+
 import { runBountyCli } from '../cli/index.js';
 
 runBountyCli();
