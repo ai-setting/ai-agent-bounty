@@ -61,6 +61,8 @@ import {
 import { registerAgentCommands } from './commands/register-agent/index.js';
 import { bountyTaskCommands } from './commands/bounty-task/index.js';
 import { comCommands } from './commands/com/index.js';
+import { authCommands } from './commands/auth/index.js';
+import { serverCommands } from './commands/server/index.js';
 
 // 环境变量
 const BOUNTY_IM_AUTO_ES_NAME = 'bounty-im-auto';
@@ -267,6 +269,8 @@ export async function runBountyCli(): Promise<void> {
       .command(registerAgentCommands)
       .command(bountyTaskCommands)
       .command(comCommands)
+      .command(authCommands)
+      .command(serverCommands)
 
       .demandCommand(1, 'See --help for available commands')
       .strict()
