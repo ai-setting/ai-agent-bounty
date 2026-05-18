@@ -8,7 +8,7 @@ import chalk from 'chalk';
 import { createContext } from '../../services/context.js';
 
 export const infoCommand: CommandModule = {
-  command: 'info',
+  command: 'register-agent info',
   describe: 'Get detailed information about an agent',
   
   builder: (yargs) =>

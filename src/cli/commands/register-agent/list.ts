@@ -23,7 +23,7 @@ interface ListAgentsOptions {
 }
 
 export const listCommand: CommandModule = {
-  command: 'list',
+  command: 'register-agent list',
   describe: 'List all registered agents',
 
   builder: (yargs) =>

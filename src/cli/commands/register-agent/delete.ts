@@ -14,7 +14,7 @@ interface DeleteAgentOptions {
 }
 
 export const deleteCommand: CommandModule = {
-  command: 'delete',
+  command: 'register-agent delete',
   describe: 'Delete an agent by ID',
 
   builder: (yargs) =>

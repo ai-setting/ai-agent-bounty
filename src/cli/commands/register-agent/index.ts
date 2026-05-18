@@ -1,6 +1,6 @@
 /**
- * Agent Commands
- * Commands for managing agents in the bounty system
+ * Register-Agent Commands
+ * Commands for registering and managing agents in the bounty system
  */
 
 import type { CommandModule } from 'yargs';
@@ -14,9 +14,9 @@ import { addCommand } from './add.js';
 import { getCommand } from './get.js';
 import { deleteCommand } from './delete.js';
 
-export const agentCommands: CommandModule = {
-  command: 'agent',
-  describe: 'Manage agents in the bounty system',
+export const registerAgentCommands: CommandModule = {
+  command: 'register-agent',
+  describe: 'Register and manage agents in the bounty system',
   
   builder: (yargs) =>
     yargs

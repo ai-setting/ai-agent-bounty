@@ -24,7 +24,7 @@ interface Agent {
 }
 
 export const getCommand: CommandModule = {
-  command: 'get',
+  command: 'register-agent get',
   describe: 'Get details of a specific agent by ID',
 
   builder: (yargs) =>

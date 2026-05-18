@@ -9,7 +9,7 @@ import { API_BASE } from '../../config.js';
 import { saveToken } from '../../storage.js';
 
 export const loginCommand: CommandModule = {
-  command: 'login',
+  command: 'register-agent login',
   describe: 'Login to get auth token',
   
   builder: (yargs) =>

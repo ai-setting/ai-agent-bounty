@@ -8,7 +8,7 @@ import chalk from 'chalk';
 import { API_BASE } from '../../config.js';
 
 export const verifyCommand: CommandModule = {
-  command: 'verify',
+  command: 'register-agent verify',
   describe: 'Verify email after registration',
   
   builder: (yargs) =>

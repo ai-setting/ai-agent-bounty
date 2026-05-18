@@ -11,8 +11,8 @@ import { submitCommand } from './submit.js';
 import { completeCommand } from './complete.js';
 import { cancelCommand } from './cancel.js';
 
-export const bountyCommands: CommandModule = {
-  command: 'bounty',
+export const bountyTaskCommands: CommandModule = {
+  command: 'bounty-task',
   describe: 'Manage bounty tasks',
   
   builder: (yargs) =>
