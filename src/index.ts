@@ -18,10 +18,12 @@ export {
   type CompleteResult 
 } from './lib/bounty/index.js';
 
-// Agent IM 模块
+// Server (Bounty Business + Auth + IM)
+export { BountyHTTPServer } from './server/http/index.js';
+export { BountyWebSocketServer } from './server/ws/index.js';
+
+// IM Submodule (Database, Client, EventSource)
 export { createIMServer, type IMServerConfig } from './im/server/index.js';
-export { IMHTTPServer } from './im/server/http.js';
-export { IMWebSocketServer } from './im/server/ws.js';
 export { IMDatabase } from './im/db/index.js';
 export { Mailbox, type MailboxConfig } from './im/client/index.js';
 export type { Message, Agent as IMAgent, Content } from './im/types.js';
