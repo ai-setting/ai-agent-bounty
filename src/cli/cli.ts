@@ -64,6 +64,10 @@ import { comCommands } from './commands/com/index.js';
 import { authCommands } from './commands/auth/index.js';
 import { serverCommands } from './commands/server/index.js';
 
+// 注册 Bounty Prompt Hook（注入 bounty 特有命令到 default agent prompt）
+import { registerBountyPromptHook } from './hooks/bounty-prompt-hook.js';
+registerBountyPromptHook();
+
 // 环境变量
 const BOUNTY_IM_AUTO_ES_NAME = 'bounty-im-auto';
 
