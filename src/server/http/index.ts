@@ -200,6 +200,27 @@ export class BountyHTTPServer {
       }
 
       // === Legacy Public Routes ===
+      // POST /messages - Send message (public legacy route)
+      if (method === 'POST' && path === '/messages') {
+        return await this.imRoutes!.sendMessage(req);
+      }
+
+      // GET /messages - Get messages for address (public legacy route)
+      if (method === 'GET' && path === '/messages') {
+        return this.imRoutes!.getMessages(url);
+      }
+
+      // GET /messages/:id - Get message by id (public legacy route)
+      if (method === 'GET' && path.startsWith('/messages/')) {
+        const id = path.slice('/messages/'.length);
+        return this.imRoutes!.getMessageById(id);
+      }
+
+      // POST /messages/ack - Acknowledge messages (public legacy route)
+      if (method === 'POST' && path === '/messages/ack') {
+        return await this.imRoutes!.ackMessages(req);
+      }
+
       if (method === 'GET' && path === '/health') {
         return Response.json({ status: 'ok', timestamp: Date.now() });
       }

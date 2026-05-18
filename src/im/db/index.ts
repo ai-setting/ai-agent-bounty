@@ -97,10 +97,15 @@ export class IMDatabase {
     return rows.map(row => this.rowToMessage(row));
   }
 
+  /**
+   * Get pending messages for an address
+   * Only returns messages with status 'pending' - not yet delivered
+   * Does NOT return 'delivered' messages to avoid duplicate delivery on reconnect
+   */
   getPendingMessages(address: string): Message[] {
     const rows = this.db.prepare(
-      'SELECT * FROM im_messages WHERE to_address = ? AND status != ? ORDER BY created_at ASC'
-    ).all(address, 'acked') as MessageRow[];
+      'SELECT * FROM im_messages WHERE to_address = ? AND status = ? ORDER BY created_at ASC'
+    ).all(address, 'pending') as MessageRow[];
     return rows.map(row => this.rowToMessage(row));
   }
 

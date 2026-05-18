@@ -93,7 +93,7 @@ describe('IMDatabase', () => {
       expect(inbox[2].id).toBe('msg-003');
     });
 
-    it('should get only undelivered messages for offline sync', () => {
+    it('should get only pending messages for offline sync', () => {
       const now = new Date().toISOString();
       const messages: Message[] = [
         { id: 'msg-006', from: 'alice@server.com', to: 'bob@server.com', content: { type: 'text', body: 'Msg 1' }, status: 'pending', createdAt: now },
@@ -104,10 +104,9 @@ describe('IMDatabase', () => {
       messages.forEach(m => db.saveMessage(m));
       const pending = db.getPendingMessages('bob@server.com');
 
-      // pending = not acked (pending + delivered)
-      expect(pending).toHaveLength(2);
+      // Only pending messages are returned - delivered/acked are already handled
+      expect(pending).toHaveLength(1);
       expect(pending[0].id).toBe('msg-006');
-      expect(pending[1].id).toBe('msg-007');
     });
 
     it('should return empty inbox for address with no messages', () => {
