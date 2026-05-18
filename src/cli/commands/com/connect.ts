@@ -5,6 +5,7 @@
 
 import type { CommandModule } from 'yargs';
 import chalk from 'chalk';
+import { CLI_PORT } from '../../config-env.js';
 
 interface ConnectOptions {
   address: string;
@@ -27,23 +28,24 @@ export const connectCommand: CommandModule<object, ConnectOptions> = {
       .option('host', {
         alias: 'H',
         type: 'string',
-        description: 'IM server host',
+        description: 'IM server host (default: localhost)',
         default: 'localhost',
       })
       .option('port', {
         alias: 'p',
         type: 'number',
-        description: 'IM server port',
-        default: 3001,
+        description: 'IM server port (default: from BOUNTY_PORT)',
+        default: parseInt(CLI_PORT, 10),
       }),
 
   handler: async (args) => {
     const { address, host, port } = args;
     const wsUrl = `ws://${host}:${port}/ws?address=${encodeURIComponent(address)}`;
     
-    console.log(chalk.bold('\nConnecting to Agent IM server...\n'));
+    console.log(chalk.bold('\n🔗 Connecting to Agent IM server...\n'));
     console.log(chalk.gray('  Address:'), address);
-    console.log(chalk.gray('  Server:'), `${host}:${port}`);
+    console.log(chalk.gray('  Server:'), `ws://${host}:${port}/ws`);
+    console.log(chalk.gray('  Port:'), port, chalk.gray('(from BOUNTY_PORT)'));
     console.log();
     
     try {

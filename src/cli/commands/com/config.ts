@@ -5,6 +5,7 @@
 
 import type { CommandModule } from 'yargs';
 import chalk from 'chalk';
+import { CLI_PORT } from '../../config-env.js';
 
 interface ConfigOptions {
   host?: string;
@@ -21,14 +22,14 @@ export const configCommand: CommandModule<object, ConfigOptions> = {
       .option('host', {
         alias: 'H',
         type: 'string',
-        description: 'IM server host',
+        description: 'IM server host (default: localhost)',
         default: 'localhost',
       })
       .option('port', {
         alias: 'p',
         type: 'number',
-        description: 'IM server port',
-        default: 3001,
+        description: 'IM server port (default: from BOUNTY_PORT)',
+        default: parseInt(CLI_PORT, 10),
       })
       .option('show', {
         alias: 's',
@@ -53,7 +54,7 @@ export const configCommand: CommandModule<object, ConfigOptions> = {
       console.log(chalk.green('\n✓ Agent IM configuration\n'));
       console.log(chalk.bold('Current Configuration:\n'));
       console.log(chalk.cyan('  Server Host:'), config.imHost);
-      console.log(chalk.cyan('  Server Port:'), config.imPort);
+      console.log(chalk.cyan('  Server Port:'), config.imPort, chalk.gray('(from BOUNTY_PORT)'));
       console.log(chalk.gray(`  Updated: ${config.updatedAt}`));
       console.log();
       

@@ -5,48 +5,40 @@
 
 import type { CommandModule } from 'yargs';
 import chalk from 'chalk';
-import { CLI_SERVER_PORT, CLI_API_BASE } from '../../config-env.js';
+import { CLI_PORT } from '../../config-env.js';
 
 export const statusCommand: CommandModule = {
   command: 'status',
   describe: 'Show bounty server status',
 
   handler: async () => {
-    const port = CLI_SERVER_PORT;
+    const port = CLI_PORT;
     const serverUrl = `http://localhost:${port}`;
 
     console.log(chalk.cyan('\n📊 Server Status'));
-    console.log(chalk.gray(`  Configured API_BASE: ${CLI_API_BASE}`));
-    console.log(chalk.gray(`  Checking port: ${port}`));
+    console.log(chalk.gray(`  Port: ${port}`));
 
     try {
-      const response = await fetch(`${serverUrl}/api/health`);
+      const response = await fetch(`${serverUrl}/health`);
 
       if (response.ok) {
         const data = await response.json() as {
           status?: string;
-          uptime?: number;
-          version?: string;
+          timestamp?: number;
         };
 
         console.log(chalk.green('\n✓ Server is running'));
-        console.log(chalk.cyan('  URL:'), serverUrl);
-        console.log(chalk.cyan('  Port:'), port);
+        console.log(chalk.cyan('  HTTP:'), serverUrl);
+        console.log(chalk.cyan('  WebSocket:'), `ws://localhost:${port}/ws`);
         
-        if (data.version) {
-          console.log(chalk.cyan('  Version:'), data.version);
-        }
-        
-        if (data.uptime) {
-          const hours = Math.floor(data.uptime / 3600);
-          const minutes = Math.floor((data.uptime % 3600) / 60);
-          console.log(chalk.cyan('  Uptime:'), `${hours}h ${minutes}m`);
+        if (data.timestamp) {
+          console.log(chalk.cyan('  Uptime check:'), new Date(data.timestamp).toLocaleString());
         }
 
-        console.log('\nAvailable endpoints:');
-        console.log(`  ${serverUrl}/api/health`);
-        console.log(`  ${serverUrl}/api/agents`);
-        console.log(`  ${serverUrl}/api/tasks`);
+        console.log('\nEndpoints:');
+        console.log(`  ${serverUrl}/           # Server info`);
+        console.log(`  ${serverUrl}/health      # Health check`);
+        console.log(`  ${serverUrl}/api/auth/*  # Auth API`);
       } else {
         console.log(chalk.red('\n✗ Server is responding but not healthy'));
         console.log(chalk.cyan('  Status:'), response.status);

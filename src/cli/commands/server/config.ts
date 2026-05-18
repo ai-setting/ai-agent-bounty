@@ -36,15 +36,19 @@ export const configCommand: CommandModule = {
 
     console.log(chalk.bold('\n  ────────────────────────────────────────────────────────────────────────────────────────────'));
 
-    // Show database path
-    const dbPath = process.env.BOUNTY_DB_PATH || './data/bounty.db';
-    console.log(`\n  ${chalk.cyan('Database:')} ${dbPath}`);
+    // Show URLs
+    const port = process.env.BOUNTY_PORT || '4000';
+    const wsPort = port; // Same port for HTTP and WebSocket
+    console.log(`\n  ${chalk.cyan('Server URLs:')}`);
+    console.log(`  HTTP:      http://localhost:${port}`);
+    console.log(`  WebSocket: ws://localhost:${wsPort}/ws`);
+    console.log(`  Health:    http://localhost:${port}/health`);
 
     // Try to read package.json for version
     try {
       const pkg = JSON.parse(readFileSync(join(process.cwd(), 'package.json'), 'utf-8'));
       if (pkg.version) {
-        console.log(`  ${chalk.cyan('Version:')} ${pkg.version}`);
+        console.log(`\n  ${chalk.cyan('Version:')} ${pkg.version}`);
       }
     } catch {
       // Ignore

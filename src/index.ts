@@ -18,9 +18,8 @@ export {
   type CompleteResult 
 } from './lib/bounty/index.js';
 
-// Server (Bounty Business + Auth + IM)
+// Server (Bounty Business + Auth + IM, HTTP + WebSocket on same port)
 export { BountyHTTPServer } from './server/http/index.js';
-export { BountyWebSocketServer } from './server/ws/index.js';
 
 // IM Submodule (Database, Client, EventSource)
 export { createIMServer, type IMServerConfig } from './im/server/index.js';

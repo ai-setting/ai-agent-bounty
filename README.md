@@ -31,9 +31,7 @@ CLI 支持从 `.env` 文件加载环境变量：
 # 创建 .env 文件
 cat > .env << EOF
 BOUNTY_PORT=4000
-BOUNTY_IM_PORT=4002
 BOUNTY_API_URL=http://localhost:4000
-BOUNTY_IM_SERVER_URL=ws://localhost:4002/ws
 BOUNTY_DOMAIN=bounty.local
 BOUNTY_DB_PATH=./data/bounty.db
 EOF
@@ -43,10 +41,8 @@ EOF
 
 | 变量 | 默认值 | 说明 |
 |------|--------|------|
-| `BOUNTY_PORT` | `4000` | HTTP Server 端口 |
-| `BOUNTY_IM_PORT` | `4002` | IM WebSocket Server 端口 |
-| `BOUNTY_API_URL` | `http://localhost:4000` | CLI 连接的 API 地址 |
-| `BOUNTY_IM_SERVER_URL` | `ws://localhost:4002/ws` | IM WebSocket 地址 |
+| `BOUNTY_PORT` | `4000` | Server 端口（HTTP + WebSocket 共用同一端口）|
+| `BOUNTY_API_URL` | `http://localhost:4000` | API 地址（CLI 连接到此处）|
 | `BOUNTY_DOMAIN` | `bounty.local` | Agent 地址域名 |
 | `BOUNTY_DB_PATH` | `./data/bounty.db` | 数据库文件路径 |
 | `BOUNTY_IM_ADDRESS` | `(自动设置)` | 你的 IM 地址 |

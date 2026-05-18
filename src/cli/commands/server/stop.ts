@@ -5,21 +5,21 @@
 
 import type { CommandModule } from 'yargs';
 import chalk from 'chalk';
-import { CLI_SERVER_PORT } from '../../config-env.js';
+import { CLI_PORT } from '../../config-env.js';
 
 export const stopCommand: CommandModule = {
   command: 'stop',
   describe: 'Stop the bounty server',
 
   handler: async () => {
-    const port = CLI_SERVER_PORT;
+    const port = CLI_PORT;
     const serverUrl = `http://localhost:${port}`;
 
     console.log(chalk.cyan('\n🛑 Stopping bounty server...'));
 
     // Check if server is running
     try {
-      const response = await fetch(`${serverUrl}/api/health`);
+      const response = await fetch(`${serverUrl}/health`);
       if (!response.ok) {
         console.log(chalk.yellow('\n⚠ Server is not running'));
         return;
@@ -29,7 +29,7 @@ export const stopCommand: CommandModule = {
       return;
     }
 
-    // Try to stop via API
+    // Try graceful shutdown via API
     try {
       const response = await fetch(`${serverUrl}/api/shutdown`, {
         method: 'POST',

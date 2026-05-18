@@ -8,7 +8,7 @@ import chalk from 'chalk';
 import { spawn } from 'child_process';
 import { join } from 'path';
 import { existsSync } from 'fs';
-import { CLI_SERVER_PORT, CLI_SERVER_URL } from '../../config-env.js';
+import { CLI_PORT, CLI_SERVER_URL } from '../../config-env.js';
 
 export const startCommand: CommandModule = {
   command: 'start',
@@ -19,8 +19,8 @@ export const startCommand: CommandModule = {
       .option('port', {
         alias: 'p',
         type: 'string',
-        description: 'Server port',
-        default: CLI_SERVER_PORT,
+        description: 'Server port (BOUNTY_PORT)',
+        default: CLI_PORT,
       })
       .option('detach', {
         alias: 'd',
@@ -38,7 +38,7 @@ export const startCommand: CommandModule = {
 
     // Check if server is already running
     try {
-      const response = await fetch(`${serverUrl}/api/health`);
+      const response = await fetch(`${serverUrl}/health`);
       if (response.ok) {
         console.log(chalk.yellow(`\n⚠ Server is already running on port ${port}`));
         return;
@@ -49,8 +49,8 @@ export const startCommand: CommandModule = {
 
     // Find the server entry point
     const possiblePaths = [
-      join(process.cwd(), 'dist', 'server', 'index.js'),
-      join(process.cwd(), 'src', 'server', 'index.ts'),
+      join(process.cwd(), 'dist', 'server', 'server.js'),
+      join(process.cwd(), 'src', 'server', 'server.ts'),
     ];
 
     let serverPath = '';
@@ -62,8 +62,8 @@ export const startCommand: CommandModule = {
     }
 
     if (!serverPath) {
-      console.error(chalk.red('\n✗ Server not found. Please run "bun run build" first.\n'));
-      console.error('Or start with: bounty server start');
+      console.error(chalk.red('\n✗ Server entry point not found.\n'));
+      console.error('  Please run "bun run build" first, or use "bun run dev" to start in development mode.\n');
       process.exit(1);
     }
 
@@ -88,12 +88,13 @@ export const startCommand: CommandModule = {
 
       // Check if started successfully
       try {
-        const response = await fetch(`${serverUrl}/api/health`);
+        const response = await fetch(`${serverUrl}/health`);
         if (response.ok) {
-          console.log(chalk.green('\n✓ Server started successfully'));
-          console.log(chalk.cyan('  URL:'), serverUrl);
-          console.log(chalk.cyan('  Port:'), port);
-          console.log(chalk.cyan('  API_BASE:'), `BOUNTY_API_URL=${serverUrl}`);
+          console.log(chalk.green('\n✓ Server started successfully!'));
+          console.log(chalk.cyan('  HTTP/WS:'), `ws://localhost:${port}/ws`);
+          console.log(chalk.cyan('  Health:'), `${serverUrl}/health`);
+          console.log('\nNext steps:');
+          console.log(`  ${chalk.gray('bounty auth register --email <email> --name <name>')}`);
           return;
         }
       } catch {
@@ -104,6 +105,8 @@ export const startCommand: CommandModule = {
       console.log(chalk.cyan('  Check status with:'), 'bounty server status');
     } else {
       // Start server in foreground
+      console.log(chalk.cyan('\n  Press Ctrl+C to stop\n'));
+      
       const child = spawn('bun', ['run', serverPath], {
         env,
         stdio: 'inherit',

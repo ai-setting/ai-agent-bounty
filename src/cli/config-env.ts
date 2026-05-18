@@ -30,24 +30,19 @@ export function getOptionalEnv(key: string): string | undefined {
 // ============ CLI Configuration ============
 
 /**
- * HTTP Server port
+ * Server port (HTTP + WebSocket on same port)
  */
-export const CLI_SERVER_PORT = getEnv('BOUNTY_PORT', '4000');
+export const CLI_PORT = getEnv('BOUNTY_PORT', '4000');
 
 /**
- * IM WebSocket Server port
+ * Server URL (for health checks and API calls)
  */
-export const CLI_IM_PORT = getEnv('BOUNTY_IM_PORT', '4002');
+export const CLI_SERVER_URL = `http://localhost:${CLI_PORT}`;
 
 /**
- * HTTP Server URL (for health checks)
+ * WebSocket URL (same port as HTTP, ws:// protocol)
  */
-export const CLI_SERVER_URL = `http://localhost:${CLI_SERVER_PORT}`;
-
-/**
- * IM WebSocket Server URL
- */
-export const CLI_IM_SERVER_URL = getEnv('BOUNTY_IM_SERVER_URL', `ws://localhost:${CLI_IM_PORT}/ws`);
+export const CLI_WS_URL = `ws://localhost:${CLI_PORT}/ws`;
 
 /**
  * API Base URL - used by all API commands
@@ -74,10 +69,8 @@ export interface ConfigItem {
 }
 
 export const CONFIG_ITEMS: ConfigItem[] = [
-  { name: 'BOUNTY_PORT', envKey: 'BOUNTY_PORT', default: '4000', desc: 'HTTP server port' },
-  { name: 'BOUNTY_IM_PORT', envKey: 'BOUNTY_IM_PORT', default: '4002', desc: 'IM WebSocket server port' },
+  { name: 'BOUNTY_PORT', envKey: 'BOUNTY_PORT', default: '4000', desc: 'Server port (HTTP + WebSocket)' },
   { name: 'BOUNTY_API_URL', envKey: 'BOUNTY_API_URL', default: 'http://localhost:4000', desc: 'API base URL (CLI connects here)' },
-  { name: 'BOUNTY_IM_SERVER_URL', envKey: 'BOUNTY_IM_SERVER_URL', default: 'ws://localhost:4002/ws', desc: 'IM WebSocket server URL' },
   { name: 'BOUNTY_DOMAIN', envKey: 'BOUNTY_DOMAIN', default: 'bounty.local', desc: 'Domain for agent addresses' },
   { name: 'BOUNTY_DB_PATH', envKey: 'BOUNTY_DB_PATH', default: './data/bounty.db', desc: 'Database file path' },
   { name: 'BOUNTY_IM_ADDRESS', envKey: 'BOUNTY_IM_ADDRESS', default: '(auto-set after register)', desc: 'Your IM address' },

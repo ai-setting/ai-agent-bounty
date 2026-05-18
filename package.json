@@ -41,10 +41,12 @@
     "roy-plugin.js"
   ],
   "scripts": {
-    "build": "bun run build:cli && bun run build:bin && bun run build:plugin",
+    "build": "bun run build:cli && bun run build:bin && bun run build:server && bun run build:plugin",
     "build:cli": "bun build ./src/cli/cli.ts --outdir=./dist --target=bun --external @ai-setting/roy-agent-cli --external @ai-setting/roy-agent-core",
     "build:bin": "bun build ./src/bin/bounty.ts --outdir=./dist/bin --target=bun --external @ai-setting/roy-agent-cli --external @ai-setting/roy-agent-core",
+    "build:server": "bun build ./src/server/server.ts --outdir=./dist/server --target=bun",
     "build:plugin": "bun build ./src/plugin/index.ts --outdir=./dist/plugin --target=bun",
+    "server": "bun run dist/server/server.js",
     "dev": "bun run src/bin/bounty.ts",
     "demo:imap-poll": "bun run scripts/imap-poll-demo.ts",
     "im:server": "bun run scripts/start-im-server.ts",
