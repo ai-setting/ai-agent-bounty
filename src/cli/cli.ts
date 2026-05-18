@@ -166,7 +166,9 @@ async function initializeBountyEnv(): Promise<void> {
     return;
   }
 
-  const imServerUrl = process.env.BOUNTY_IM_SERVER_URL || 'ws://localhost:4002/ws';
+  const imServerUrl =
+    process.env.BOUNTY_IM_SERVER_URL ||
+    (process.env.BOUNTY_PORT ? `ws://localhost:${process.env.BOUNTY_PORT}/ws` : 'ws://localhost:4002/ws');
   const config = {
     id: BOUNTY_IM_AUTO_ES_NAME,
     name: 'Bounty IM (Auto)',
@@ -180,9 +182,10 @@ async function initializeBountyEnv(): Promise<void> {
   // 检查是否已存在同名实例，如果存在则先移除再重新注册（确保使用最新配置）
   const existing = eventSourceComponent.get(BOUNTY_IM_AUTO_ES_NAME);
   if (existing) {
-    // 检查配置是否变化
+    // 检查配置是否变化（address 或 imServerUrl 任一变化都需要更新）
+    const existingAddress = existing.options?.address;
     const existingUrl = existing.options?.imServerUrl;
-    if (existingUrl !== imServerUrl) {
+    if (existingAddress !== address || existingUrl !== imServerUrl) {
       eventSourceComponent.unregister(BOUNTY_IM_AUTO_ES_NAME);
       eventSourceComponent.register(config);
       console.log(`✅ 已更新 bounty-im EventSource: ${BOUNTY_IM_AUTO_ES_NAME} (${address})`);

@@ -39,9 +39,12 @@ interface BountyIMEnvConfig {
  * 从环境变量读取 Bounty IM 配置
  */
 function getEnvConfig(): BountyIMEnvConfig {
+  const imServerUrl =
+    process.env.BOUNTY_IM_SERVER_URL ||
+    (process.env.BOUNTY_PORT ? `ws://localhost:${process.env.BOUNTY_PORT}/ws` : undefined);
   return {
     address: process.env.BOUNTY_IM_ADDRESS,
-    imServerUrl: process.env.BOUNTY_IM_SERVER_URL,
+    imServerUrl,
   };
 }
 
@@ -72,7 +75,10 @@ export class BountyIMInstance implements EventSourceInstance {
     this.setStatus("starting");
 
     const address = this.config.options?.address as string | undefined;
-    const imServerUrl = (this.config.options?.imServerUrl as string) || "ws://localhost:4002/ws";
+    const defaultUrl = process.env.BOUNTY_PORT
+      ? `ws://localhost:${process.env.BOUNTY_PORT}/ws`
+      : "ws://localhost:4002/ws";
+    const imServerUrl = (this.config.options?.imServerUrl as string) || defaultUrl;
     
     const wsUrl = new URL(imServerUrl);
     if (address) {
@@ -276,7 +282,8 @@ export const bountyIMHandler: EventSourceHandler = {
       errors.push("Address format invalid (expected: agent-id@host)");
     }
 
-    const imServerUrl = (config.options?.imServerUrl as string) || getEnvConfig().imServerUrl || "ws://localhost:4002/ws";
+    const envConfig = getEnvConfig();
+    const imServerUrl = (config.options?.imServerUrl as string) || envConfig.imServerUrl || "ws://localhost:4002/ws";
     if (imServerUrl && !imServerUrl.startsWith("ws://") && !imServerUrl.startsWith("wss://")) {
       errors.push("imServerUrl must start with ws:// or wss://");
     }
