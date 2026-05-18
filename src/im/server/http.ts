@@ -540,3 +540,6 @@ export class IMHTTPServer {
     return Response.json({ success: true, acked });
   }
 }
+
+// Alias for backward compatibility
+export { IMHTTPServer as BountyHTTPServer };

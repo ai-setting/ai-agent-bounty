@@ -247,3 +247,6 @@ export class IMWebSocketServer {
     }
   }
 }
+
+// Alias for backward compatibility
+export { IMWebSocketServer as BountyWebSocketServer };
