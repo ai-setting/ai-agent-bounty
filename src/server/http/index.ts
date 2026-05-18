@@ -104,9 +104,24 @@ export class BountyHTTPServer {
     const path = url.pathname;
     const method = req.method;
 
-    // Handle WebSocket upgrade
-    if (server.upgrade(req)) {
-      return new Response(undefined);  // WebSocket upgraded, no HTTP response needed
+    // Handle WebSocket upgrade for /ws endpoint
+    if (path === '/ws') {
+      const address = url.searchParams.get('address');
+      
+      if (!address) {
+        return Response.json({
+          event: 'error',
+          data: { message: 'Missing required parameter: address' }
+        }, { status: 400 });
+      }
+
+      const success = server.upgrade(req, {
+        data: { address },
+      });
+
+      if (success) {
+        return new Response(undefined);  // WebSocket upgraded, no HTTP response
+      }
     }
 
     try {
