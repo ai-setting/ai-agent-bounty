@@ -14,7 +14,7 @@ interface AddAgentOptions {
 }
 
 export const addCommand: CommandModule = {
-  command: 'register-agent add',
+  command: 'add',
   describe: 'Register a new agent (requires email verification)',
 
   builder: (yargs) =>
@@ -69,7 +69,7 @@ export const addCommand: CommandModule = {
       console.log(chalk.cyan('  Email:'), options.email);
       console.log('\n' + (data.message || ''));
       console.log('\nNext: Check your email and verify with:');
-      console.log(chalk.cyan(`  bounty agent verify --email ${options.email} --code <code>`));
+      console.log(chalk.cyan(`  bounty register-agent verify --email ${options.email} --code <code>`));
       console.log();
     } catch (error) {
       console.error(chalk.red(`\n✗ Error: ${error instanceof Error ? error.message : 'Registration failed'}\n`));

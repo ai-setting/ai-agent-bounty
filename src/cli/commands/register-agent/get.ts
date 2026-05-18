@@ -24,7 +24,7 @@ interface Agent {
 }
 
 export const getCommand: CommandModule = {
-  command: 'register-agent get',
+  command: 'get',
   describe: 'Get details of a specific agent by ID',
 
   builder: (yargs) =>
@@ -46,7 +46,7 @@ export const getCommand: CommandModule = {
       // If no token, prompt for login
       if (!token) {
         console.log(chalk.yellow('\n⚠ No token found. Please login first.\n'));
-        console.log(chalk.cyan('  bounty agent login --email <your-email>\n'));
+        console.log(chalk.cyan('  bounty register-agent login --email <your-email>\n'));
         process.exit(1);
       }
 

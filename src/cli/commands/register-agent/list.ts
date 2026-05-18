@@ -23,7 +23,7 @@ interface ListAgentsOptions {
 }
 
 export const listCommand: CommandModule = {
-  command: 'register-agent list',
+  command: 'list',
   describe: 'List all registered agents',
 
   builder: (yargs) =>
@@ -42,7 +42,7 @@ export const listCommand: CommandModule = {
 
       if (!token) {
         console.log(chalk.yellow('\n⚠ No token found. Please login first.\n'));
-        console.log(chalk.cyan('  bounty agent login --email <your-email>\n'));
+        console.log(chalk.cyan('  bounty register-agent login --email <your-email>\n'));
         process.exit(1);
       }
 

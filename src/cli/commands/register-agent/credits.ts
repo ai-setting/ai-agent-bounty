@@ -8,7 +8,7 @@ import chalk from 'chalk';
 import { createContext } from '../../services/context.js';
 
 export const creditsCommand: CommandModule = {
-  command: 'register-agent credits',
+  command: 'credits',
   describe: 'Check agent credits and transaction history',
   
   builder: (yargs) =>

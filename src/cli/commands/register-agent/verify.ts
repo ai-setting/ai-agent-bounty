@@ -8,7 +8,7 @@ import chalk from 'chalk';
 import { API_BASE } from '../../config.js';
 
 export const verifyCommand: CommandModule = {
-  command: 'register-agent verify',
+  command: 'verify',
   describe: 'Verify email after registration',
   
   builder: (yargs) =>
@@ -54,7 +54,7 @@ export const verifyCommand: CommandModule = {
       console.log(chalk.cyan('  Address:'), data.address);
       console.log(chalk.cyan('  Credits:'), data.credits);
       console.log('\nYou can now use:');
-      console.log('  bounty agent info');
+      console.log('  bounty register-agent info');
       console.log('  bounty tasks list');
     } catch (error) {
       console.error(chalk.red(`\n✗ Error: ${error instanceof Error ? error.message : 'Verification failed'}\n`));

@@ -14,7 +14,7 @@ interface DeleteAgentOptions {
 }
 
 export const deleteCommand: CommandModule = {
-  command: 'register-agent delete',
+  command: 'delete',
   describe: 'Delete an agent by ID',
 
   builder: (yargs) =>
@@ -41,7 +41,7 @@ export const deleteCommand: CommandModule = {
 
       if (!token) {
         console.log(chalk.yellow('\n⚠ No token found. Please login first.\n'));
-        console.log(chalk.cyan('  bounty agent login --email <your-email>\n'));
+        console.log(chalk.cyan('  bounty register-agent login --email <your-email>\n'));
         process.exit(1);
       }
 

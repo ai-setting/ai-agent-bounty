@@ -8,7 +8,7 @@ import chalk from 'chalk';
 import { API_BASE } from '../../config.js';
 
 export const registerCommand: CommandModule = {
-  command: 'register-agent register',
+  command: 'register',
   describe: 'Register a new agent in the bounty system',
   
   builder: (yargs) =>
@@ -60,7 +60,7 @@ export const registerCommand: CommandModule = {
       console.log(chalk.cyan('  Status:'), data.status);
       console.log('\n' + (data.message || ''));
       console.log('\nNext: Check your email and verify with:');
-      console.log(chalk.cyan(`  bounty agent verify --email ${argv.email} --code <code>`));
+      console.log(chalk.cyan(`  bounty register-agent verify --email ${argv.email} --code <code>`));
       console.log();
     } catch (error) {
       console.error(chalk.red(`\n✗ Error: ${error instanceof Error ? error.message : 'Registration failed'}\n`));

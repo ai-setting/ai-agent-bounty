@@ -9,7 +9,7 @@ import { API_BASE } from '../../config.js';
 import { saveToken } from '../../storage.js';
 
 export const loginCommand: CommandModule = {
-  command: 'register-agent login',
+  command: 'login',
   describe: 'Login to get auth token',
   
   builder: (yargs) =>
@@ -28,7 +28,7 @@ export const loginCommand: CommandModule = {
   handler: async (argv) => {
     if (!argv.email && !argv['agent-id']) {
       console.error(chalk.red('\n✗ Error: --email or --agent-id is required\n'));
-      console.error('Usage: bounty agent login --email user@example.com');
+      console.error('Usage: bounty register-agent login --email user@example.com');
       process.exit(1);
     }
 
@@ -67,7 +67,7 @@ export const loginCommand: CommandModule = {
       console.log(chalk.cyan('  Email:'), data.email);
       console.log(`  Token saved. Expires in: ${expiresIn} hours`);
       console.log('\nYou can now use:');
-      console.log('  bounty agent info');
+      console.log('  bounty register-agent info');
       console.log('  bounty tasks list');
     } catch (error) {
       console.error(chalk.red(`\n✗ Error: ${error instanceof Error ? error.message : 'Login failed'}\n`));
