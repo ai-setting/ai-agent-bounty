@@ -15,8 +15,8 @@
 export type AuthTokenPayload = {
   /** Agent ID (subject) */
   sub: string;
-  /** Agent email */
-  email: string;
+  /** Agent email (optional) */
+  email?: string;
   /** Issued at timestamp */
   iat: number;
   /** Expiration timestamp */

@@ -26,7 +26,7 @@ const getSecret = () => {
  * @param payload - Token payload (sub: agent_id, email)
  * @returns JWT token string
  */
-export async function createToken(payload: Omit<AuthTokenPayload, 'iat' | 'exp'>): Promise<string> {
+export async function createToken(payload: { sub: string; email?: string }): Promise<string> {
   const token = await new SignJWT(payload)
     .setProtectedHeader({ alg: 'HS256' })
     .setIssuedAt()
