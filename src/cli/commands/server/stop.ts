@@ -5,20 +5,21 @@
 
 import type { CommandModule } from 'yargs';
 import chalk from 'chalk';
-
-const SERVER_PORT = process.env.BOUNTY_PORT || '4000';
-const SERVER_URL = `http://localhost:${SERVER_PORT}`;
+import { CLI_SERVER_PORT } from '../../config-env.js';
 
 export const stopCommand: CommandModule = {
   command: 'stop',
   describe: 'Stop the bounty server',
 
   handler: async () => {
+    const port = CLI_SERVER_PORT;
+    const serverUrl = `http://localhost:${port}`;
+
     console.log(chalk.cyan('\n🛑 Stopping bounty server...'));
 
     // Check if server is running
     try {
-      const response = await fetch(`${SERVER_URL}/api/health`);
+      const response = await fetch(`${serverUrl}/api/health`);
       if (!response.ok) {
         console.log(chalk.yellow('\n⚠ Server is not running'));
         return;
@@ -30,7 +31,7 @@ export const stopCommand: CommandModule = {
 
     // Try to stop via API
     try {
-      const response = await fetch(`${SERVER_URL}/api/shutdown`, {
+      const response = await fetch(`${serverUrl}/api/shutdown`, {
         method: 'POST',
       });
 
@@ -45,13 +46,13 @@ export const stopCommand: CommandModule = {
     // Try to kill process on port
     try {
       const { execSync } = await import('child_process');
-      execSync(`lsof -ti:${SERVER_PORT} | xargs kill -9 2>/dev/null || true`, {
+      execSync(`lsof -ti:${port} | xargs kill -9 2>/dev/null || true`, {
         stdio: 'ignore',
       });
       console.log(chalk.green('\n✓ Server stopped'));
     } catch {
       console.log(chalk.yellow('\n⚠ Could not stop server gracefully'));
-      console.log(chalk.cyan('  Try:'), `lsof -ti:${SERVER_PORT} | xargs kill -9`);
+      console.log(chalk.cyan('  Try:'), `lsof -ti:${port} | xargs kill -9`);
     }
   },
 };

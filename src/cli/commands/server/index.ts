@@ -7,6 +7,9 @@
  * - server stop - Stop the bounty server
  * - server status - Show server status
  * - server config - Show server configuration
+ * 
+ * Note: All CLI commands require the server to be running.
+ * Use `bounty server start` to start the server.
  */
 
 import type { CommandModule } from 'yargs';

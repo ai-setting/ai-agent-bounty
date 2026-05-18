@@ -1,6 +1,8 @@
 /**
  * CLI Configuration
+ * 
+ * Now supports loading from .env file via config-env.ts
  */
 
-// API Base URL - can be overridden via BOUNTY_API_URL env var
-export const API_BASE = process.env.BOUNTY_API_URL || 'http://localhost:4002';
+// Re-export for backward compatibility
+export { CLI_API_BASE as API_BASE } from './config-env.js';

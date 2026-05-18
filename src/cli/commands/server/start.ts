@@ -8,9 +8,7 @@ import chalk from 'chalk';
 import { spawn } from 'child_process';
 import { join } from 'path';
 import { existsSync } from 'fs';
-
-const SERVER_PORT = process.env.BOUNTY_PORT || '4000';
-const SERVER_URL = `http://localhost:${SERVER_PORT}`;
+import { CLI_SERVER_PORT, CLI_SERVER_URL } from '../../config-env.js';
 
 export const startCommand: CommandModule = {
   command: 'start',
@@ -22,7 +20,7 @@ export const startCommand: CommandModule = {
         alias: 'p',
         type: 'string',
         description: 'Server port',
-        default: SERVER_PORT,
+        default: CLI_SERVER_PORT,
       })
       .option('detach', {
         alias: 'd',
@@ -34,12 +32,13 @@ export const startCommand: CommandModule = {
   handler: async (argv) => {
     const port = argv.port as string;
     const detach = argv.detach as boolean;
+    const serverUrl = `http://localhost:${port}`;
 
     console.log(chalk.cyan('\n🚀 Starting bounty server...'));
 
     // Check if server is already running
     try {
-      const response = await fetch(`${SERVER_URL}/api/health`);
+      const response = await fetch(`${serverUrl}/api/health`);
       if (response.ok) {
         console.log(chalk.yellow(`\n⚠ Server is already running on port ${port}`));
         return;
@@ -89,11 +88,12 @@ export const startCommand: CommandModule = {
 
       // Check if started successfully
       try {
-        const response = await fetch(`${SERVER_URL}/api/health`);
+        const response = await fetch(`${serverUrl}/api/health`);
         if (response.ok) {
           console.log(chalk.green('\n✓ Server started successfully'));
-          console.log(chalk.cyan('  URL:'), SERVER_URL);
+          console.log(chalk.cyan('  URL:'), serverUrl);
           console.log(chalk.cyan('  Port:'), port);
+          console.log(chalk.cyan('  API_BASE:'), `BOUNTY_API_URL=${serverUrl}`);
           return;
         }
       } catch {
