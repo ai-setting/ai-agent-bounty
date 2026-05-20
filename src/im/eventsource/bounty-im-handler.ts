@@ -48,6 +48,14 @@ export class BountyIMInstance implements EventSourceInstance {
     this.config = config;
   }
 
+  /**
+   * 获取当前配置的地址
+   * 优先使用 config.options.address，如果为空则从 bountyConfig 获取
+   */
+  private getCurrentAddress(): string {
+    return (this.config.options?.address as string) || bountyConfig.imAddress || "unknown";
+  }
+
   getStatus(): EventSourceStatus {
     return this.status;
   }
@@ -169,7 +177,14 @@ export class BountyIMInstance implements EventSourceInstance {
 
       // 提取消息关键信息
       const fromAddress = msg.from as string || "unknown";
-      const toAddress = msg.to as string || this.config.options?.address as string || "unknown";
+      const currentAddress = this.getCurrentAddress();
+      const toAddress = msg.to as string || currentAddress;
+      
+      // 如果 toAddress 不是当前配置的地址，说明有问题
+      if (msg.to && msg.to !== currentAddress) {
+        console.warn(`[BountyIM] Warning: message.to (${msg.to}) !== current address (${currentAddress})`);
+      }
+      
       const msgContent = msg.content as Record<string, unknown>;
       const content = msgContent?.type === "text" ? String(msgContent.body || "") : "";
 

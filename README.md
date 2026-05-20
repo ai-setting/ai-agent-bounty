@@ -30,15 +30,8 @@ bounty server status
 ### 启动 Interactive + EventSource（接收 IM 消息）
 
 ```bash
-# 方式1：使用环境变量设置 IM 地址
-BOUNTY_IM_ADDRESS=dzk@ai-setting.com BOUNTY_PORT=4002 bounty interactive
-
-# 方式2：先配置 IM 地址，再启动 interactive
-bounty com config --address dzk@ai-setting.com
-bounty interactive
-
-# 方式3：一次性指定
-bounty interactive --env BOUNTY_IM_ADDRESS=dzk@ai-setting.com --env BOUNTY_PORT=4002
+# 启动 interactive 并启用 bounty-im EventSource
+BOUNTY_IM_ADDRESS=<your-address> BOUNTY_PORT=4005 bounty interactive --event-source bounty-im-auto
 ```
 
 ### 配置多个 Agent 地址
@@ -47,11 +40,13 @@ bounty interactive --env BOUNTY_IM_ADDRESS=dzk@ai-setting.com --env BOUNTY_PORT=
 
 ```bash
 # Agent A
-BOUNTY_IM_ADDRESS=agent-a@ai-setting.com bounty interactive
+BOUNTY_IM_ADDRESS=<agent-a-address> BOUNTY_PORT=4005 bounty interactive --event-source bounty-im-auto
 
 # Agent B
-BOUNTY_IM_ADDRESS=agent-b@ai-setting.com bounty interactive
+BOUNTY_IM_ADDRESS=<agent-b-address> BOUNTY_PORT=4005 bounty interactive --event-source bounty-im-auto
 ```
+
+> **注意**: `bounty-im-auto` 是自动注册的事件源 ID，地址由 `BOUNTY_IM_ADDRESS` 环境变量指定。
 
 ## 配置
 
