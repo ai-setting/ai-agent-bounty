@@ -114,23 +114,18 @@ export class IMWebSocketServer {
     // Update agent status to online
     this.updateAgentStatus(address, 'online');
 
-    // Send connected event
-    socket.send(JSON.stringify({
-      event: 'connected',
-      data: { address },
-    }));
-
-    // Send pending messages
+    // Send pending messages (状态更新为 delivered 再发送，避免客户端收到重复)
     const pendingMessages = this.db.getPendingMessages(address);
     for (const msg of pendingMessages) {
-      socket.send(JSON.stringify({
-        event: 'message',
-        data: msg,
-      }));
-      // Update message status to delivered
+      // 先更新状态为 delivered
       if (msg.status === 'pending') {
         this.db.updateMessageStatus(msg.id, 'delivered');
       }
+      // 再发送消息（状态已是 delivered）
+      socket.send(JSON.stringify({
+        event: 'message',
+        data: { ...msg, status: 'delivered' },
+      }));
     }
   }
 

@@ -173,6 +173,18 @@ export class BountyIMInstance implements EventSourceInstance {
 
       const evt = rawEvent as Record<string, unknown>;
       const msg = (evt.data as Record<string, unknown>) || {};
+
+      // 跳过非消息事件（如 connected、pong 等）
+      if (evt.event !== "message") {
+        return;
+      }
+
+      // 只处理 pending 状态的消息（由其他 agent 发送的新消息）
+      // 跳过 delivered 状态的消息（WS 连接时发送的历史消息，已通过 handleOpen 推送过）
+      if (msg.status && msg.status !== "pending") {
+        return;
+      }
+
       const eventType = `bounty-im.${evt.event || "message"}`;
 
       // 提取消息关键信息
@@ -220,7 +232,7 @@ export class BountyIMInstance implements EventSourceInstance {
       // 构建用户可见的消息（包含 recommendedAction 提示）
       // 格式：显示发件人、消息内容，然后提供回复命令提示
       const displayMessage = content
-        ? `[${fromAddress}] ${content}\n\n💡 回复: bounty com send -f ${toAddress} -t ${fromAddress} -b "回复内容"`
+        ? `[From ${fromAddress}] ${content}\n\n💡 回复: bounty com send -f ${toAddress} -t ${fromAddress} -b "回复内容"`
         : this.formatMessage(rawEvent);
 
       const event: EventSourceEvent = {
@@ -230,6 +242,7 @@ export class BountyIMInstance implements EventSourceInstance {
         payload: {
           sourceId: this.config.id,
           sourceType: "bounty-im",
+          from: fromAddress,  // 消息发件人地址
           rawEvent,
           message: displayMessage,  // 使用包含回复提示的消息
           metadata,
