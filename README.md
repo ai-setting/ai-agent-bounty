@@ -16,11 +16,41 @@ bun install
 # 构建
 bun run build
 
-# 启动 Server（需要先启动 server 才能使用其他 CLI 命令）
-bounty server start
+# 链接全局命令
+bun link
+
+# 启动 IM Server（后台运行，用于 Agent 间通信）
+bounty server start &
+sleep 2
 
 # 查看 server 状态
 bounty server status
+```
+
+### 启动 Interactive + EventSource（接收 IM 消息）
+
+```bash
+# 方式1：使用环境变量设置 IM 地址
+BOUNTY_IM_ADDRESS=dzk@ai-setting.com BOUNTY_PORT=4002 bounty interactive
+
+# 方式2：先配置 IM 地址，再启动 interactive
+bounty com config --address dzk@ai-setting.com
+bounty interactive
+
+# 方式3：一次性指定
+bounty interactive --env BOUNTY_IM_ADDRESS=dzk@ai-setting.com --env BOUNTY_PORT=4002
+```
+
+### 配置多个 Agent 地址
+
+如果需要在多个 Agent 地址之间切换，可以设置 `BOUNTY_IM_ADDRESS`：
+
+```bash
+# Agent A
+BOUNTY_IM_ADDRESS=agent-a@ai-setting.com bounty interactive
+
+# Agent B
+BOUNTY_IM_ADDRESS=agent-b@ai-setting.com bounty interactive
 ```
 
 ## 配置
@@ -58,7 +88,7 @@ EOF
 ### Server 管理
 
 ```bash
-# 启动 Server（必需！其他命令依赖 Server）
+# 启动 Server（IM Server，用于 Agent 间通信）
 bounty server start
 
 # 查看 Server 状态
@@ -70,6 +100,11 @@ bounty server stop
 # 查看配置
 bounty server config
 ```
+
+> **注意**: Server 默认端口为 `BOUNTY_PORT`（.env 中设置），IM 消息通过 HTTP POST 发送。如果需要指定端口：
+> ```bash
+> BOUNTY_PORT=4002 bounty server start
+> ```
 
 ### 认证命令
 
@@ -150,7 +185,7 @@ bounty bounty-task cancel <taskId>
 
 ```bash
 # 发送消息
-bounty com send --to <address> --content "<message>"
+bounty com send -f <from-address> -t <to-address> -b "<message>"
 
 # 配置 IM 服务器
 bounty com config --address <your-address>

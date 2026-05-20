@@ -13,6 +13,9 @@ import {
   type EventSourceEvent,
   type EventSourceEventHandler,
   type EventSourceStatus,
+  type EventMetadata,
+  type ReplyChannel,
+  type RecommendedAction,
 } from "@ai-setting/roy-agent-core";
 
 // 导入全局 env 实例获取函数（由 bounty cli 提供）
@@ -186,6 +189,47 @@ export class BountyIMInstance implements EventSourceInstance {
       const msg = (evt.data as Record<string, unknown>) || {};
       const eventType = `bounty-im.${evt.event || "message"}`;
 
+      // 提取消息关键信息
+      const fromAddress = msg.from as string || "unknown";
+      const toAddress = msg.to as string || this.config.options?.address as string || "unknown";
+      const msgContent = msg.content as Record<string, unknown>;
+      const content = msgContent?.type === "text" ? String(msgContent.body || "") : "";
+
+      // 构建 metadata（参考 lark-cli 实现）
+      const metadata: EventMetadata = {
+        eventType,
+        senderId: fromAddress,
+        chatId: toAddress,  // 当前 agent 的地址作为 chatId
+      };
+
+      // 推荐动作：告诉 Agent 如何回复（参考 lark-cli recommendedAction）
+      let recommendedAction: RecommendedAction | undefined;
+      if (evt.event === "message") {
+        recommendedAction = {
+          action: `处理消息并通过 bounty com send 回复发件人。使用格式：bounty com send -f ${toAddress} -t ${fromAddress} -b "回复内容"`,
+          replyTo: {
+            chatId: fromAddress,  // 回复目标：发件人
+          },
+        };
+      }
+
+      // 反馈通道：包含回复所需的信息
+      const replyChannel: ReplyChannel = {
+        type: "bounty-im",
+        chatId: fromAddress,  // 回复目标：发件人
+        params: {
+          from: toAddress,  // 当前 agent 地址作为发件人
+          to: fromAddress,  // 回复给发件人
+          imServerUrl: this.config.options?.imServerUrl,
+        },
+      };
+
+      // 构建用户可见的消息（包含 recommendedAction 提示）
+      // 格式：显示发件人、消息内容，然后提供回复命令提示
+      const displayMessage = content
+        ? `[${fromAddress}] ${content}\n\n💡 回复: bounty com send -f ${toAddress} -t ${fromAddress} -b "回复内容"`
+        : this.formatMessage(rawEvent);
+
       const event: EventSourceEvent = {
         sourceId: this.config.id,
         type: eventType,
@@ -194,18 +238,10 @@ export class BountyIMInstance implements EventSourceInstance {
           sourceId: this.config.id,
           sourceType: "bounty-im",
           rawEvent,
-          message: this.formatMessage(rawEvent),
-          metadata: {
-            eventType,
-            senderId: msg.from as string,
-          },
-          replyChannel: {
-            type: "bounty-im",
-            params: {
-              address: this.config.options?.address,
-              imServerUrl: this.config.options?.imServerUrl,
-            },
-          },
+          message: displayMessage,  // 使用包含回复提示的消息
+          metadata,
+          recommendedAction,
+          replyChannel,
           timestamp: Date.now(),
         },
       };

@@ -332,10 +332,9 @@ bounty com disconnect --agent-id <agent-id>
 
 # 发送消息
 bounty com send \
-  --from <address> \
-  --to <address> \
-  --subject <subject> \
-  --body <body>
+  -f <from-address> \
+  -t <to-address> \
+  -b <body>
 
 # 查看收件箱
 bounty com inbox --address <address> [--unread] [--limit <n>]
