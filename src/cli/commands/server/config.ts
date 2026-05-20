@@ -7,7 +7,7 @@ import type { CommandModule } from 'yargs';
 import chalk from 'chalk';
 import { readFileSync } from 'fs';
 import { join } from 'path';
-import { CONFIG_ITEMS } from '../../config-env.js';
+import { bountyConfig } from '../../../lib/config/bounty-config.js';
 
 export const configCommand: CommandModule = {
   command: 'config',
@@ -20,7 +20,7 @@ export const configCommand: CommandModule = {
     console.log(chalk.bold('  Name                      Current                               Default     Description'));
     console.log(chalk.bold('  ────────────────────────────────────────────────────────────────────────────────────────────'));
 
-    for (const item of CONFIG_ITEMS) {
+    for (const item of bountyConfig.toConfigItems()) {
       const current = process.env[item.envKey] || chalk.gray(`(not set)`);
       const namePad = item.name.padEnd(24);
       const currentStr = typeof current === 'string' ? current : '';
@@ -37,12 +37,11 @@ export const configCommand: CommandModule = {
     console.log(chalk.bold('\n  ────────────────────────────────────────────────────────────────────────────────────────────'));
 
     // Show URLs
-    const port = process.env.BOUNTY_PORT || '4000';
-    const wsPort = port; // Same port for HTTP and WebSocket
-    console.log(`\n  ${chalk.cyan('Server URLs:')}`);
-    console.log(`  HTTP:      http://localhost:${port}`);
-    console.log(`  WebSocket: ws://localhost:${wsPort}/ws`);
-    console.log(`  Health:    http://localhost:${port}/health`);
+    console.log(`\n  ${chalk.cyan('Server URLs (from bountyConfig):')}`);
+    console.log(`  HTTP:      ${bountyConfig.url}`);
+    console.log(`  WebSocket: ${bountyConfig.wsUrl}`);
+    console.log(`  Health:    ${bountyConfig.url}/health`);
+    console.log(`  IM Server: ${bountyConfig.getImServerUrl()}`);
 
     // Try to read package.json for version
     try {

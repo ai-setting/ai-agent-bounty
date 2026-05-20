@@ -1,8 +1,8 @@
 /**
  * CLI Configuration
  * 
- * Now supports loading from .env file via config-env.ts
+ * 使用统一的 bountyConfig 管理配置
  */
 
 // Re-export for backward compatibility
-export { CLI_API_BASE as API_BASE } from './config-env.js';
+export { bountyConfig, CLI_API_BASE as API_BASE } from '../lib/config/bounty-config.js';

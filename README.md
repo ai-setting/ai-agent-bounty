@@ -69,10 +69,15 @@ EOF
 
 ### 环境变量说明
 
+所有配置项支持环境变量覆盖或 `.env` 文件配置。HTTP 和 WebSocket 使用相同端口。
+
 | 变量 | 默认值 | 说明 |
 |------|--------|------|
 | `BOUNTY_PORT` | `4000` | Server 端口（HTTP + WebSocket 共用同一端口）|
-| `BOUNTY_API_URL` | `http://localhost:4000` | API 地址（CLI 连接到此处）|
+| `BOUNTY_URL` | `http://localhost:4000` | Server HTTP URL |
+| `BOUNTY_WS_URL` | `ws://localhost:4000/ws` | WebSocket URL |
+| `BOUNTY_API_URL` | `(同 BOUNTY_URL)` | API 地址（CLI 连接到此处）|
+| `BOUNTY_IM_SERVER_URL` | `(同 BOUNTY_WS_URL)` | IM Server WebSocket URL |
 | `BOUNTY_DOMAIN` | `bounty.local` | Agent 地址域名 |
 | `BOUNTY_DB_PATH` | `./data/bounty.db` | 数据库文件路径 |
 | `BOUNTY_IM_ADDRESS` | `(自动设置)` | 你的 IM 地址 |
@@ -307,7 +312,6 @@ ai-agent-bounty/
 │   │   └── bounty.ts
 │   ├── cli/              # CLI 核心
 │   │   ├── cli.ts        # 主入口
-│   │   ├── config-env.ts # 环境变量配置（支持 .env）
 │   │   ├── config.ts     # 配置导出
 │   │   ├── storage.ts    # Token 存储
 │   │   └── commands/     # 命令模块
@@ -319,6 +323,8 @@ ai-agent-bounty/
 │   ├── server/           # Server 实现
 │   ├── auth/             # 认证服务
 │   ├── lib/              # 工具库
+│   │   └── config/       # 统一配置管理
+│   │       └── bounty-config.ts  # BountyConfig 类
 │   └── im/               # IM 通信
 ├── dist/                 # 编译输出
 ├── tests/                # 测试文件

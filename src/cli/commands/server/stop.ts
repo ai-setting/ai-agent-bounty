@@ -5,14 +5,14 @@
 
 import type { CommandModule } from 'yargs';
 import chalk from 'chalk';
-import { CLI_PORT } from '../../config-env.js';
+import { bountyConfig } from '../../../lib/config/bounty-config.js';
 
 export const stopCommand: CommandModule = {
   command: 'stop',
   describe: 'Stop the bounty server',
 
   handler: async () => {
-    const port = CLI_PORT;
+    const port = bountyConfig.port;
     const serverUrl = `http://localhost:${port}`;
 
     console.log(chalk.cyan('\n🛑 Stopping bounty server...'));

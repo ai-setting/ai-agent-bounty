@@ -5,7 +5,7 @@
 
 import type { CommandModule } from 'yargs';
 import chalk from 'chalk';
-import { CLI_PORT } from '../../config-env.js';
+import { bountyConfig } from '../../../lib/config/bounty-config.js';
 
 interface SendOptions {
   from: string;
@@ -42,14 +42,14 @@ export const sendCommand: CommandModule<object, SendOptions> = {
       .option('host', {
         alias: 'H',
         type: 'string',
-        description: 'IM server host (default: localhost)',
-        default: 'localhost',
+        description: 'IM server host',
+        default: bountyConfig.host,
       })
       .option('port', {
         alias: 'p',
         type: 'number',
-        description: 'IM server port (default: from BOUNTY_PORT)',
-        default: parseInt(CLI_PORT, 10),
+        description: 'IM server port',
+        default: bountyConfig.port,
       }),
 
   handler: async (args) => {

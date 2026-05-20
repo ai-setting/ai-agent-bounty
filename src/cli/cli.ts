@@ -8,6 +8,9 @@ import { hideBin } from 'yargs/helpers';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 
+// ========== 统一配置 ==========
+import { bountyConfig } from '../lib/config/bounty-config.js';
+
 // ========== 初始化 Bounty IM EventSource Handler ==========
 // 自动注册 bounty-im handler 到 EventSourceInitHooks
 import '../im/eventsource/index.js';
@@ -170,9 +173,8 @@ async function initializeBountyEnv(): Promise<void> {
     return;
   }
 
-  const imServerUrl =
-    process.env.BOUNTY_IM_SERVER_URL ||
-    (process.env.BOUNTY_PORT ? `ws://localhost:${process.env.BOUNTY_PORT}/ws` : 'ws://localhost:4002/ws');
+  // 使用 bountyConfig 统一获取 IM Server URL
+  const imServerUrl = bountyConfig.getImServerUrl();
   const config = {
     id: BOUNTY_IM_AUTO_ES_NAME,
     name: 'Bounty IM (Auto)',

@@ -5,7 +5,7 @@
 
 import type { CommandModule } from 'yargs';
 import chalk from 'chalk';
-import { CLI_PORT } from '../../config-env.js';
+import { bountyConfig } from '../../../lib/config/bounty-config.js';
 
 interface InboxOptions {
   address: string;
@@ -35,8 +35,8 @@ export const inboxCommand: CommandModule<object, InboxOptions> = {
       .option('port', {
         alias: 'p',
         type: 'number',
-        description: 'IM server port (default: from BOUNTY_PORT)',
-        default: parseInt(CLI_PORT, 10),
+        description: 'IM server port',
+        default: bountyConfig.port,
       })
       .option('limit', {
         alias: 'l',

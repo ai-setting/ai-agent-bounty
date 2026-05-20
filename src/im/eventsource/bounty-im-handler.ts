@@ -2,7 +2,7 @@
  * Bounty IM EventSource Handler
  * 
  * 实现 EventSourceHandler 接口，通过 EventSourceInitHooks 注册到 roy-agent
- * 支持环境变量配置：BOUNTY_IM_ADDRESS, BOUNTY_IM_SERVER_URL
+ * 使用 bountyConfig 统一管理配置
  */
 
 import {
@@ -18,6 +18,8 @@ import {
   type RecommendedAction,
 } from "@ai-setting/roy-agent-core";
 
+import { bountyConfig } from '../../lib/config/bounty-config.js';
+
 // 导入全局 env 实例获取函数（由 bounty cli 提供）
 // 注意：这里通过动态导入避免循环依赖
 async function getGlobalEnv(): Promise<any> {
@@ -27,28 +29,6 @@ async function getGlobalEnv(): Promise<any> {
   } catch {
     return null;
   }
-}
-
-// ============================================================================
-// 环境变量配置
-// ============================================================================
-
-interface BountyIMEnvConfig {
-  address?: string;
-  imServerUrl?: string;
-}
-
-/**
- * 从环境变量读取 Bounty IM 配置
- */
-function getEnvConfig(): BountyIMEnvConfig {
-  const imServerUrl =
-    process.env.BOUNTY_IM_SERVER_URL ||
-    (process.env.BOUNTY_PORT ? `ws://localhost:${process.env.BOUNTY_PORT}/ws` : undefined);
-  return {
-    address: process.env.BOUNTY_IM_ADDRESS,
-    imServerUrl,
-  };
 }
 
 // ============================================================================
@@ -77,11 +57,9 @@ export class BountyIMInstance implements EventSourceInstance {
 
     this.setStatus("starting");
 
+    // 使用 bountyConfig 统一获取 IM Server URL
     const address = this.config.options?.address as string | undefined;
-    const defaultUrl = process.env.BOUNTY_PORT
-      ? `ws://localhost:${process.env.BOUNTY_PORT}/ws`
-      : "ws://localhost:4002/ws";
-    const imServerUrl = (this.config.options?.imServerUrl as string) || defaultUrl;
+    const imServerUrl = (this.config.options?.imServerUrl as string) || bountyConfig.getImServerUrl();
     
     const wsUrl = new URL(imServerUrl);
     if (address) {
@@ -311,15 +289,15 @@ export const bountyIMHandler: EventSourceHandler = {
     if (!config.id) errors.push("EventSource ID is required");
     if (!config.name) errors.push("EventSource name is required");
 
-    const address = (config.options?.address as string) || getEnvConfig().address;
+    // 使用 bountyConfig 获取地址和 IM Server URL
+    const address = (config.options?.address as string) || bountyConfig.imAddress;
     if (!address) {
       errors.push("Bounty IM address is required (options.address or BOUNTY_IM_ADDRESS env)");
     } else if (!/^[\w-]+@[\w.-]+$/.test(address)) {
       errors.push("Address format invalid (expected: agent-id@host)");
     }
 
-    const envConfig = getEnvConfig();
-    const imServerUrl = (config.options?.imServerUrl as string) || envConfig.imServerUrl || "ws://localhost:4002/ws";
+    const imServerUrl = (config.options?.imServerUrl as string) || bountyConfig.getImServerUrl();
     if (imServerUrl && !imServerUrl.startsWith("ws://") && !imServerUrl.startsWith("wss://")) {
       errors.push("imServerUrl must start with ws:// or wss://");
     }
@@ -340,6 +318,3 @@ EventSourceInitHooks.register("bounty-im", async (component) => {
   component.registerHandler(bountyIMHandler);
   console.log("[BountyIM] Handler registered to EventSourceComponent");
 });
-
-// 导出
-export type { BountyIMEnvConfig };

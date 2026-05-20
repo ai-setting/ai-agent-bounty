@@ -8,7 +8,7 @@ import chalk from 'chalk';
 import { spawn } from 'child_process';
 import { join } from 'path';
 import { existsSync } from 'fs';
-import { CLI_PORT, CLI_SERVER_URL } from '../../config-env.js';
+import { bountyConfig } from '../../../lib/config/bounty-config.js';
 
 export const startCommand: CommandModule = {
   command: 'start',
@@ -20,7 +20,7 @@ export const startCommand: CommandModule = {
         alias: 'p',
         type: 'string',
         description: 'Server port (BOUNTY_PORT)',
-        default: CLI_PORT,
+        default: String(bountyConfig.port),
       })
       .option('detach', {
         alias: 'd',

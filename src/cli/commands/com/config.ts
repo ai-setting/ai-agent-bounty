@@ -5,7 +5,7 @@
 
 import type { CommandModule } from 'yargs';
 import chalk from 'chalk';
-import { CLI_PORT } from '../../config-env.js';
+import { bountyConfig } from '../../../lib/config/bounty-config.js';
 
 interface ConfigOptions {
   host?: string;
@@ -22,14 +22,14 @@ export const configCommand: CommandModule<object, ConfigOptions> = {
       .option('host', {
         alias: 'H',
         type: 'string',
-        description: 'IM server host (default: localhost)',
-        default: 'localhost',
+        description: 'IM server host',
+        default: bountyConfig.host,
       })
       .option('port', {
         alias: 'p',
         type: 'number',
-        description: 'IM server port (default: from BOUNTY_PORT)',
-        default: parseInt(CLI_PORT, 10),
+        description: 'IM server port',
+        default: bountyConfig.port,
       })
       .option('show', {
         alias: 's',
@@ -54,7 +54,9 @@ export const configCommand: CommandModule<object, ConfigOptions> = {
       console.log(chalk.green('\n✓ Agent IM configuration\n'));
       console.log(chalk.bold('Current Configuration:\n'));
       console.log(chalk.cyan('  Server Host:'), config.imHost);
-      console.log(chalk.cyan('  Server Port:'), config.imPort, chalk.gray('(from BOUNTY_PORT)'));
+      console.log(chalk.cyan('  Server Port:'), config.imPort);
+      console.log(chalk.cyan('  Server URL:'), `http://${host}:${port}`);
+      console.log(chalk.cyan('  WebSocket URL:'), `ws://${host}:${port}/ws`);
       console.log(chalk.gray(`  Updated: ${config.updatedAt}`));
       console.log();
       
