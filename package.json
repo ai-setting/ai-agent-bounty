@@ -56,9 +56,9 @@
     "prepublishOnly": "npm run build"
   },
   "dependencies": {
-    "@ai-setting/roy-agent-cli": "1.5.39",
-    "@ai-setting/roy-agent-coder-harness": "1.5.36",
-    "@ai-setting/roy-agent-core": "1.5.37",
+    "@ai-setting/roy-agent-cli": "^1.5.41",
+    "@ai-setting/roy-agent-coder-harness": "^1.5.41",
+    "@ai-setting/roy-agent-core": "^1.5.41",
     "@types/ws": "^8.18.1",
     "chalk": "^5.3.0",
     "dotenv": "^17.4.2",

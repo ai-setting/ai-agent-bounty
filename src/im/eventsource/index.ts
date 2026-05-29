@@ -9,4 +9,4 @@ import "./bounty-im-handler.js";
 
 // 导出 EventSourceHandler 和类型
 export { bountyIMHandler } from "./bounty-im-handler.js";
-export type { BountyIMInstance, BountyIMEnvConfig } from "./bounty-im-handler.js";
+export type { BountyIMInstance } from "./bounty-im-handler.js";
