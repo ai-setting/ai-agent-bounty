@@ -146,8 +146,11 @@ export class BountyHTTPServer {
 
         // Protected routes
         const authResult = await this.checkAuth(req);
-        if (!authResult.error) {
-          const agentId = authResult.agentId!;
+        if (authResult.error) {
+          return authResult.error;
+        }
+        if (authResult.agentId) {
+          const agentId = authResult.agentId;
 
           // Agent routes
           if (method === 'GET' && path === '/api/agents/me') {
@@ -204,14 +207,14 @@ export class BountyHTTPServer {
 
           // IM routes (protected)
           if (method === 'GET' && path === '/api/messages') {
-            return this.imRoutes!.getMessages(url);
+            return this.imRoutes!.getMessages(url, { agentId });
           }
           if (method === 'POST' && path === '/api/messages') {
-            return await this.imRoutes!.sendMessage(req);
+            return await this.imRoutes!.sendMessage(req, { agentId });
           }
           if (method === 'GET' && path.startsWith('/api/messages/')) {
             const id = path.slice('/api/messages/'.length);
-            return this.imRoutes!.getMessageById(id);
+            return this.imRoutes!.getMessageById(id, { agentId });
           }
           if (method === 'POST' && path === '/api/messages/ack') {
             return await this.imRoutes!.ackMessages(req);
@@ -225,15 +228,16 @@ export class BountyHTTPServer {
         return await this.imRoutes!.sendMessage(req);
       }
 
-      // GET /messages - Get messages for address (public legacy route)
+      // GET /messages - Public legacy route (no auth, read-only by address).
+      // New clients should use the protected GET /api/messages endpoint.
       if (method === 'GET' && path === '/messages') {
-        return this.imRoutes!.getMessages(url);
+        return this.imRoutes!.getMessagesForAddress(url);
       }
 
       // GET /messages/:id - Get message by id (public legacy route)
       if (method === 'GET' && path.startsWith('/messages/')) {
         const id = path.slice('/messages/'.length);
-        return this.imRoutes!.getMessageById(id);
+        return this.imRoutes!.getMessageByIdPublic(id);
       }
 
       // POST /messages/ack - Acknowledge messages (public legacy route)

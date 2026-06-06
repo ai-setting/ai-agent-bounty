@@ -1,23 +1,16 @@
 /**
  * Bounty Routes must use BountyService (H1)
- *
- * Background: src/server/http/bounty-routes.ts had hand-rolled SQL
- * for create/grab/submit that bypassed the BountyService. As a
- * result, no credits were deducted for publish, no escrow was
- * created, and complete/cancel/dispute endpoints didn't exist.
- *
- * This test exercises the bounty-routes through BountyService, plus
- * the new completeTask/cancelTask/disputeTask endpoints wired in
- * src/server/http/index.ts.
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'bun:test';
+
+vi.mock('../../src/auth/mailer.js', () => ({
+  sendVerificationEmail: vi.fn().mockResolvedValue(undefined)
+}));
+
 import { BountyHTTPServer } from '../../src/server/http';
-import { BountyService } from '../../src/lib/bounty';
-import { AgentService } from '../../src/lib/agent';
 import { IMDatabase } from '../../src/im/db';
 import { Database } from '../../src/lib/storage/database';
-import { AuthRoutes } from '../../src/server/http/auth-routes';
 
 describe('Bounty Routes use BountyService (H1)', () => {
   let imDb: IMDatabase;
@@ -26,7 +19,6 @@ describe('Bounty Routes use BountyService (H1)', () => {
   let baseUrl: string;
   let publisherToken: string;
   let grabberToken: string;
-  let authRoutes: AuthRoutes;
 
   async function registerAndVerify(email: string, name: string): Promise<string> {
     const reg = await fetch(`${baseUrl}/api/auth/register`, {
@@ -67,7 +59,6 @@ describe('Bounty Routes use BountyService (H1)', () => {
     await server.start();
     baseUrl = `http://localhost:${server.getPort()}`;
 
-    authRoutes = new AuthRoutes(bountyDb);
 
     publisherToken = await registerAndVerify('publisher@example.com', 'Publisher');
     grabberToken = await registerAndVerify('grabber@example.com', 'Grabber');

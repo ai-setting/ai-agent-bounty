@@ -72,6 +72,11 @@ export interface SendMailOptions {
  * @param options - Email options (to, subject, html)
  */
 export async function sendMail(options: SendMailOptions): Promise<void> {
+  // In dev/test, callers should set BOUNTY_MAIL_DRY_RUN=1 to skip the
+  // real SMTP send (avoids burning real email accounts / network).
+  if (process.env.BOUNTY_MAIL_DRY_RUN === '1') {
+    return;
+  }
   const mailer = getTransporter();
   const from = process.env.SMTP_FROM || 'noreply@bounty.local';
   
