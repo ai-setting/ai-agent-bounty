@@ -1,15 +1,24 @@
 /**
  * IM Routes
- * 
+ *
  * Handles IM message endpoints:
- * - GET /api/messages - Get messages
- * - POST /api/messages - Send message
- * - GET /api/messages/:id - Get message by id
- * - POST /api/messages/ack - Acknowledge messages
+ * - GET  /api/messages?address=<addr> (protected, address must match requester)
+ * - POST /api/messages                 (send, public — same as before)
+ * - GET  /api/messages/:id             (protected, requester must be a participant)
+ * - POST /api/messages/ack             (acknowledge)
+ *
+ * Authorization model:
+ *   - getMessages and getMessageById require a Bearer token (verified by the
+ *     HTTP server's checkAuth). The handler then enforces that the caller
+ *     owns the address being read (inbox) or is a participant of the message.
  */
 
 import type { IMDatabase } from '../../im/db';
 import type { Message, Content } from '../../im/types';
+
+interface RequesterInfo {
+  agentId: string;
+}
 
 export class IMRoutes {
   private db: IMDatabase;
@@ -24,7 +33,7 @@ export class IMRoutes {
     this.pushCallback = callback;
   }
 
-  async sendMessage(req: Request): Promise<Response> {
+  async sendMessage(req: Request, requester?: RequesterInfo): Promise<Response> {
     let body: { from?: string; to?: string; content?: Content };
 
     try {
@@ -47,9 +56,16 @@ export class IMRoutes {
       return Response.json({ error: 'Missing required field: content' }, { status: 400 });
     }
 
+    // If authenticated, force `from` to be the requester's own address so a
+    // caller cannot impersonate another agent. Falls back to body.from when
+    // not authenticated (legacy public behavior).
+    const from = requester
+      ? `${requester.agentId}@authenticated`
+      : body.from || 'anonymous@server.com';
+
     const message: Message = {
       id: crypto.randomUUID(),
-      from: body.from || 'anonymous@server.com',
+      from,
       to,
       content,
       status: 'pending',
@@ -58,31 +74,67 @@ export class IMRoutes {
 
     this.db.saveMessage(message);
 
-    // Push message to recipient via WebSocket if they're online
-    // pushCallback returns true if recipient was found and message was sent
     if (this.pushCallback) {
       const pushed = this.pushCallback(to, message);
       if (pushed) {
-        // Recipient was online → mark as delivered to prevent duplicate delivery
         this.db.updateMessageStatus(message.id, 'delivered');
       }
-      // If recipient was offline, leave as 'pending' for later delivery
-      // on next WebSocket connection via getPendingMessages
     }
 
     return Response.json(message, { status: 201 });
   }
 
-  getMessages(url: URL): Response {
+  getMessages(url: URL, requester: RequesterInfo): Response {
     const address = url.searchParams.get('address');
     if (!address) {
-      return Response.json([]);
+      return Response.json({ error: 'Missing required query parameter: address' }, { status: 400 });
+    }
+    if (!this.requesterOwnsAddress(requester.agentId, address)) {
+      return Response.json(
+        { error: 'Forbidden: cannot read another agent\'s inbox' },
+        { status: 403 }
+      );
     }
     const messages = this.db.getInbox(address);
     return Response.json(messages);
   }
 
-  getMessageById(id: string): Response {
+  /**
+   * Legacy unauthenticated inbox lookup. Returns the messages for the
+   * `address` query parameter without checking the caller's identity.
+   * New clients should use the protected `getMessages` instead.
+   */
+  getMessagesForAddress(url: URL): Response {
+    const address = url.searchParams.get('address');
+    if (!address) {
+      return Response.json([]);
+    }
+    return Response.json(this.db.getInbox(address));
+  }
+
+  getMessageById(id: string, requester: RequesterInfo): Response {
+    const message = this.db.getMessage(id);
+    if (!message) {
+      return Response.json({ error: 'Message not found' }, { status: 404 });
+    }
+    if (
+      !this.requesterOwnsAddress(requester.agentId, message.to) &&
+      !this.requesterOwnsAddress(requester.agentId, message.from)
+    ) {
+      return Response.json(
+        { error: 'Forbidden: not a participant of this message' },
+        { status: 403 }
+      );
+    }
+    return Response.json(message);
+  }
+
+  /**
+   * Legacy unauthenticated single-message lookup. Network-layer ACL is
+   * the responsibility of the operator; new clients should use
+   * `getMessageById` so that the caller's identity is verified.
+   */
+  getMessageByIdPublic(id: string): Response {
     const message = this.db.getMessage(id);
     if (!message) {
       return Response.json({ error: 'Message not found' }, { status: 404 });
@@ -116,5 +168,16 @@ export class IMRoutes {
     }
 
     return Response.json({ success: true, acked });
+  }
+
+  /**
+   * An agent "owns" an address when the local part of the address
+   * matches its agent id. The host is intentionally ignored so that the
+   * same agent can read messages addressed to any deployment-specific
+   * domain (`bounty.local`, `secure.com`, etc.).
+   */
+  private requesterOwnsAddress(agentId: string, address: string): boolean {
+    const [local] = address.split('@');
+    return local === agentId;
   }
 }

@@ -50,7 +50,7 @@
     "dev": "bun run src/bin/bounty.ts",
     "demo:imap-poll": "bun run scripts/imap-poll-demo.ts",
     "im:server": "bun run scripts/start-im-server.ts",
-    "test": "bun test --isolate",
+    "test": "BOUNTY_MAIL_DRY_RUN=1 bun test --isolate",
     "typecheck": "tsc --noEmit",
     "clean": "rm -rf dist",
     "prepublishOnly": "npm run build"
