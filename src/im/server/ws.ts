@@ -57,7 +57,14 @@ export class IMWebSocketServer {
         close: (socket) => {
           this.handleClose(socket);
         },
-      },
+        // Bun.serve calls the `error` handler when a WebSocket
+        // encounters a protocol-level error. We previously defined
+        // handleError() but never wired it up, which meant an error
+        // would silently leak the client from the registry.
+        error: (socket: any, error: Error) => {
+          this.handleError(socket, error);
+        },
+      } as any,
     });
 
     this.port = this.server.port;
