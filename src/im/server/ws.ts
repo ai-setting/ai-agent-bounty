@@ -133,6 +133,12 @@ export class IMWebSocketServer {
         data: { ...msg, status: 'delivered' },
       }));
     }
+
+    // Send connection confirmation
+    socket.send(JSON.stringify({
+      event: 'connected',
+      data: { address },
+    }));
   }
 
   private handleMessage(socket: any, message: any): void {
