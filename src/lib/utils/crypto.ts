@@ -10,9 +10,18 @@ const IV_LENGTH = 16;
 const TAG_LENGTH = 16;
 const SALT_LENGTH = 32;
 
+const isProduction = () => process.env.NODE_ENV === 'production';
+
+let warnedFallback = false;
+
 /**
- * Get encryption key from environment or generate a default
- * In production, set BOUNTY_ENCRYPTION_KEY environment variable
+ * Get encryption key from environment or generate a default.
+ *
+ * In production (NODE_ENV=production), a missing BOUNTY_ENCRYPTION_KEY
+ * is a hard error. In dev, a stable dev key is used and a one-time
+ * warning is logged.
+ *
+ * @throws Error in production when BOUNTY_ENCRYPTION_KEY is not set.
  */
 function getEncryptionKey(): Buffer {
   const envKey = process.env.BOUNTY_ENCRYPTION_KEY;
@@ -20,8 +29,19 @@ function getEncryptionKey(): Buffer {
     // Derive a 32-byte key from the environment key using scrypt
     return scryptSync(envKey, 'bounty-salt', 32);
   }
+  if (isProduction()) {
+    throw new Error(
+      'BOUNTY_ENCRYPTION_KEY environment variable is required in production'
+    );
+  }
+  if (!warnedFallback) {
+    console.warn(
+      '[Crypto] Warning: Using default encryption key. ' +
+        'Set BOUNTY_ENCRYPTION_KEY environment variable for security.'
+    );
+    warnedFallback = true;
+  }
   // For development only - in production, use environment variable
-  console.warn('[Crypto] Warning: Using default encryption key. Set BOUNTY_ENCRYPTION_KEY environment variable for security.');
   return scryptSync('bounty-default-dev-key-do-not-use-in-production', 'bounty-salt', 32);
 }
 
@@ -40,10 +60,10 @@ export function encrypt(plaintext: string): string {
   const derivedKey = scryptSync(key, salt, 32);
 
   const cipher = createCipheriv(ALGORITHM, derivedKey, iv);
-  
+
   let encrypted = cipher.update(plaintext, 'utf8', 'base64');
   encrypted += cipher.final('base64');
-  
+
   const tag = cipher.getAuthTag();
 
   // Combine: salt:iv:encrypted:tag (all base64)

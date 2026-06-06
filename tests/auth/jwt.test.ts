@@ -49,11 +49,25 @@ describe('JWT Utils', () => {
       expect(token1).not.toBe(token2);
     });
 
-    it('should throw error when JWT_SECRET is not set', async () => {
+    it('should throw error when JWT_SECRET is not set in production', async () => {
       delete process.env.JWT_SECRET;
-      
-      await expect(createToken({ sub: 'agent-123' }))
-        .rejects.toThrow('JWT_SECRET environment variable is required');
+      process.env.NODE_ENV = 'production';
+
+      try {
+        await expect(createToken({ sub: 'agent-123' }))
+          .rejects.toThrow(/JWT_SECRET/);
+      } finally {
+        delete process.env.NODE_ENV;
+      }
+    });
+
+    it('should fall back to a derived dev secret when JWT_SECRET is not set in dev', async () => {
+      delete process.env.JWT_SECRET;
+      delete process.env.NODE_ENV;
+
+      const token = await createToken({ sub: 'agent-123' });
+      expect(token).toBeDefined();
+      expect((await verifyToken(token)).sub).toBe('agent-123');
     });
   });
 
@@ -126,11 +140,16 @@ describe('JWT Utils', () => {
         .rejects.toThrow();
     });
 
-    it('should throw error when JWT_SECRET is not set', async () => {
+    it('should throw error when JWT_SECRET is not set in production', async () => {
       delete process.env.JWT_SECRET;
-      
-      await expect(verifyToken('some-token'))
-        .rejects.toThrow('JWT_SECRET environment variable is required');
+      process.env.NODE_ENV = 'production';
+
+      try {
+        await expect(verifyToken('some-token'))
+          .rejects.toThrow(/JWT_SECRET/);
+      } finally {
+        delete process.env.NODE_ENV;
+      }
     });
   });
 
