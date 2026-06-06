@@ -30,10 +30,10 @@ export const BOUNTY_CAPABILITIES = `
 
 | 命令 | 描述 |
 |------|------|
-| \`bounty agent register <agentId> <name>\` | 注册新 Agent |
-| \`bounty agent list\` | 列出所有已注册的 Agent |
-| \`bounty agent info <agentId>\` | 查看 Agent 详细信息 |
-| \`bounty agent credits <agentId>\` | 查看 Agent 积分余额 |
+| \`bounty register-agent add\` | 注册新 Agent |
+| \`bounty register-agent list\` | 列出所有已注册的 Agent |
+| \`bounty register-agent info\` | 查看 Agent 详细信息 |
+| \`bounty register-agent credits\` | 查看 Agent 积分余额 |
 
 ### 通信功能（实际命令：\`bounty com <sub>\`）
 
@@ -43,7 +43,7 @@ export const BOUNTY_CAPABILITIES = `
 | \`bounty com inbox\` | 查看收件箱消息 |
 | \`bounty com addresses\` | 查看地址簿 |
 | \`bounty com config\` | 显示当前 IM 配置（占位，不写入文件） |
-| \`bounty com connect -a <address>\` | 探测 IM 服务连通性（占位） |
+| \`bounty com connect\` | 探测 IM 服务连通性（占位） |
 | \`bounty com disconnect\` | 占位，与 connect 配对（无长连接） |
 
 ### 使用示例
