@@ -171,7 +171,11 @@ export class BountyHTTPServer {
           // Bounty routes
           if (this.bountyRoutes) {
             if (method === 'GET' && path === '/api/tasks') {
-              return this.bountyRoutes.getTasks();
+              return this.bountyRoutes.getTasks(url);
+            }
+            if (method === 'GET' && path.startsWith('/api/tasks/') && !path.endsWith('/grab') && !path.endsWith('/submit') && !path.endsWith('/complete') && !path.endsWith('/cancel') && !path.endsWith('/dispute')) {
+              const id = path.slice('/api/tasks/'.length);
+              return this.bountyRoutes.getTaskById(id);
             }
             if (method === 'POST' && path === '/api/tasks') {
               return await this.bountyRoutes.createTask(req, agentId);
@@ -183,6 +187,18 @@ export class BountyHTTPServer {
             if (method === 'PUT' && path.startsWith('/api/tasks/') && path.endsWith('/submit')) {
               const id = path.slice('/api/tasks/'.length, -'/submit'.length);
               return await this.bountyRoutes.submitTask(req, id, agentId);
+            }
+            if (method === 'PUT' && path.startsWith('/api/tasks/') && path.endsWith('/complete')) {
+              const id = path.slice('/api/tasks/'.length, -'/complete'.length);
+              return await this.bountyRoutes.completeTask(req, id, agentId);
+            }
+            if (method === 'PUT' && path.startsWith('/api/tasks/') && path.endsWith('/cancel')) {
+              const id = path.slice('/api/tasks/'.length, -'/cancel'.length);
+              return await this.bountyRoutes.cancelTask(req, id, agentId);
+            }
+            if (method === 'PUT' && path.startsWith('/api/tasks/') && path.endsWith('/dispute')) {
+              const id = path.slice('/api/tasks/'.length, -'/dispute'.length);
+              return await this.bountyRoutes.disputeTask(req, id, agentId);
             }
           }
 
