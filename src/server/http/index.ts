@@ -29,7 +29,11 @@ export interface BountyServerConfig {
   port?: number;
 }
 
-type PushCallback = (address: string, message: Message) => void;
+/**
+ * PushCallback: Push message to recipient via WebSocket
+ * @returns true if recipient was found and message was pushed (online), false otherwise
+ */
+type PushCallback = (address: string, message: Message) => boolean;
 
 interface ClientInfo {
   socket: any;
@@ -57,7 +61,7 @@ export class BountyHTTPServer {
       this.authRoutes = new AuthRoutes(this.bountyDb);
       this.bountyRoutes = new BountyRoutes(this.bountyDb);
     }
-    this.imRoutes = new IMRoutes(this.imDb, (to, msg) => this.pushCallback?.(to, msg));
+    this.imRoutes = new IMRoutes(this.imDb, (to, msg) => this.pushCallback?.(to, msg) ?? false);
   }
 
   setPushCallback(callback: PushCallback): void {
@@ -291,16 +295,18 @@ export class BountyHTTPServer {
       data: { address },
     }));
 
-    // Send pending messages
+    // Send pending messages (状态更新为 delivered 再发送，避免客户端收到重复)
     const pendingMessages = this.imDb.getPendingMessages(address);
     for (const msg of pendingMessages) {
-      socket.send(JSON.stringify({
-        event: 'message',
-        data: msg,
-      }));
+      // 先更新状态为 delivered
       if (msg.status === 'pending') {
         this.imDb.updateMessageStatus(msg.id, 'delivered');
       }
+      // 再发送消息（状态已是 delivered），客户端收到后跳过已处理的消息
+      socket.send(JSON.stringify({
+        event: 'message',
+        data: { ...msg, status: 'delivered' },
+      }));
     }
   }
 
@@ -402,7 +408,11 @@ export class BountyHTTPServer {
 
   // ============ Exported for Server Entry ============
 
-  pushMessage(address: string, message: Message): void {
+  /**
+   * Push a message to a connected client via WebSocket
+   * @returns true if the client was found and message was sent, false if client is offline
+   */
+  pushMessage(address: string, message: Message): boolean {
     const client = this.clients.get(address);
     if (client) {
       try {
@@ -410,9 +420,11 @@ export class BountyHTTPServer {
           event: 'message',
           data: message,
         }));
+        return true;
       } catch (err) {
         console.error('[WS] Error sending message:', err);
       }
     }
+    return false;
   }
 }

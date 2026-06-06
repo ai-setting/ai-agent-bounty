@@ -13,14 +13,14 @@ import type { Message, Content } from '../../im/types';
 
 export class IMRoutes {
   private db: IMDatabase;
-  private pushCallback: ((address: string, message: Message) => void) | null;
+  private pushCallback: ((address: string, message: Message) => boolean) | null;
 
-  constructor(db: IMDatabase, pushCallback?: (address: string, message: Message) => void) {
+  constructor(db: IMDatabase, pushCallback?: (address: string, message: Message) => boolean) {
     this.db = db;
     this.pushCallback = pushCallback || null;
   }
 
-  setPushCallback(callback: (address: string, message: Message) => void): void {
+  setPushCallback(callback: (address: string, message: Message) => boolean): void {
     this.pushCallback = callback;
   }
 
@@ -58,8 +58,16 @@ export class IMRoutes {
 
     this.db.saveMessage(message);
 
+    // Push message to recipient via WebSocket if they're online
+    // pushCallback returns true if recipient was found and message was sent
     if (this.pushCallback) {
-      this.pushCallback(to, message);
+      const pushed = this.pushCallback(to, message);
+      if (pushed) {
+        // Recipient was online → mark as delivered to prevent duplicate delivery
+        this.db.updateMessageStatus(message.id, 'delivered');
+      }
+      // If recipient was offline, leave as 'pending' for later delivery
+      // on next WebSocket connection via getPendingMessages
     }
 
     return Response.json(message, { status: 201 });

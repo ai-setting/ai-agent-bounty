@@ -21,8 +21,9 @@ export class IMServer {
     await this.wsServer.start();
     
     // Register push callback for HTTP server to push messages via WebSocket
+    // Returns true if recipient was found and message was sent (online)
     this.httpServer.setPushCallback((address, message) => {
-      this.wsServer.pushMessage(address, message);
+      return this.wsServer.pushMessage(address, message);
     });
   }
 

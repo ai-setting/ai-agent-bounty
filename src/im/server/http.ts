@@ -3,7 +3,11 @@ import type { Message, Content } from '../types';
 import { createAuthRoutes } from '../../auth/routes';
 import type { Database } from '../../lib/storage/database';
 
-type PushCallback = (address: string, message: Message) => void;
+/**
+ * PushCallback: 推送消息到收件人
+ * @returns true if recipient was found and message was pushed (online), false otherwise
+ */
+type PushCallback = (address: string, message: Message) => boolean;
 
 export class IMHTTPServer {
   private db: IMDatabase;
@@ -483,8 +487,17 @@ export class IMHTTPServer {
     this.db.saveMessage(message);
 
     // Push message to recipient if they are connected via WebSocket
+    // pushCallback returns true if the recipient was online and message was pushed
     if (this.pushCallback) {
-      this.pushCallback(to, message);
+      const pushed = this.pushCallback(to, message);
+      if (pushed) {
+        // Recipient was online and received the message → mark as delivered
+        // This prevents the message from being returned by getPendingMessages
+        // on subsequent reconnections, avoiding duplicate delivery
+        this.db.updateMessageStatus(message.id, 'delivered');
+      }
+      // If recipient was offline, leave as 'pending' so it will be
+      // delivered on next WebSocket connection via getPendingMessages
     }
 
     return Response.json(message, { status: 201 });

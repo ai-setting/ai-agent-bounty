@@ -30,7 +30,7 @@ async function main() {
   // Set push callback for real-time WebSocket message delivery
   // This enables instant message push when agents send messages via HTTP API
   server.setPushCallback((address, message) => {
-    server.pushMessage(address, message);
+    return server.pushMessage(address, message);
   });
 
   server.start();

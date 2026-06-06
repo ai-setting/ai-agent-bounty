@@ -257,6 +257,21 @@ export class BountyIMInstance implements EventSourceInstance {
 
       // 推送 EnvEvent 到环境事件系统（event-source 类型，匹配 interactive 监听）
       this.pushEnvEvent(event);
+
+      // 处理完成后发送 ACK 到 IM 服务器，更新消息状态为 acked
+      // 防止消息因状态停留在 pending/delivered 而被重复投递或处理
+      if (msg.id && this.ws) {
+        try {
+          const ackPayload = JSON.stringify({
+            event: 'ack',
+            data: { messageIds: [msg.id] },
+          });
+          this.ws.send(ackPayload);
+          console.log(`[BountyIM] 已发送 ACK for message: ${msg.id}`);
+        } catch (ackErr) {
+          console.error(`[BountyIM] 发送 ACK 失败:`, ackErr);
+        }
+      }
     } catch (err) {
       console.error(`[BountyIM] Error processing message:`, err);
     }

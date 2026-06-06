@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>计数器</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        .counter {
+            background: white;
+            border-radius: 16px;
+            padding: 40px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            text-align: center;
+        }
+        .counter__value {
+            font-size: 72px;
+            font-weight: bold;
+            color: #333;
+            margin: 20px 0;
+        }
+        .counter__buttons {
+            display: flex;
+            gap: 20px;
+            justify-content: center;
+        }
+        .counter__btn {
+            width: 60px;
+            height: 60px;
+            border: none;
+            border-radius: 50%;
+            font-size: 32px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: transform 0.1s, box-shadow 0.1s;
+        }
+        .counter__btn:hover {
+            transform: scale(1.1);
+        }
+        .counter__btn:active {
+            transform: scale(0.95);
+        }
+        .counter__btn--decrement {
+            background: #ff6b6b;
+            color: white;
+        }
+        .counter__btn--increment {
+            background: #51cf66;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <div class="counter">
+        <div class="counter__value" id="counter-value">0</div>
+        <div class="counter__buttons">
+            <button class="counter__btn counter__btn--decrement" id="decrement">−</button>
+            <button class="counter__btn counter__btn--increment" id="increment">+</button>
+        </div>
+    </div>
+    <script type="module" src="counter.js"></script>
+</body>
+</html>

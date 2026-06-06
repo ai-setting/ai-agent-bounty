@@ -82,7 +82,11 @@ export class IMWebSocketServer {
     return this.port;
   }
 
-  pushMessage(address: string, message: Message): void {
+  /**
+   * Push message to a connected client via WebSocket
+   * @returns true if the client was found and message was sent, false if client is offline
+   */
+  pushMessage(address: string, message: Message): boolean {
     const client = this.clients.get(address);
     if (client) {
       try {
@@ -90,10 +94,12 @@ export class IMWebSocketServer {
           event: 'message',
           data: message,
         }));
+        return true;
       } catch (err) {
         console.error(`[WS] Error sending message:`, err);
       }
     }
+    return false;
   }
 
   private handleOpen(socket: any): void {
