@@ -1,11 +1,16 @@
 /**
  * com config command
- * Configure Agent IM server connection
+ *
+ * STUB: this command does not write a config file. It only
+ * displays the resolved host/port and probes the server. The
+ * placeholder notice is printed so operators do not assume the
+ * configuration has been persisted.
  */
 
 import type { CommandModule } from 'yargs';
 import chalk from 'chalk';
 import { bountyConfig } from '../../../lib/config/bounty-config.js';
+import { printStubNotice } from './stub.js';
 
 interface ConfigOptions {
   host?: string;
@@ -15,8 +20,8 @@ interface ConfigOptions {
 
 export const configCommand: CommandModule<object, ConfigOptions> = {
   command: ['config', 'c'],
-  describe: 'Configure Agent IM server connection',
-  
+  describe: 'Display current IM configuration (placeholder, nothing is saved)',
+
   builder: (yargs) =>
     yargs
       .option('host', {
@@ -39,42 +44,28 @@ export const configCommand: CommandModule<object, ConfigOptions> = {
       }),
 
   handler: async (args) => {
-    const { host, port } = args;
-    
-    // Save config to local file
-    const config = {
-      imHost: host,
-      imPort: port,
-      updatedAt: new Date().toISOString(),
-    };
-    
+    const { host, port, show } = args;
+
+    console.log(chalk.green('\n✓ Agent IM configuration (read-only)\n'));
+    console.log(chalk.bold('Current Configuration:\n'));
+    console.log(chalk.cyan('  Server Host:'), host);
+    console.log(chalk.cyan('  Server Port:'), port);
+    console.log(chalk.cyan('  Server URL:'), `http://${host}:${port}`);
+    console.log(chalk.cyan('  WebSocket URL:'), `ws://${host}:${port}/ws`);
+    console.log();
+
     try {
-      // In a real implementation, this would save to a config file
-      // For now, we just show the config
-      console.log(chalk.green('\n✓ Agent IM configuration\n'));
-      console.log(chalk.bold('Current Configuration:\n'));
-      console.log(chalk.cyan('  Server Host:'), config.imHost);
-      console.log(chalk.cyan('  Server Port:'), config.imPort);
-      console.log(chalk.cyan('  Server URL:'), `http://${host}:${port}`);
-      console.log(chalk.cyan('  WebSocket URL:'), `ws://${host}:${port}/ws`);
-      console.log(chalk.gray(`  Updated: ${config.updatedAt}`));
-      console.log();
-      
-      // Verify connection
-      try {
-        const response = await fetch(`http://${host}:${port}/health`);
-        if (response.ok) {
-          console.log(chalk.green('  Status:'), chalk.green('Connected'));
-        } else {
-          console.log(chalk.yellow('  Status:'), chalk.yellow('Server returned error'));
-        }
-      } catch {
-        console.log(chalk.yellow('  Status:'), chalk.yellow('Not connected (server unreachable)'));
+      const response = await fetch(`http://${host}:${port}/health`);
+      if (response.ok) {
+        console.log(chalk.green('  Status:'), chalk.green('Connected'));
+      } else {
+        console.log(chalk.yellow('  Status:'), chalk.yellow('Server returned error'));
       }
-      console.log();
-    } catch (error) {
-      console.error(chalk.red('\n✗ Error:'), error instanceof Error ? error.message : String(error));
-      process.exit(1);
+    } catch {
+      console.log(chalk.yellow('  Status:'), chalk.yellow('Not connected (server unreachable)'));
     }
+    console.log();
+
+    printStubNotice('config', { host, port, show });
   },
 };

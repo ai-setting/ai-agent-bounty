@@ -29,13 +29,25 @@ let envLoaded = false;
 
 function loadEnv(): void {
   if (envLoaded) return;
-  
+
   const envPath = join(process.cwd(), '.env');
   if (existsSync(envPath)) {
+    // dotenv returns an object describing what was loaded; we
+    // intentionally stay silent here to keep the module's import
+    // side-effects from polluting stdout. Callers that need to
+    // verify the .env was picked up can use isEnvLoaded() below.
     dotenvConfig({ path: envPath });
-    console.log('[BountyConfig] Loaded .env from:', envPath);
   }
   envLoaded = true;
+}
+
+/**
+ * Returns true once the .env file in the current working directory
+ * has been read. Operators and tests use this to confirm the file
+ * was actually found and parsed.
+ */
+export function isEnvLoaded(): boolean {
+  return envLoaded;
 }
 
 // 立即加载 .env

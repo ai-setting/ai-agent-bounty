@@ -146,8 +146,11 @@ export class BountyHTTPServer {
 
         // Protected routes
         const authResult = await this.checkAuth(req);
-        if (!authResult.error) {
-          const agentId = authResult.agentId!;
+        if (authResult.error) {
+          return authResult.error;
+        }
+        if (authResult.agentId) {
+          const agentId = authResult.agentId;
 
           // Agent routes
           if (method === 'GET' && path === '/api/agents/me') {
@@ -171,7 +174,11 @@ export class BountyHTTPServer {
           // Bounty routes
           if (this.bountyRoutes) {
             if (method === 'GET' && path === '/api/tasks') {
-              return this.bountyRoutes.getTasks();
+              return this.bountyRoutes.getTasks(url);
+            }
+            if (method === 'GET' && path.startsWith('/api/tasks/') && !path.endsWith('/grab') && !path.endsWith('/submit') && !path.endsWith('/complete') && !path.endsWith('/cancel') && !path.endsWith('/dispute')) {
+              const id = path.slice('/api/tasks/'.length);
+              return this.bountyRoutes.getTaskById(id);
             }
             if (method === 'POST' && path === '/api/tasks') {
               return await this.bountyRoutes.createTask(req, agentId);
@@ -184,18 +191,30 @@ export class BountyHTTPServer {
               const id = path.slice('/api/tasks/'.length, -'/submit'.length);
               return await this.bountyRoutes.submitTask(req, id, agentId);
             }
+            if (method === 'PUT' && path.startsWith('/api/tasks/') && path.endsWith('/complete')) {
+              const id = path.slice('/api/tasks/'.length, -'/complete'.length);
+              return await this.bountyRoutes.completeTask(req, id, agentId);
+            }
+            if (method === 'PUT' && path.startsWith('/api/tasks/') && path.endsWith('/cancel')) {
+              const id = path.slice('/api/tasks/'.length, -'/cancel'.length);
+              return await this.bountyRoutes.cancelTask(req, id, agentId);
+            }
+            if (method === 'PUT' && path.startsWith('/api/tasks/') && path.endsWith('/dispute')) {
+              const id = path.slice('/api/tasks/'.length, -'/dispute'.length);
+              return await this.bountyRoutes.disputeTask(req, id, agentId);
+            }
           }
 
           // IM routes (protected)
           if (method === 'GET' && path === '/api/messages') {
-            return this.imRoutes!.getMessages(url);
+            return this.imRoutes!.getMessages(url, { agentId });
           }
           if (method === 'POST' && path === '/api/messages') {
-            return await this.imRoutes!.sendMessage(req);
+            return await this.imRoutes!.sendMessage(req, { agentId });
           }
           if (method === 'GET' && path.startsWith('/api/messages/')) {
             const id = path.slice('/api/messages/'.length);
-            return this.imRoutes!.getMessageById(id);
+            return this.imRoutes!.getMessageById(id, { agentId });
           }
           if (method === 'POST' && path === '/api/messages/ack') {
             return await this.imRoutes!.ackMessages(req);
@@ -209,15 +228,16 @@ export class BountyHTTPServer {
         return await this.imRoutes!.sendMessage(req);
       }
 
-      // GET /messages - Get messages for address (public legacy route)
+      // GET /messages - Public legacy route (no auth, read-only by address).
+      // New clients should use the protected GET /api/messages endpoint.
       if (method === 'GET' && path === '/messages') {
-        return this.imRoutes!.getMessages(url);
+        return this.imRoutes!.getMessagesForAddress(url);
       }
 
       // GET /messages/:id - Get message by id (public legacy route)
       if (method === 'GET' && path.startsWith('/messages/')) {
         const id = path.slice('/messages/'.length);
-        return this.imRoutes!.getMessageById(id);
+        return this.imRoutes!.getMessageByIdPublic(id);
       }
 
       // POST /messages/ack - Acknowledge messages (public legacy route)

@@ -1,10 +1,15 @@
 /**
  * com disconnect command
- * Disconnect from Agent IM server
+ *
+ * STUB: this command does not maintain an open connection, so
+ * "disconnecting" is a no-op beyond printing a placeholder
+ * notice. It exists for symmetry with `connect` and so that
+ * scripts which chain the two commands do not silently lose
+ * messages.
  */
 
 import type { CommandModule } from 'yargs';
-import chalk from 'chalk';
+import { printStubNotice } from './stub.js';
 
 interface DisconnectOptions {
   address?: string;
@@ -13,8 +18,8 @@ interface DisconnectOptions {
 
 export const disconnectCommand: CommandModule<object, DisconnectOptions> = {
   command: ['disconnect', 'disc'],
-  describe: 'Disconnect from Agent IM server',
-  
+  describe: 'Disconnect from Agent IM server (placeholder, no persistent connection)',
+
   builder: (yargs) =>
     yargs
       .option('address', {
@@ -30,20 +35,16 @@ export const disconnectCommand: CommandModule<object, DisconnectOptions> = {
 
   handler: async (args) => {
     const { address, all } = args;
-    
-    if (all) {
-      console.log(chalk.bold('\nDisconnecting all connections...\n'));
-      console.log(chalk.green('✓ All connections closed\n'));
-    } else if (address) {
-      console.log(chalk.bold('\nDisconnecting...\n'));
-      console.log(chalk.cyan('  Address:'), address);
-      console.log(chalk.green('\n✓ Disconnected\n'));
-    } else {
-      console.log(chalk.yellow('\n⚠ No address specified and --all not set.\n'));
-      console.log(chalk.gray('  Use:'));
-      console.log(chalk.gray('    bounty com disconnect --address <address>'));
-      console.log(chalk.gray('    bounty com disconnect --all'));
+
+    if (!all && !address) {
+      printStubNotice('disconnect', {});
+      console.log('  Use one of:');
+      console.log('    bounty com disconnect --address <address>');
+      console.log('    bounty com disconnect --all');
       console.log();
+      return;
     }
+
+    printStubNotice('disconnect', { address, all });
   },
 };

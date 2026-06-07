@@ -1,4 +1,9 @@
-import { describe, test, expect, beforeEach, afterEach, beforeAll } from 'bun:test';
+import { describe, test, expect, beforeEach, afterEach, beforeAll, vi } from 'bun:test';
+
+vi.mock('../../src/auth/mailer.js', () => ({
+  sendVerificationEmail: vi.fn().mockResolvedValue(undefined)
+}));
+
 import { IMHTTPServer } from '../../src/im/server/http';
 import { IMDatabase } from '../../src/im/db';
 import { Database } from '../../src/lib/storage/database';

@@ -34,7 +34,7 @@ export const bountyPluginInfo = {
  * # 安装插件后，通过 roy 使用
  * roy agent register --name "My Agent" --email "agent@example.com"
  * roy bounty publish --title "Fix bug" --reward 100
- * roy im send --from "agent@host" --to "other@host" --body "Hello"
+ * roy im send --from <agent-id>@<host> --to <other-id>@<host> --body "Hello"
  * ```
  */
 export const bountyPlugin: RoyCliPlugin = {

@@ -1,115 +1,209 @@
 /**
  * Bounty Routes
- * 
- * Handles Bounty task endpoints:
- * - GET /api/tasks - List tasks
- * - POST /api/tasks - Create task
- * - PUT /api/tasks/:id/grab - Grab task
- * - PUT /api/tasks/:id/submit - Submit task result
+ *
+ * Thin HTTP layer over BountyService. All business logic (escrow,
+ * credit accounting, status transitions) lives in BountyService; this
+ * module is responsible for:
+ *   - request body parsing + validation
+ *   - looking up the agent by id and resolving the publisher email
+ *   - mapping service return values to HTTP responses
+ *
+ * Endpoints:
+ *   GET  /api/tasks
+ *   POST /api/tasks
+ *   PUT  /api/tasks/:id/grab
+ *   PUT  /api/tasks/:id/submit
+ *   PUT  /api/tasks/:id/complete   (added in H1)
+ *   PUT  /api/tasks/:id/cancel     (added in H1)
+ *   PUT  /api/tasks/:id/dispute    (added in H1)
+ *   GET  /api/tasks/:id            (added in H1)
  */
 
 import type { Database } from '../../lib/storage/database';
+import { BountyService, type Task, type TaskFilter, TaskStatus } from '../../lib/bounty/index.js';
+import { AgentService } from '../../lib/agent/index.js';
+
+interface JsonBody {
+  [k: string]: unknown;
+}
+
+async function readJson(req: Request): Promise<JsonBody | null> {
+  const text = await req.text();
+  if (!text) return null;
+  try {
+    return JSON.parse(text) as JsonBody;
+  } catch {
+    return undefined as unknown as null;
+  }
+}
+
+function badRequest(message: string): Response {
+  return Response.json({ error: message }, { status: 400 });
+}
+
+function notFound(message = 'Not found'): Response {
+  return Response.json({ error: message }, { status: 404 });
+}
+
+function forbidden(message: string): Response {
+  return Response.json({ error: message }, { status: 403 });
+}
+
+function internalError(message = 'Internal server error'): Response {
+  return Response.json({ error: message }, { status: 500 });
+}
 
 export class BountyRoutes {
   private db: Database;
+  private bountyService: BountyService;
 
   constructor(db: Database) {
     this.db = db;
+    this.bountyService = new BountyService(db, new AgentService(db));
   }
 
-  getTasks(): Response {
-    const tasks = this.db.prepare(`
-      SELECT * FROM tasks ORDER BY created_at DESC
-    `).all();
+  // ===== Queries =====
 
+  getTasks(url: URL): Response {
+    const filter: TaskFilter = {};
+    const status = url.searchParams.get('status');
+    if (status) filter.status = status as TaskStatus;
+    const type = url.searchParams.get('type');
+    if (type) filter.type = type;
+    const publisherId = url.searchParams.get('publisherId');
+    if (publisherId) filter.publisherId = publisherId;
+    const assigneeId = url.searchParams.get('assigneeId');
+    if (assigneeId) filter.assigneeId = assigneeId;
+
+    const tasks = this.bountyService.list(filter);
     return Response.json(tasks);
   }
 
+  getTaskById(taskId: string): Response {
+    const task = this.bountyService.getById(taskId);
+    if (!task) return notFound('Task not found');
+    return Response.json(task);
+  }
+
+  // ===== Commands =====
+
   async createTask(req: Request, agentId: string): Promise<Response> {
-    let body: { title?: string; description?: string; reward?: number; type?: string };
+    const body = await readJson(req);
+    if (body === null) return badRequest('Missing request body');
+    if (body === undefined) return badRequest('Invalid JSON');
+
+    const { title, description, reward, type } = body as {
+      title?: unknown;
+      description?: unknown;
+      reward?: unknown;
+      type?: unknown;
+    };
+
+    if (typeof title !== 'string' || !title.trim()) {
+      return badRequest('Missing required field: title');
+    }
+    if (typeof description !== 'string' || !description.trim()) {
+      return badRequest('Missing required field: description');
+    }
+    if (typeof reward !== 'number' || !(reward > 0)) {
+      return badRequest('Missing required field: reward (must be > 0)');
+    }
+    const taskType = typeof type === 'string' && type.trim() ? type : 'bounty';
+
+    const agent = this.db
+      .prepare('SELECT email FROM agents WHERE id = ?')
+      .get(agentId) as { email: string } | undefined;
+    if (!agent) return notFound('Agent not found');
+
     try {
-      const text = await req.text();
-      if (!text) {
-        return Response.json({ error: 'Missing request body' }, { status: 400 });
-      }
-      body = JSON.parse(text);
-    } catch {
-      return Response.json({ error: 'Invalid JSON' }, { status: 400 });
+      const task = this.bountyService.publish({
+        title: title.trim(),
+        description: description.trim(),
+        type: taskType,
+        reward,
+        publisherId: agentId,
+        publisherEmail: agent.email,
+      });
+      return Response.json(task, { status: 201 });
+    } catch (err) {
+      return badRequest(err instanceof Error ? err.message : 'Publish failed');
     }
-
-    const { title, description, reward, type } = body;
-
-    if (!title || !description || !reward) {
-      return Response.json({ error: 'Missing required fields: title, description, reward' }, { status: 400 });
-    }
-
-    const agent = this.db.prepare('SELECT * FROM agents WHERE id = ?').get(agentId) as any;
-    if (!agent) {
-      return Response.json({ error: 'Agent not found' }, { status: 404 });
-    }
-
-    const now = Date.now();
-    const taskId = crypto.randomUUID();
-
-    this.db.prepare(`
-      INSERT INTO tasks (id, title, description, type, reward, publisher_id, publisher_email, status, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, 'open', ?, ?)
-    `).run(taskId, title, description, type || 'bounty', reward, agentId, agent.email, now, now);
-
-    const task = this.db.prepare('SELECT * FROM tasks WHERE id = ?').get(taskId);
-    return Response.json(task, { status: 201 });
   }
 
   grabTask(taskId: string, agentId: string): Response {
-    const task = this.db.prepare('SELECT * FROM tasks WHERE id = ?').get(taskId) as any;
-    if (!task) {
-      return Response.json({ error: 'Task not found' }, { status: 404 });
+    const agent = this.db
+      .prepare('SELECT email FROM agents WHERE id = ?')
+      .get(agentId) as { email: string } | undefined;
+    if (!agent) return notFound('Agent not found');
+
+    const result = this.bountyService.grab(taskId, agentId, agent.email);
+    if (!result.success) {
+      const status = result.reason === 'Task not found' ? 404 : 400;
+      return Response.json({ error: result.reason }, { status });
     }
 
-    if (task.status !== 'open') {
-      return Response.json({ error: 'Task is not open' }, { status: 400 });
-    }
-
-    const agent = this.db.prepare('SELECT * FROM agents WHERE id = ?').get(agentId) as any;
-    if (!agent) {
-      return Response.json({ error: 'Agent not found' }, { status: 404 });
-    }
-
-    const now = Date.now();
-    this.db.prepare(`
-      UPDATE tasks SET assignee_id = ?, assignee_email = ?, status = 'in_progress', updated_at = ?
-      WHERE id = ?
-    `).run(agentId, agent.email, now, taskId);
-
-    const updatedTask = this.db.prepare('SELECT * FROM tasks WHERE id = ?').get(taskId);
-    return Response.json(updatedTask);
+    const task = this.bountyService.getById(taskId);
+    return Response.json(task);
   }
 
   async submitTask(req: Request, taskId: string, agentId: string): Promise<Response> {
-    let body: { result?: string };
-    try {
-      const text = await req.text();
-      body = JSON.parse(text || '{}');
-    } catch {
-      return Response.json({ error: 'Invalid JSON' }, { status: 400 });
+    const body = await readJson(req);
+    if (body === undefined) return badRequest('Invalid JSON');
+    const resultText = (body?.result as unknown);
+    if (typeof resultText !== 'string') {
+      return badRequest('Missing required field: result');
     }
-
-    const task = this.db.prepare('SELECT * FROM tasks WHERE id = ?').get(taskId) as any;
-    if (!task) {
-      return Response.json({ error: 'Task not found' }, { status: 404 });
+    const result = this.bountyService.submit(taskId, agentId, resultText);
+    if (!result.success) {
+      const status = result.reason === 'Task not found' ? 404 : 400;
+      return Response.json({ error: result.reason }, { status });
     }
+    const task = this.bountyService.getById(taskId);
+    return Response.json(task);
+  }
 
-    if (task.assignee_id !== agentId) {
-      return Response.json({ error: 'Not authorized to submit this task' }, { status: 403 });
+  async completeTask(_req: Request, taskId: string, agentId: string): Promise<Response> {
+    const task = this.bountyService.getById(taskId);
+    if (!task) return notFound('Task not found');
+    if (task.publisherId !== agentId) {
+      return forbidden('Only the publisher can complete the task');
     }
+    const result = this.bountyService.complete(taskId, agentId);
+    if (!result.success) {
+      return Response.json({ error: result.reason }, { status: 400 });
+    }
+    return Response.json(this.bountyService.getById(taskId));
+  }
 
-    const now = Date.now();
-    this.db.prepare(`
-      UPDATE tasks SET result = ?, status = 'submitted', updated_at = ?
-      WHERE id = ?
-    `).run(body.result || '', now, taskId);
+  async cancelTask(_req: Request, taskId: string, agentId: string): Promise<Response> {
+    const task = this.bountyService.getById(taskId);
+    if (!task) return notFound('Task not found');
+    if (task.publisherId !== agentId) {
+      return forbidden('Only the publisher can cancel the task');
+    }
+    const result = this.bountyService.cancel(taskId, agentId);
+    if (!result.success) {
+      return Response.json({ error: result.reason }, { status: 400 });
+    }
+    return Response.json(this.bountyService.getById(taskId));
+  }
 
-    const updatedTask = this.db.prepare('SELECT * FROM tasks WHERE id = ?').get(taskId);
-    return Response.json(updatedTask);
+  async disputeTask(req: Request, taskId: string, agentId: string): Promise<Response> {
+    const body = await readJson(req);
+    if (body === undefined) return badRequest('Invalid JSON');
+    const reason = body?.reason as unknown;
+    if (typeof reason !== 'string' || !reason.trim()) {
+      return badRequest('Missing required field: reason');
+    }
+    const task = this.bountyService.getById(taskId);
+    if (!task) return notFound('Task not found');
+    if (task.publisherId !== agentId) {
+      return forbidden('Only the publisher can dispute the task');
+    }
+    const result = this.bountyService.dispute(taskId, agentId, reason.trim());
+    if (!result.success) {
+      return Response.json({ error: result.reason }, { status: 400 });
+    }
+    return Response.json(this.bountyService.getById(taskId));
   }
 }

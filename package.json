@@ -1,6 +1,6 @@
 {
   "name": "@ai-setting/agent-bounty",
-  "version": "0.3.4",
+  "version": "0.3.5",
   "type": "module",
   "description": "AI Agent Bounty System - Task publishing, grabbing, and communication platform",
   "main": "./dist/index.js",
@@ -48,30 +48,26 @@
     "build:plugin": "bun build ./src/plugin/index.ts --outdir=./dist/plugin --target=bun",
     "server": "bun run dist/server/server.js",
     "dev": "bun run src/bin/bounty.ts",
-    "demo:imap-poll": "bun run scripts/imap-poll-demo.ts",
     "im:server": "bun run scripts/start-im-server.ts",
-    "test": "bun test",
+    "test": "BOUNTY_MAIL_DRY_RUN=1 bun test --isolate",
     "typecheck": "tsc --noEmit",
     "clean": "rm -rf dist",
     "prepublishOnly": "npm run build"
   },
   "dependencies": {
-    "@ai-setting/roy-agent-cli": "^1.5.41",
-    "@ai-setting/roy-agent-coder-harness": "^1.5.41",
-    "@ai-setting/roy-agent-core": "^1.5.41",
+    "@ai-setting/roy-agent-cli": "^1.5.56",
+    "@ai-setting/roy-agent-coder-harness": "^1.5.47",
+    "@ai-setting/roy-agent-core": "^1.5.55",
     "@types/ws": "^8.18.1",
     "chalk": "^5.3.0",
     "dotenv": "^17.4.2",
-    "imap": "^0.8.17",
     "jose": "^6.2.3",
-    "mailparser": "^3.6.5",
     "nodemailer": "^8.0.7",
     "uuid": "^9.0.0",
     "yargs": "^17.7.2",
     "zod": "^3.22.4"
   },
   "devDependencies": {
-    "@types/imap": "^0.8.39",
     "@types/node": "^20.10.0",
     "@types/nodemailer": "^8.0.0",
     "@types/uuid": "^9.0.7",
@@ -94,8 +90,7 @@
     "mail",
     "communication",
     "escrow",
-    "smtp",
-    "imap"
+    "smtp"
   ],
   "author": "ai-setting",
   "license": "MIT",
