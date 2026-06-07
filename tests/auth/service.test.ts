@@ -131,11 +131,14 @@ describe('Auth Service', () => {
 
     it('should throw error for invalid verification code', async () => {
       const email = 'invalid-code@example.com';
-      
+
       await register(mockDb, { email, name: 'Invalid Code Agent' });
 
+      // After register(), a real verification row exists. The wrong code
+      // '000000' triggers the 'Invalid verification code' branch
+      // (not 'No verification code found', which is the empty-DB branch).
       await expect(verify(mockDb, { email, code: '000000' }))
-        .rejects.toThrow('Invalid or expired verification code');
+        .rejects.toThrow('Invalid verification code');
     });
 
     it('should throw error for expired verification code', async () => {

@@ -130,17 +130,21 @@ describe('Verification Code Logic', () => {
 
       createVerification(mockDb as any, 'agent-123', 'test@example.com', '123456');
 
-      // Check prepare was called with INSERT statement
-      expect(mockPrepare).toHaveBeenCalled();
-      const sqlArg = mockPrepare.mock.calls[0][0];
-      expect(sqlArg).toContain('INSERT INTO verifications');
-      
-      // Check run was called with correct parameters
-      expect(mockRun).toHaveBeenCalled();
-      const runArgs = mockRun.mock.calls[0];
-      expect(runArgs[1]).toBe('agent-123'); // agent_id
-      expect(runArgs[2]).toBe('test@example.com'); // email
-      expect(runArgs[3]).toBe('123456'); // code
+      // The first prepare call is the DELETE for any prior codes, the
+      // second is the INSERT.
+      expect(mockPrepare).toHaveBeenCalledTimes(2);
+      const insertCall = mockPrepare.mock.calls.find(c => (c[0] as string).includes('INSERT INTO verifications'));
+      expect(insertCall).toBeDefined();
+      const insertSql = insertCall![0] as string;
+      expect(insertSql).toContain('INSERT INTO verifications');
+
+      // The first run() call corresponds to the DELETE (no args), the
+      // second to the INSERT (with id/agentId/email/code/timestamps).
+      expect(mockRun).toHaveBeenCalledTimes(2);
+      const insertRun = mockRun.mock.calls[1];
+      expect(insertRun[1]).toBe('agent-123'); // agent_id
+      expect(insertRun[2]).toBe('test@example.com'); // email
+      expect(insertRun[3]).toBe('123456'); // code
     });
 
     it('should set expiration time to 24 hours from now', () => {
@@ -154,9 +158,10 @@ describe('Verification Code Logic', () => {
 
       createVerification(mockDb as any, 'agent-456', 'test@example.com', '654321');
 
-      expect(mockRun).toHaveBeenCalled();
-      const runArgs = mockRun.mock.calls[0];
-      // run() args: id, agent_id, email, code, expires_at, created_at (type is hardcoded in SQL)
+      // The first run is the DELETE, the second is the INSERT. The
+      // INSERT receives (id, agent_id, email, code, created_at, expires_at).
+      expect(mockRun).toHaveBeenCalledTimes(2);
+      const runArgs = mockRun.mock.calls[1];
       expect(runArgs.length).toBe(6);
     });
   });
@@ -197,9 +202,10 @@ describe('Verification Code Logic', () => {
       });
 
       const result = verifyCode(mockDb as any, 'test@example.com', '000000');
-      
+
+      // No row in DB → 'No verification code found for this email'
       expect(result.valid).toBe(false);
-      expect(result.error).toBe('Invalid or expired verification code');
+      expect(result.error).toBe('No verification code found for this email');
       expect(result.agentId).toBeUndefined();
     });
 
@@ -264,9 +270,11 @@ describe('Verification Code Logic', () => {
       });
 
       const result = verifyCode(mockDb as any, 'test@example.com', '123456');
-      
+
+      // After a successful verify, the row is deleted (one-time use),
+      // so a second verify call finds no row.
       expect(result.valid).toBe(false);
-      expect(result.error).toBe('Invalid or expired verification code');
+      expect(result.error).toBe('No verification code found for this email');
     });
   });
 
