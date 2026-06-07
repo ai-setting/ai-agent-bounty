@@ -48,7 +48,6 @@
     "build:plugin": "bun build ./src/plugin/index.ts --outdir=./dist/plugin --target=bun",
     "server": "bun run dist/server/server.js",
     "dev": "bun run src/bin/bounty.ts",
-    "demo:imap-poll": "bun run scripts/imap-poll-demo.ts",
     "im:server": "bun run scripts/start-im-server.ts",
     "test": "BOUNTY_MAIL_DRY_RUN=1 bun test --isolate",
     "typecheck": "tsc --noEmit",
@@ -62,16 +61,13 @@
     "@types/ws": "^8.18.1",
     "chalk": "^5.3.0",
     "dotenv": "^17.4.2",
-    "imap": "^0.8.17",
     "jose": "^6.2.3",
-    "mailparser": "^3.6.5",
     "nodemailer": "^8.0.7",
     "uuid": "^9.0.0",
     "yargs": "^17.7.2",
     "zod": "^3.22.4"
   },
   "devDependencies": {
-    "@types/imap": "^0.8.39",
     "@types/node": "^20.10.0",
     "@types/nodemailer": "^8.0.0",
     "@types/uuid": "^9.0.7",
@@ -94,8 +90,7 @@
     "mail",
     "communication",
     "escrow",
-    "smtp",
-    "imap"
+    "smtp"
   ],
   "author": "ai-setting",
   "license": "MIT",
