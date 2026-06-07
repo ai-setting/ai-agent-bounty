@@ -484,4 +484,34 @@ describe('IMWebSocketServer', () => {
       bob.close();
     });
   });
+
+  describe('regression: connected event on open (upgrade branch fix)', () => {
+    test('should send connected event on open (regression test for upgrade branch)', async () => {
+      const ws = new WebSocket(`ws://localhost:${wsPort}/ws?address=regression@server.com`);
+
+      const connected = await new Promise<any>((resolve, reject) => {
+        const timer = setTimeout(() => reject(new Error('Timed out waiting for connected event')), 5000);
+        ws.onmessage = (e) => {
+          try {
+            const msg = JSON.parse(e.data);
+            if (msg.event === 'connected') {
+              clearTimeout(timer);
+              resolve(msg);
+            }
+          } catch (err) {
+            clearTimeout(timer);
+            reject(err);
+          }
+        };
+        ws.onerror = (err) => {
+          clearTimeout(timer);
+          reject(err);
+        };
+      });
+
+      expect(connected.event).toBe('connected');
+      expect(connected.data.address).toBe('regression@server.com');
+      ws.close();
+    });
+  });
 });
