@@ -103,7 +103,7 @@ describe('No unused / ghost imports (L1)', () => {
     for (const file of [...walk(SRC), ...walk(TESTS)]) {
       const text = readFileSync(file, 'utf-8');
       for (const m of text.matchAll(importRe)) {
-        const spec = m[1]!;
+        const spec = (m[1] || m[2] || '');
         if (spec.startsWith('.') || spec.startsWith('/')) {
           continue;
         }
