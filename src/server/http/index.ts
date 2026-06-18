@@ -369,11 +369,11 @@ export class BountyHTTPServer {
             // Send to recipient if online
             const recipient = this.clients.get(msg.data.to);
             if (recipient) {
+              this.imDb.updateMessageStatus(imMessage.id, 'delivered');
               recipient.socket.send(JSON.stringify({
                 event: 'message',
-                data: imMessage,
+                data: { ...imMessage, status: 'delivered' },
               }));
-              this.imDb.updateMessageStatus(imMessage.id, 'delivered');
             }
           }
           break;
@@ -430,15 +430,20 @@ export class BountyHTTPServer {
 
   /**
    * Push a message to a connected client via WebSocket
+   * Updates message status to 'delivered' when push succeeds.
    * @returns true if the client was found and message was sent, false if client is offline
    */
   pushMessage(address: string, message: Message): boolean {
     const client = this.clients.get(address);
     if (client) {
       try {
+        // Update status to delivered before sending
+        if (message.status === 'pending') {
+          this.imDb.updateMessageStatus(message.id, 'delivered');
+        }
         client.socket.send(JSON.stringify({
           event: 'message',
-          data: message,
+          data: { ...message, status: 'delivered' },
         }));
         return true;
       } catch (err) {
