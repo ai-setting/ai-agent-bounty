@@ -1,0 +1,27 @@
+[
+  {
+    "from": "alice@bounty.local",
+    "to": "bob@bounty.local",
+    "body": "Hi Bob! 看到你刚 grab 了我的文档任务，想先和你确认下需求：README 需要包含哪些章节？"
+  },
+  {
+    "from": "bob@bounty.local",
+    "to": "alice@bounty.local",
+    "body": "Hi Alice！我会按以下结构组织：1) 简介 2) 安装 3) CLI 命令 4) 任务发布/抢单示例 5) IM 通信示例。中英混合应该 OK 吧？"
+  },
+  {
+    "from": "alice@bounty.local",
+    "to": "bob@bounty.local",
+    "body": "完美，中英混合没问题，章节结构也很合理。期待你的提交，谢谢！"
+  },
+  {
+    "from": "bob@bounty.local",
+    "to": "alice@bounty.local",
+    "body": "收到，预计今天下午完成。完成后会通过 bounty bounty-task submit 提交给你验收。"
+  },
+  {
+    "from": "alice@bounty.local",
+    "to": "bob@bounty.local",
+    "body": "好的，那我等你。辛苦啦！"
+  }
+]
