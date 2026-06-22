@@ -144,13 +144,21 @@ export class BountyHTTPServer {
           return await this.authRoutes.sendCode(req);
         }
 
-        // Protected routes
-        const authResult = await this.checkAuth(req);
-        if (authResult.error) {
-          return authResult.error;
+        // Protected routes - only enforce auth for /api/* paths so that
+        // public legacy routes (/health, /messages) below remain reachable
+        // without auth. Previously this check ran unconditionally inside
+        // the if (this.authRoutes) block and short-circuited every request
+        // with 401 even when no auth header was expected (see H2 fix in
+        // 9090610 which inadvertently regressed these public endpoints).
+        let agentId: string | undefined;
+        if (path.startsWith('/api/')) {
+          const authResult = await this.checkAuth(req);
+          if (authResult.error) {
+            return authResult.error;
+          }
+          agentId = authResult.agentId;
         }
-        if (authResult.agentId) {
-          const agentId = authResult.agentId;
+        if (agentId) {
 
           // Agent routes
           if (method === 'GET' && path === '/api/agents/me') {
