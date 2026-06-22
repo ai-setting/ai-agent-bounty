@@ -10,7 +10,6 @@ import { addressesCommand } from './addresses.js';
 import { inboxCommand } from './inbox.js';
 import { connectCommand } from './connect.js';
 import { disconnectCommand } from './disconnect.js';
-import { discussCommand } from './discuss.js';
 
 export const comCommands: CommandModule = {
   command: 'com',
@@ -24,7 +23,6 @@ export const comCommands: CommandModule = {
       .command(inboxCommand)
       .command(connectCommand)
       .command(disconnectCommand)
-      .command(discussCommand)
       .demandCommand(1, 'See --help for available commands'),
 
   handler: () => {
@@ -39,4 +37,3 @@ export { addressesCommand } from './addresses.js';
 export { inboxCommand } from './inbox.js';
 export { connectCommand } from './connect.js';
 export { disconnectCommand } from './disconnect.js';
-export { discussCommand } from './discuss.js';
