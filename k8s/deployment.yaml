@@ -1,0 +1,130 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: bounty-data
+  namespace: tongagent
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+  storageClassName: sangfor-eds-block-csi-provisioner
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bounty-server
+  namespace: tongagent
+  labels:
+    app: bounty-server
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: bounty-server
+  template:
+    metadata:
+      labels:
+        app: bounty-server
+    spec:
+      imagePullSecrets:
+        - name: harbor-cred
+      containers:
+        - name: bounty-server
+          image: harbor.mybigai.ac.cn/tongos/bounty-server:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 4005
+              name: http
+              protocol: TCP
+          env:
+            - name: BOUNTY_PORT
+              value: "4005"
+            - name: BOUNTY_DB_PATH
+              value: /app/data/bounty.db
+            - name: BOUNTY_DOMAIN
+              value: bounty.tongagents.example.com
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: bounty-secret
+                  key: jwt-secret
+            - name: SMTP_HOST
+              valueFrom:
+                secretKeyRef:
+                  name: bounty-secret
+                  key: smtp-host
+            - name: SMTP_PORT
+              valueFrom:
+                secretKeyRef:
+                  name: bounty-secret
+                  key: smtp-port
+            - name: SMTP_SECURE
+              value: "true"
+            - name: SMTP_FROM
+              valueFrom:
+                secretKeyRef:
+                  name: bounty-secret
+                  key: smtp-from
+            - name: SMTP_AUTH_CODE
+              valueFrom:
+                secretKeyRef:
+                  name: bounty-secret
+                  key: smtp-auth-code
+          volumeMounts:
+            - name: data
+              mountPath: /app/data
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "100m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 4005
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 4005
+            initialDelaySeconds: 5
+            periodSeconds: 10
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: bounty-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: bounty-server
+  namespace: tongagent
+spec:
+  type: ClusterIP
+  ports:
+    - port: 4005
+      targetPort: 4005
+      protocol: TCP
+      name: http
+  selector:
+    app: bounty-server
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: bounty-server-lb
+  namespace: tongagent
+spec:
+  type: LoadBalancer
+  ports:
+    - port: 4005
+      targetPort: 4005
+      protocol: TCP
+      name: http
+  selector:
+    app: bounty-server
