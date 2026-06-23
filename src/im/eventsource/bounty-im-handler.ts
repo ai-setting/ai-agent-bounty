@@ -16,6 +16,7 @@ import {
   type EventMetadata,
   type ReplyChannel,
   type RecommendedAction,
+  isQuietMode,
 } from "@ai-setting/roy-agent-core";
 
 import { bountyConfig } from '../../lib/config/bounty-config.js';
@@ -359,5 +360,7 @@ export const bountyIMHandler: EventSourceHandler = {
 
 EventSourceInitHooks.register("bounty-im", async (component) => {
   component.registerHandler(bountyIMHandler);
-  console.log("[BountyIM] Handler registered to EventSourceComponent");
+  if (!isQuietMode()) {
+    console.log("[BountyIM] Handler registered to EventSourceComponent");
+  }
 });

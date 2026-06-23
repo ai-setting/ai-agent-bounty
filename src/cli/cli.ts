@@ -10,6 +10,7 @@ import { join } from 'path';
 
 // ========== 统一配置 ==========
 import { bountyConfig } from '../lib/config/bounty-config.js';
+import { setQuietMode } from '@ai-setting/roy-agent-core';
 
 // ========== 初始化 Bounty IM EventSource Handler ==========
 // 自动注册 bounty-im handler 到 EventSourceInitHooks
@@ -69,7 +70,7 @@ import { serverCommands } from './commands/server/index.js';
 
 // 注册 Bounty Prompt Hook（注入 bounty 特有命令到 default agent prompt）
 import { registerBountyPromptHook } from './hooks/bounty-prompt-hook.js';
-registerBountyPromptHook();
+// NOTE: registerBountyPromptHook() is called inside runBountyCli() after setQuietMode(true)
 
 // 环境变量
 const BOUNTY_IM_AUTO_ES_NAME = 'bounty-im-auto';
@@ -124,6 +125,7 @@ export function getGlobalEnv(): any {
 export function getOrCreateEnvService(): EnvironmentService {
   if (!globalEnvService) {
     const output = new OutputService();
+    output.configure({ quiet: true });
     globalEnvService = new EnvironmentService(output);
   }
   return globalEnvService;
@@ -150,7 +152,7 @@ async function initializeBountyEnv(): Promise<void> {
   const envService = getOrCreateEnvService();
 
   // 创建环境（即使没有配置也会初始化组件）
-  await envService.create({});
+  await envService.create({ quiet: true });
   
   // 设置全局 env 实例，供 bounty-im-handler 使用
   const env = envService.getEnvironment();
@@ -204,8 +206,24 @@ async function initializeBountyEnv(): Promise<void> {
   console.log(`✅ 已自动添加 bounty-im EventSource: ${BOUNTY_IM_AUTO_ES_NAME} (${address})`);
 }
 
+/**
+ * 全局 quiet 模式 middleware
+ * 
+ * 默认 quiet 开启（减少日志输出），使用 --no-quiet 关闭 quiet 模式
+ */
+function quietModeMiddleware(argv: Record<string, unknown>): void {
+  // 当 quiet 为 true（即没有传 --no-quiet）时，设置 quiet 模式
+  if (argv.quiet === true) {
+    setQuietMode(true);
+  }
+}
+
 export async function runBountyCli(): Promise<void> {
   try {
+    // 在初始化 env 之前设置 quiet 模式，抑制日志噪声
+    setQuietMode(true);
+    registerBountyPromptHook();
+
     // CLI 启动时初始化（自动注册 bounty-im EventSource）
     await initializeBountyEnv();
 
@@ -220,6 +238,15 @@ export async function runBountyCli(): Promise<void> {
       .scriptName('bounty')
       .version(version)
       .usage('$0 <command> [options]')
+      // 全局 quiet 选项（默认 quiet，使用 --no-quiet 开启日志）
+      .option('quiet', {
+        describe: 'Quiet mode (default: on, use --no-quiet to enable logging)',
+        type: 'boolean',
+        default: true,
+        global: true,
+      })
+      // 全局 middleware，在命令执行前设置 quiet 模式
+      .middleware(quietModeMiddleware, true)
       .describe('h', 'show help')
       .alias('h', 'help')
 

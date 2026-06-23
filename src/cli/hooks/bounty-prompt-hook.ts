@@ -7,7 +7,7 @@
  * 触发时机：在默认 prompt 渲染完成后追加 bounty 特有内容
  */
 
-import { globalHookManager } from '@ai-setting/roy-agent-core';
+import { globalHookManager, isQuietMode } from '@ai-setting/roy-agent-core';
 import { BOUNTY_CAPABILITIES } from '../../lib/mail/bounty-constants.js';
 
 /**
@@ -41,7 +41,9 @@ const bountyPromptHook = {
  */
 export function registerBountyPromptHook(): void {
   globalHookManager.register('prompt.after-render', bountyPromptHook);
-  console.log('[Bounty] Prompt hook registered');
+  if (!isQuietMode()) {
+    console.log('[Bounty] Prompt hook registered');
+  }
 }
 
 // 导出 hook 对象供测试使用
