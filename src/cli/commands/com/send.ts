@@ -15,7 +15,30 @@
 
 import type { CommandModule } from 'yargs';
 import chalk from 'chalk';
+import { existsSync, readFileSync } from 'fs';
+import { homedir } from 'os';
+import { join } from 'path';
 import { bountyConfig } from '../../../lib/config/bounty-config.js';
+
+/** Default location for saved auth token (written by `bounty auth login`). */
+const TOKEN_FILE = join(homedir(), '.config', 'bounty', 'token');
+
+/**
+ * Auto-read saved auth token if present (Phase C.1 enhancement).
+ *
+ * Returns undefined if the file is missing / empty / unreadable.
+ * Callers should attach `Authorization: Bearer <token>` if defined.
+ */
+export function readAuthToken(): string | undefined {
+  try {
+    if (!existsSync(TOKEN_FILE)) return undefined;
+    const content = readFileSync(TOKEN_FILE, 'utf-8').trim();
+    return content || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 
 interface SendOptions {
   from: string;
@@ -54,7 +77,16 @@ export const sendCommand: CommandModule<object, SendOptions> = {
         type: 'string',
         description:
           'IM server base URL with scheme (e.g. https://bounty.tongagents.example.com:443). ' +
-          'When set, overrides --host/--port. Recommended for remote or HTTPS endpoints.',
+          'When set, overrides --host/--port. Recommended for remote or HTTPS endpoints. ' +
+          'Auto-attaches Authorization header from ~/.config/bounty/token if present.',
+      })
+      .option('insecure', {
+        alias: 'k',
+        type: 'boolean',
+        default: false,
+        description:
+          'Skip TLS certificate verification (for self-signed k8s ingress). ' +
+          'Sets NODE_TLS_REJECT_UNAUTHORIZED=0 for this process.',
       })
       .option('host', {
         alias: 'H',
@@ -69,7 +101,15 @@ export const sendCommand: CommandModule<object, SendOptions> = {
         default: bountyConfig.port,
       }),
   handler: async (args) => {
-    const { from, to, body, host, port, serverUrl } = args;
+    const { from, to, body, host, port, serverUrl, insecure } = args;
+
+    // TLS skip-verify：影响本进程所有 fetch
+    if (insecure) {
+      process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
+    }
+
+    // Authorization header：自动从 ~/.config/bounty/token 加载（如果存在）
+    const authToken = readAuthToken();
 
     // 优先级：--server-url > --host/--port
     // --server-url 必须带 scheme（http:// 或 https://），且不含尾斜杠
@@ -90,11 +130,15 @@ export const sendCommand: CommandModule<object, SendOptions> = {
     }
 
     try {
+      const authHeaders: Record<string, string> = {
+        'Content-Type': 'application/json',
+      };
+      if (authToken) {
+        authHeaders['Authorization'] = `Bearer ${authToken}`;
+      }
       const response = await fetch(url, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: authHeaders,
         body: JSON.stringify({
           from,
           to,
