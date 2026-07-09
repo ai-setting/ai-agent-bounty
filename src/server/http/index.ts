@@ -179,10 +179,10 @@ export class BountyHTTPServer {
 
           // Agent routes
           if (method === 'GET' && path === '/api/agents/me') {
-            return this.authRoutes.getCurrentAgent(agentId);
+            return this.authRoutes.getCurrentAgent(agentId!);
           }
           if (method === 'GET' && path === '/api/agents/me/credits') {
-            return this.authRoutes.getCurrentAgentCredits(agentId);
+            return this.authRoutes.getCurrentAgentCredits(agentId!);
           }
           if (method === 'GET' && path === '/api/agents') {
             return this.authRoutes.listAgents();
@@ -193,7 +193,7 @@ export class BountyHTTPServer {
           }
           if (method === 'DELETE' && path.startsWith('/api/agents/')) {
             const id = path.slice('/api/agents/'.length);
-            return this.authRoutes.deleteAgent(id, agentId);
+            return this.authRoutes.deleteAgent(id, agentId!);
           }
 
           // Bounty routes
@@ -206,40 +206,40 @@ export class BountyHTTPServer {
               return this.bountyRoutes.getTaskById(id);
             }
             if (method === 'POST' && path === '/api/tasks') {
-              return await this.bountyRoutes.createTask(req, agentId);
+              return await this.bountyRoutes.createTask(req, agentId!);
             }
             if (method === 'PUT' && path.startsWith('/api/tasks/') && path.endsWith('/grab')) {
               const id = path.slice('/api/tasks/'.length, -'/grab'.length);
-              return this.bountyRoutes.grabTask(id, agentId);
+              return this.bountyRoutes.grabTask(id, agentId!);
             }
             if (method === 'PUT' && path.startsWith('/api/tasks/') && path.endsWith('/submit')) {
               const id = path.slice('/api/tasks/'.length, -'/submit'.length);
-              return await this.bountyRoutes.submitTask(req, id, agentId);
+              return await this.bountyRoutes.submitTask(req, id, agentId!);
             }
             if (method === 'PUT' && path.startsWith('/api/tasks/') && path.endsWith('/complete')) {
               const id = path.slice('/api/tasks/'.length, -'/complete'.length);
-              return await this.bountyRoutes.completeTask(req, id, agentId);
+              return await this.bountyRoutes.completeTask(req, id, agentId!);
             }
             if (method === 'PUT' && path.startsWith('/api/tasks/') && path.endsWith('/cancel')) {
               const id = path.slice('/api/tasks/'.length, -'/cancel'.length);
-              return await this.bountyRoutes.cancelTask(req, id, agentId);
+              return await this.bountyRoutes.cancelTask(req, id, agentId!);
             }
             if (method === 'PUT' && path.startsWith('/api/tasks/') && path.endsWith('/dispute')) {
               const id = path.slice('/api/tasks/'.length, -'/dispute'.length);
-              return await this.bountyRoutes.disputeTask(req, id, agentId);
+              return await this.bountyRoutes.disputeTask(req, id, agentId!);
             }
           }
 
           // IM routes (protected)
           if (method === 'GET' && path === '/api/messages') {
-            return this.imRoutes!.getMessages(url, { agentId });
+            return this.imRoutes!.getMessages(url, { agentId: agentId! });
           }
           if (method === 'POST' && path === '/api/messages') {
-            return await this.imRoutes!.sendMessage(req, { agentId });
+            return await this.imRoutes!.sendMessage(req, { agentId: agentId! });
           }
           if (method === 'GET' && path.startsWith('/api/messages/')) {
             const id = path.slice('/api/messages/'.length);
-            return this.imRoutes!.getMessageById(id, { agentId });
+            return this.imRoutes!.getMessageById(id, { agentId: agentId! });
           }
           if (method === 'POST' && path === '/api/messages/ack') {
             return await this.imRoutes!.ackMessages(req);

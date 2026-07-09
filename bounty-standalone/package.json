@@ -1,7 +1,7 @@
 {
   "name": "@ai-setting/agent-bounty-standalone",
-  "version": "0.4.0",
-  "description": "AI Agent Bounty System - Standalone binary for all platforms",
+  "version": "0.4.1",
+  "description": "AI Agent Bounty System - Standalone binary for all platforms (v0.4.1: upgrade roy deps cli 1.5.103, harness 1.5.50, core 1.5.99)",
   "type": "module",
   "bin": {
     "bounty": "./bin/run.js",
