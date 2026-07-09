@@ -14,7 +14,7 @@ import { bountyConfig } from '../../../lib/config/bounty-config.js';
 import {
   addServerUrlOption,
   resolveServerUrl,
-} from '../../../lib/server-url-option.js';
+} from '../../lib/server-url-option.js';
 
 interface InboxOptions {
   address: string;

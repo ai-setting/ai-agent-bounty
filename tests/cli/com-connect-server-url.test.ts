@@ -33,7 +33,7 @@ describe('bounty com connect - --server-url option', () => {
 
   test('T1: connect.ts references shared --server-url helper', () => {
     const src = readFileSync(SRC, 'utf-8');
-    expect(src).toContain("from '../../../lib/server-url-option.js'");
+    expect(src).toContain("from '../../lib/server-url-option.js'");
     expect(src).toMatch(/addServerUrlOption\(/);
     expect(src).not.toMatch(/alias:\s*['"]u['"]/);
   });

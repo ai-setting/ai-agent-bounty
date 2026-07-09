@@ -4,7 +4,7 @@
  * 目的：消除 12+ 个 CLI 命令里重复的 --server-url 定义 + scheme 校验 +
  * 末尾 / trim 逻辑。所有命令（auth/*, register-agent/*, com/*）应统一调用：
  *
- *   import { addServerUrlOption, resolveServerUrl } from '<relative>/lib/server-url-option.js';
+ *   import { addServerUrlOption, resolveServerUrl } from '../lib/server-url-option.js';
  *   builder: (y) => addServerUrlOption(y.option(...))
  *   handler: const baseUrl = resolveServerUrl(opts.serverUrl, API_BASE);
  *

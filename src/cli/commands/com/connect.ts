@@ -19,7 +19,7 @@ import { printStubNotice } from './stub.js';
 import {
   addServerUrlOption,
   resolveServerUrl,
-} from '../../../lib/server-url-option.js';
+} from '../../lib/server-url-option.js';
 
 interface ConnectOptions {
   address: string;
