@@ -9,6 +9,9 @@ import { spawn } from 'child_process';
 import { join } from 'path';
 import { existsSync } from 'fs';
 import { bountyConfig } from '../../../lib/config/bounty-config.js';
+// v0.5.0: TLS skip default — use bountyFetch wrapper
+import { bountyFetch } from '../../lib/fetch-helper.js';
+
 
 const MAX_PORT = 65535;
 const MIN_PORT = 1;
@@ -72,7 +75,7 @@ export const startCommand: CommandModule = {
 
     // Check if server is already running
     try {
-      const response = await fetch(`${serverUrl}/health`);
+      const response = await bountyFetch(`${serverUrl}/health`);
       if (response.ok) {
         console.log(chalk.yellow(`\n⚠ Server is already running on port ${port}`));
         return;
@@ -170,7 +173,7 @@ export async function waitForHealth(
 ): Promise<boolean> {
   for (let i = 0; i < attempts; i++) {
     try {
-      const response = await fetch(`${url}/health`);
+      const response = await bountyFetch(`${url}/health`);
       if (response.ok) return true;
     } catch {
       // server not yet accepting connections

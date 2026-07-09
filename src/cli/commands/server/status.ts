@@ -6,6 +6,9 @@
 import type { CommandModule } from 'yargs';
 import chalk from 'chalk';
 import { bountyConfig } from '../../../lib/config/bounty-config.js';
+// v0.5.0: TLS skip default — use bountyFetch wrapper
+import { bountyFetch } from '../../lib/fetch-helper.js';
+
 
 export const statusCommand: CommandModule = {
   command: 'status',
@@ -19,7 +22,7 @@ export const statusCommand: CommandModule = {
     console.log(chalk.gray(`  Port: ${port}`));
 
     try {
-      const response = await fetch(`${serverUrl}/health`);
+      const response = await bountyFetch(`${serverUrl}/health`);
 
       if (response.ok) {
         const data = await response.json() as {

@@ -6,6 +6,9 @@
 import type { CommandModule } from 'yargs';
 import chalk from 'chalk';
 import { bountyConfig } from '../../../lib/config/bounty-config.js';
+// v0.5.0: TLS skip default — use bountyFetch wrapper
+import { bountyFetch } from '../../lib/fetch-helper.js';
+
 
 export const stopCommand: CommandModule = {
   command: 'stop',
@@ -19,7 +22,7 @@ export const stopCommand: CommandModule = {
 
     // Check if server is running
     try {
-      const response = await fetch(`${serverUrl}/health`);
+      const response = await bountyFetch(`${serverUrl}/health`);
       if (!response.ok) {
         console.log(chalk.yellow('\n⚠ Server is not running'));
         return;
@@ -31,7 +34,7 @@ export const stopCommand: CommandModule = {
 
     // Try graceful shutdown via API
     try {
-      const response = await fetch(`${serverUrl}/api/shutdown`, {
+      const response = await bountyFetch(`${serverUrl}/api/shutdown`, {
         method: 'POST',
       });
 

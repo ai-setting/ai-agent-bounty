@@ -7,6 +7,9 @@ import type { CommandModule } from 'yargs';
 import chalk from 'chalk';
 import { API_BASE } from '../../config.js';
 import { loadToken } from '../../storage.js';
+// v0.5.0: TLS skip default — use bountyFetch wrapper
+import { bountyFetch } from '../../lib/fetch-helper.js';
+
 import {
   addServerUrlOption,
   resolveServerUrl,
@@ -55,7 +58,7 @@ export const listCommand: CommandModule = {
 
       const baseUrl = resolveServerUrl(options['server-url'], API_BASE);
 
-      const response = await fetch(`${baseUrl}/api/agents`, {
+      const response = await bountyFetch(`${baseUrl}/api/agents`, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`,
