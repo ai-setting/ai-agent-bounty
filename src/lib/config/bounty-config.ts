@@ -113,7 +113,10 @@ class BountyConfig {
   /** API Base URL */
   get apiUrl(): string {
     loadEnv();
-    return process.env.BOUNTY_API_URL || this.url;
+    // 优先级（v0.5.0）：BOUNTY_API_URL > BOUNTY_SERVER_URL > default
+    return process.env.BOUNTY_API_URL
+      || process.env.BOUNTY_SERVER_URL
+      || this.url;
   }
   
   // ============ Domain 配置 ============
