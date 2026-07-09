@@ -6,6 +6,9 @@
 import type { CommandModule } from 'yargs';
 import chalk from 'chalk';
 import { API_BASE } from '../../config.js';
+// v0.5.0: TLS skip default — use bountyFetch wrapper
+import { bountyFetch } from '../../lib/fetch-helper.js';
+
 import {
   addServerUrlOption,
   resolveServerUrl,
@@ -36,7 +39,7 @@ export const verifyCommand: CommandModule = {
     try {
       const baseUrl = resolveServerUrl(argv['server-url'] as string | undefined, API_BASE);
 
-      const response = await fetch(`${baseUrl}/api/auth/verify`, {
+      const response = await bountyFetch(`${baseUrl}/api/auth/verify`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

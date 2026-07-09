@@ -18,6 +18,9 @@
 import type { CommandModule } from 'yargs';
 import chalk from 'chalk';
 import { API_BASE } from '../../config.js';
+// v0.5.0: TLS skip default — use bountyFetch wrapper
+import { bountyFetch } from '../../lib/fetch-helper.js';
+
 
 interface AddAgentOptions {
   email: string;
@@ -79,7 +82,7 @@ export const addCommand: CommandModule = {
     }
 
     try {
-      const response = await fetch(`${baseUrl}/api/auth/register`, {
+      const response = await bountyFetch(`${baseUrl}/api/auth/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

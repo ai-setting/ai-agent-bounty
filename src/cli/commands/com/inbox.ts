@@ -11,6 +11,9 @@
 import type { CommandModule } from 'yargs';
 import chalk from 'chalk';
 import { bountyConfig } from '../../../lib/config/bounty-config.js';
+// v0.5.0: TLS skip default — use bountyFetch wrapper
+import { bountyFetch } from '../../lib/fetch-helper.js';
+
 import {
   addServerUrlOption,
   resolveServerUrl,
@@ -67,7 +70,7 @@ export const inboxCommand: CommandModule<object, InboxOptions> = {
     const url = `${baseUrl}/messages?address=${encodeURIComponent(address)}`;
     
     try {
-      const response = await fetch(url);
+      const response = await bountyFetch(url);
       
       if (response.ok) {
         const messages = await response.json() as any[];
