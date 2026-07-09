@@ -1,0 +1,4 @@
+# Build artifacts (re-created by scripts/build-standalone.ts)
+bin/bounty-*
+!bin/run.js
+*.tgz

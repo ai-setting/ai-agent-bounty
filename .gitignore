@@ -39,3 +39,7 @@ coverage/
 # Worktrees
 .worktrees/
 worktrees/
+
+# Auth files (must not be committed)
+.npmrc
+

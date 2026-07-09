@@ -1,0 +1,40 @@
+{
+  "name": "@ai-setting/agent-bounty-standalone",
+  "version": "0.4.0",
+  "description": "AI Agent Bounty System - Standalone binary for all platforms",
+  "type": "module",
+  "bin": {
+    "bounty": "./bin/run.js",
+    "bounty-linux-x64": "./bin/bounty-linux-x64",
+    "bounty-linux-arm64": "./bin/bounty-linux-arm64",
+    "bounty-darwin-x64": "./bin/bounty-darwin-x64",
+    "bounty-darwin-arm64": "./bin/bounty-darwin-arm64",
+    "bounty-windows-x64": "./bin/bounty-windows-x64.exe"
+  },
+  "files": [
+    "bin/**/*"
+  ],
+  "os": [
+    "linux",
+    "darwin",
+    "win32"
+  ],
+  "cpu": [
+    "x64",
+    "arm64"
+  ],
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "author": "ai-setting",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ai-setting/ai-agent-bounty.git",
+    "directory": "bounty-standalone"
+  },
+  "publishConfig": {
+    "registry": "https://registry.npmjs.org",
+    "access": "public"
+  }
+}
