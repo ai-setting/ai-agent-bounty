@@ -56,12 +56,18 @@ export class IMRoutes {
       return Response.json({ error: 'Missing required field: content' }, { status: 400 });
     }
 
-    // If authenticated, force `from` to be the requester's own address so a
-    // caller cannot impersonate another agent. Falls back to body.from when
-    // not authenticated (legacy public behavior).
-    const from = requester
-      ? `${requester.agentId}@authenticated`
-      : body.from || 'anonymous@server.com';
+    // Phase 4 (token check toggle): from 来源策略
+    // - 检查 requester.agentId (有值) → 该 agent 的 agent_id 是 authoritative sender
+    //   (用 `@authenticated` suffix 让 server 端能 push 到正确的 ws client)
+    // - requester 缺失 OR agentId undefined → legacy 行为: 用 body.from (caller 自报)
+    //
+    // 注意: token check OFF 场景下 requester=undefined, 走 legacy path;
+    //      token check ON 场景下 requester.agentId 是真值, 强制覆盖 body.from (防止冒充)
+    const requesterAgentId = requester?.agentId as string | undefined;
+    const from =
+      requesterAgentId
+        ? `${requesterAgentId}@authenticated`
+        : body.from || 'anonymous@server.com';
 
     const message: Message = {
       id: crypto.randomUUID(),
