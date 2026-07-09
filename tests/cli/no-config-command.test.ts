@@ -61,3 +61,23 @@ describe('bountyConfig class still used by internal modules (backward compat)', 
     expect(existsSync(bountyConfigPath)).toBe(true);
   });
 });
+
+describe('bounty top-level config command removal (v0.5.0)', () => {
+  // 用户需求 "去掉 bounty config 相关命令行以及逻辑" 同时涵盖顶层 `bounty config`
+  // 命令（来自 @ai-setting/roy-agent-cli）。这些 ConfigCommand 在 cli.ts 中被注册，
+  // v0.5.0 起应当不注册。
+  test('src/cli/cli.ts does NOT import ConfigCommand from roy-agent-cli', () => {
+    const cliPath = resolve(SRC_ROOT, 'cli.ts');
+    const src = readFileSync(cliPath, 'utf-8');
+    expect(src).not.toMatch(/ConfigCommand|ConfigListCommand|ConfigExportCommand|ConfigImportCommand/);
+  });
+
+  test('src/cli/cli.ts does NOT register ConfigCommand in yargs builder', () => {
+    const cliPath = resolve(SRC_ROOT, 'cli.ts');
+    const src = readFileSync(cliPath, 'utf-8');
+    expect(src).not.toMatch(/\.command\(\s*ConfigCommand\s*\)/);
+    expect(src).not.toMatch(/\.command\(\s*ConfigListCommand\s*\)/);
+    expect(src).not.toMatch(/\.command\(\s*ConfigExportCommand\s*\)/);
+    expect(src).not.toMatch(/\.command\(\s*ConfigImportCommand\s*\)/);
+  });
+});

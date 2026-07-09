@@ -27,10 +27,6 @@ import {
   SkillsCommand,
   ToolsCommand,
   McpCommand,
-  ConfigCommand,
-  ConfigListCommand,
-  ConfigExportCommand,
-  ConfigImportCommand,
   DebugCommand,
   LspCommand,
   LspListCommand,
@@ -261,12 +257,7 @@ export async function runBountyCli(): Promise<void> {
       .command(ToolsCommand)
       .command(McpCommand)
 
-      // Config 命令组
-      .command(ConfigCommand)
-      .command(ConfigListCommand)
-      .command(ConfigExportCommand)
-      .command(ConfigImportCommand)
-
+      // v0.5.0: Config 命令组已移除（用户需求："去掉 bounty config 相关命令行以及逻辑"）
       // Lsp 命令组
       .command(LspCommand)
       .command(LspListCommand)
