@@ -39,6 +39,11 @@ async function main() {
   console.log(`   HTTP: http://localhost:${port}`);
   console.log(`   WebSocket: ws://localhost:${port}/ws`);
   console.log(`   Health: http://localhost:${port}/health`);
+  // Phase 4: Token check 状态
+  const tokenCheck = process.env.BOUNTY_TOKEN_CHECK_ENABLED;
+  console.log(`   Token check: ${tokenCheck === "true" || tokenCheck === "1"
+    ? "✅ ENABLED (BOUNTY_TOKEN_CHECK_ENABLED=true)"
+    : "❌ DISABLED (set BOUNTY_TOKEN_CHECK_ENABLED=true to enable)"}`);
 
   // Graceful shutdown
   const shutdown = () => {

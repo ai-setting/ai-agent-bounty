@@ -75,7 +75,8 @@ describe('BOUNTY_CAPABILITIES prompt accuracy (H3)', () => {
   });
 
   it('lists all com subcommands that exist in the com index', () => {
-    const knownComVerbs = ['send', 'inbox', 'addresses', 'config', 'connect', 'disconnect'];
+    // Phase 4: 'config' command removed. Kept subcommands: send, inbox, addresses, connect, disconnect.
+    const knownComVerbs = ['send', 'inbox', 'addresses', 'connect', 'disconnect'];
     for (const verb of knownComVerbs) {
       expect(COM_INDEX).toContain(verb);
       expect(BOUNTY_CAPABILITIES).toContain(`com ${verb}`);

@@ -55,6 +55,9 @@ describe('IM Routes Auth (H2)', () => {
   }
 
   beforeEach(async () => {
+    // 此 test 期望 token check ON 行为（baseline 401/403）
+    // 显式设 BOUNTY_TOKEN_CHECK_ENABLED=true
+    process.env.BOUNTY_TOKEN_CHECK_ENABLED = "true";
     imDb = new IMDatabase({ memory: true });
     bountyDb = new Database({ memory: true });
     server = new BountyHTTPServer({ imDb, bountyDb, port: 0 });

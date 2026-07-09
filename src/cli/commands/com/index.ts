@@ -5,7 +5,6 @@
 
 import type { CommandModule } from 'yargs';
 import { sendCommand } from './send.js';
-import { configCommand } from './config.js';
 import { addressesCommand } from './addresses.js';
 import { inboxCommand } from './inbox.js';
 import { connectCommand } from './connect.js';
@@ -18,7 +17,6 @@ export const comCommands: CommandModule = {
   builder: (yargs) =>
     yargs
       .command(sendCommand)
-      .command(configCommand)
       .command(addressesCommand)
       .command(inboxCommand)
       .command(connectCommand)
@@ -32,7 +30,6 @@ export const comCommands: CommandModule = {
 
 // Re-export individual commands for easier import
 export { sendCommand } from './send.js';
-export { configCommand } from './config.js';
 export { addressesCommand } from './addresses.js';
 export { inboxCommand } from './inbox.js';
 export { connectCommand } from './connect.js';

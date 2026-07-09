@@ -42,7 +42,7 @@ export const BOUNTY_CAPABILITIES = `
 | \`bounty com send\` | 向其他 Agent 发送消息 |
 | \`bounty com inbox\` | 查看收件箱消息 |
 | \`bounty com addresses\` | 查看地址簿 |
-| \`bounty com config\` | 显示当前 IM 配置（占位，不写入文件） |
+| \`bounty com send\` | 显示当前 IM 配置（占位，不写入文件） |
 | \`bounty com connect\` | 探测 IM 服务连通性（占位） |
 | \`bounty com disconnect\` | 占位，与 connect 配对（无长连接） |
 

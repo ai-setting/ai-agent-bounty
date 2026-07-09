@@ -51,6 +51,15 @@ export class BountyHTTPServer {
   private authRoutes: AuthRoutes | null = null;
   private bountyRoutes: BountyRoutes | null = null;
   private imRoutes: IMRoutes | null = null;
+  /**
+   * Token check toggle (Phase 4 — 用户请求):
+   * - 默认 false: API 端点不强制 token (任何 caller 都能访问 /api/messages)
+   * - 设为 true (env BOUNTY_TOKEN_CHECK_ENABLED=true): 强制 JWT 验证
+   *
+   * 设计动机: 内部/dev 测试不需要 token, 但生产部署可开启。
+   * 部署时设 true 可以提供最小访问控制。
+   */
+  private tokenCheckEnabled: boolean;
 
   constructor(config: BountyServerConfig) {
     this.imDb = config.imDb;
@@ -62,6 +71,10 @@ export class BountyHTTPServer {
       this.bountyRoutes = new BountyRoutes(this.bountyDb);
     }
     this.imRoutes = new IMRoutes(this.imDb, (to, msg) => this.pushCallback?.(to, msg) ?? false);
+
+    // 读环境变量; 默认禁用 (token check off)
+    const envFlag = process.env.BOUNTY_TOKEN_CHECK_ENABLED;
+    this.tokenCheckEnabled = envFlag === "true" || envFlag === "1";
   }
 
   setPushCallback(callback: PushCallback): void {
@@ -146,19 +159,23 @@ export class BountyHTTPServer {
 
         // Protected routes - only enforce auth for /api/* paths so that
         // public legacy routes (/health, /messages) below remain reachable
-        // without auth. Previously this check ran unconditionally inside
-        // the if (this.authRoutes) block and short-circuited every request
-        // with 401 even when no auth header was expected (see H2 fix in
-        // 9090610 which inadvertently regressed these public endpoints).
+        // without auth.
+        //
+        // Phase 4 token check toggle:
+        // - tokenCheckEnabled = true (BOUNTY_TOKEN_CHECK_ENABLED=true): 走原 checkAuth 流程
+        //   没 auth header → 401, bad token → 401, ok → agentId
+        // - tokenCheckEnabled = false: 跳过 checkAuth, agentId 保持 undefined,
+        //   但仍 dispatch routes（routes 用 body.from 当 sender）— 让 dev/test
+        //   场景下所有 caller 都能访问。
         let agentId: string | undefined;
-        if (path.startsWith('/api/')) {
+        if (path.startsWith('/api/') && this.tokenCheckEnabled) {
           const authResult = await this.checkAuth(req);
           if (authResult.error) {
             return authResult.error;
           }
           agentId = authResult.agentId;
         }
-        if (agentId) {
+        if (agentId || !this.tokenCheckEnabled) {
 
           // Agent routes
           if (method === 'GET' && path === '/api/agents/me') {
@@ -281,6 +298,12 @@ export class BountyHTTPServer {
   }
 
   private async checkAuth(req: Request): Promise<{ agentId?: string; error?: Response | null }> {
+    // Phase 4: token check toggle. 如果 BOUNTY_TOKEN_CHECK_ENABLED != true,
+    // 直接返回成功 ({agentId: undefined}) — 路由层会用 body.from 当作 sender。
+    if (!this.tokenCheckEnabled) {
+      return { agentId: undefined };
+    }
+
     const authHeader = req.headers.get('authorization');
 
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
