@@ -1,53 +1,70 @@
 /**
  * com inbox command
  * Check inbox messages via Agent IM
+ *
+ * Phase feat/bounty-all-commands-server-url:
+ * - 新增 --server-url / -u 选项：通过 addServerUrlOption helper 复用
+ * - --server-url 提供时覆盖 --host/--port，回退保持向后兼容
+ * - 校验 + trim 由 resolveServerUrl helper 处理
  */
 
 import type { CommandModule } from 'yargs';
 import chalk from 'chalk';
 import { bountyConfig } from '../../../lib/config/bounty-config.js';
+import {
+  addServerUrlOption,
+  resolveServerUrl,
+} from '../../lib/server-url-option.js';
 
 interface InboxOptions {
   address: string;
   host?: string;
   port?: number;
   limit?: number;
+  'server-url'?: string;
 }
 
 export const inboxCommand: CommandModule<object, InboxOptions> = {
   command: ['inbox', 'i'],
   describe: 'Check inbox messages via Agent IM',
-  
+
   builder: (yargs) =>
-    yargs
-      .option('address', {
-        alias: 'a',
-        type: 'string',
-        demandOption: true,
-        description: 'Agent address (format: agent-id@host)',
-      })
-      .option('host', {
-        alias: 'H',
-        type: 'string',
-        description: 'IM server host (default: localhost)',
-        default: 'localhost',
-      })
-      .option('port', {
-        alias: 'p',
-        type: 'number',
-        description: 'IM server port',
-        default: bountyConfig.port,
-      })
-      .option('limit', {
-        alias: 'l',
-        type: 'number',
-        description: 'Number of messages to show',
-        default: 10,
-      }),
+    addServerUrlOption(
+      yargs
+        .option('address', {
+          alias: 'a',
+          type: 'string',
+          demandOption: true,
+          description: 'Agent address (format: agent-id@host)',
+        })
+        .option('host', {
+          alias: 'H',
+          type: 'string',
+          description: 'IM server host (default: localhost). Ignored when --server-url is set.',
+          default: 'localhost',
+        })
+        .option('port', {
+          alias: 'p',
+          type: 'number',
+          description: 'IM server port. Ignored when --server-url is set.',
+          default: bountyConfig.port,
+        })
+        .option('limit', {
+          alias: 'l',
+          type: 'number',
+          description: 'Number of messages to show',
+          default: 10,
+        })
+    ),
 
   handler: async (args) => {
     const { address, host, port, limit } = args;
-    const url = `http://${host}:${port}/messages?address=${encodeURIComponent(address)}`;
+
+    // baseUrl: --server-url > 默认 (http://localhost:port)
+    // 注意：inbox 的 fallback base 是动态拼出来的（包含 port），不是 API_BASE 那种静态值
+    const fallbackBase = `http://${host}:${port}`;
+    const baseUrl = resolveServerUrl(args['server-url'], fallbackBase);
+    const url = `${baseUrl}/messages?address=${encodeURIComponent(address)}`;
     
     try {
       const response = await fetch(url);

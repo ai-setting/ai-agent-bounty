@@ -1,6 +1,6 @@
 {
   "name": "@ai-setting/agent-bounty",
-  "version": "0.4.2",
+  "version": "0.4.3",
   "type": "module",
   "description": "AI Agent Bounty System — Task publishing, grabbing, and communication platform. v0.4.1: upgrade roy deps (cli 1.5.103, coder-harness 1.5.50, core 1.5.99).",
   "main": "./dist/index.js",

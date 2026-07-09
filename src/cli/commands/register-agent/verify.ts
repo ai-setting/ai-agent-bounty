@@ -6,29 +6,37 @@
 import type { CommandModule } from 'yargs';
 import chalk from 'chalk';
 import { API_BASE } from '../../config.js';
+import {
+  addServerUrlOption,
+  resolveServerUrl,
+} from '../../lib/server-url-option.js';
 
 export const verifyCommand: CommandModule = {
   command: 'verify',
   describe: 'Verify email after registration',
-  
+
   builder: (yargs) =>
-    yargs
-      .option('email', {
-        alias: 'e',
-        type: 'string',
-        demandOption: true,
-        description: 'Agent email',
-      })
-      .option('code', {
-        alias: 'c',
-        type: 'string',
-        demandOption: true,
-        description: 'Verification code',
-      }),
+    addServerUrlOption(
+      yargs
+        .option('email', {
+          alias: 'e',
+          type: 'string',
+          demandOption: true,
+          description: 'Agent email',
+        })
+        .option('code', {
+          alias: 'c',
+          type: 'string',
+          demandOption: true,
+          description: 'Verification code',
+        })
+    ),
 
   handler: async (argv) => {
     try {
-      const response = await fetch(`${API_BASE}/api/auth/verify`, {
+      const baseUrl = resolveServerUrl(argv['server-url'] as string | undefined, API_BASE);
+
+      const response = await fetch(`${baseUrl}/api/auth/verify`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

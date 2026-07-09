@@ -7,9 +7,14 @@ import type { CommandModule } from 'yargs';
 import chalk from 'chalk';
 import { API_BASE } from '../../config.js';
 import { loadToken } from '../../storage.js';
+import {
+  addServerUrlOption,
+  resolveServerUrl,
+} from '../../lib/server-url-option.js';
 
 interface GetAgentOptions {
   id: string;
+  'server-url'?: string;
 }
 
 interface Agent {
@@ -28,13 +33,14 @@ export const getCommand: CommandModule = {
   describe: 'Get details of a specific agent by ID',
 
   builder: (yargs) =>
-    yargs
-      .option('id', {
+    addServerUrlOption(
+      yargs.option('id', {
         alias: 'i',
         type: 'string',
         demandOption: true,
         description: 'Agent ID',
-      }),
+      })
+    ),
 
   handler: async (argv) => {
     const options = argv as unknown as GetAgentOptions;
@@ -50,7 +56,9 @@ export const getCommand: CommandModule = {
         process.exit(1);
       }
 
-      const response = await fetch(`${API_BASE}/api/agents/${options.id}`, {
+      const baseUrl = resolveServerUrl(options['server-url'], API_BASE);
+
+      const response = await fetch(`${baseUrl}/api/agents/${options.id}`, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`,
