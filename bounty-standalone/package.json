@@ -1,7 +1,7 @@
 {
   "name": "@ai-setting/agent-bounty-standalone",
-  "version": "0.4.3",
-  "description": "AI Agent Bounty System - Standalone binary for all platforms (v0.4.1: upgrade roy deps cli 1.5.103, harness 1.5.50, core 1.5.99)",
+  "version": "0.5.0",
+  "description": "AI Agent Bounty System - Standalone binary for all platforms. v0.5.0: remove `bounty server config`, default TLS skip, BOUNTY_SERVER_URL env alias.",
   "type": "module",
   "bin": {
     "bounty": "./bin/run.js",

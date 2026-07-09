@@ -5,9 +5,9 @@
     "": {
       "name": "@ai-setting/agent-bounty",
       "dependencies": {
-        "@ai-setting/roy-agent-cli": "1.5.103",
-        "@ai-setting/roy-agent-coder-harness": "1.5.50",
-        "@ai-setting/roy-agent-core": "1.5.99",
+        "@ai-setting/roy-agent-cli": "^1.5.110",
+        "@ai-setting/roy-agent-coder-harness": "^1.5.50",
+        "@ai-setting/roy-agent-core": "^1.5.102",
         "@types/ws": "^8.18.1",
         "chalk": "^5.3.0",
         "dotenv": "^17.4.2",
@@ -44,11 +44,11 @@
 
     "@ai-setting/markdown-language-server": ["@ai-setting/markdown-language-server@0.5.6", "", { "dependencies": { "@vscode/l10n": "^0.0.11", "markdown-it": "^14.1.1", "vscode-languageserver": "^8.1.0", "vscode-languageserver-textdocument": "^1.0.8", "vscode-languageserver-types": "^3.17.3", "vscode-markdown-languageservice": "0.5.0-alpha.12", "vscode-uri": "^3.0.7" }, "bin": { "markdown-language-server": "cli.js" } }, "sha512-suiiiH+TB1q/+thgCAiENnzTl8kwc8xBVe3oemwI5HYz6S+fYgsq3s1i/agw9eazROVy1n8k3xCq2UnX4TiWhw=="],
 
-    "@ai-setting/roy-agent-cli": ["@ai-setting/roy-agent-cli@1.5.103", "", { "dependencies": { "@ai-setting/roy-agent-coder-harness": "^1.5.50", "@ai-setting/roy-agent-core": "^1.5.83", "@ai-setting/roy-agent-ontology-harness": "^1.5.47", "chalk": "^5.6.2", "commander": "^14.0.3", "effect": "^3.21.2", "pyright": "^1.1.409", "typescript-language-server": "^5.1.3", "vscode-css-languageserver-bin": "^1.4.0", "vscode-html-languageserver-bin": "^1.4.0", "vscode-json-languageserver": "^1.3.4", "yargs": "^17.7.2", "zod-to-json-schema": "^3.25.2" }, "bin": { "roy-agent": "dist/bin/roy-agent.js" } }, "sha512-/3I8wxXf/H8XShYCeRrq2tu1v0HtnqE2q8LRWAOzEj4Oqk6LUjPt0CiVDkZawODqEewVYLrNq8MbM9swUsAbjQ=="],
+    "@ai-setting/roy-agent-cli": ["@ai-setting/roy-agent-cli@1.5.110", "", { "dependencies": { "@ai-setting/roy-agent-coder-harness": "^1.5.50", "@ai-setting/roy-agent-core": "^1.5.83", "@ai-setting/roy-agent-ontology-harness": "^1.5.47", "chalk": "^5.6.2", "commander": "^14.0.3", "effect": "^3.21.2", "pyright": "^1.1.409", "typescript-language-server": "^5.1.3", "vscode-css-languageserver-bin": "^1.4.0", "vscode-html-languageserver-bin": "^1.4.0", "vscode-json-languageserver": "^1.3.4", "yargs": "^17.7.2", "zod-to-json-schema": "^3.25.2" }, "bin": { "roy-agent": "dist/bin/roy-agent.js" } }, "sha512-i8bes92HQC5F6vUPahtrkkxL13tifO/0MfRJYy9JcU603Y77zz9qQz3l4zSU+ngz87q14dAKlFbtNcWF+naXnQ=="],
 
     "@ai-setting/roy-agent-coder-harness": ["@ai-setting/roy-agent-coder-harness@1.5.50", "", { "dependencies": { "@ai-setting/markdown-language-server": "0.5.6", "@ai-setting/roy-agent-core": "^1.5.83", "@ai-setting/vscode-markdown-languageservice": "0.5.0-alpha.12", "markdown-it": "^14.1.1", "minimatch": "^10.0.0", "vscode-jsonrpc": "^8.2.0", "vscode-languageserver-protocol": "^3.17.5", "vscode-languageserver-types": "^3.17.5", "vscode-uri": "^3.0.8" } }, "sha512-20wCFp0nd3ZT3RtjK3kpOpCyR4j2Sm1Tz609e2NwgRUCPmy/OaccdJewZuKSXWpAWnXKzrn5IEfyC4CYfHNNXQ=="],
 
-    "@ai-setting/roy-agent-core": ["@ai-setting/roy-agent-core@1.5.99", "", { "dependencies": { "@ai-sdk/anthropic": "^3.0.0", "@ai-sdk/google": "^3.0.0", "@ai-sdk/openai": "^3.0.0", "@ai-sdk/openai-compatible": "^2.0.0", "@effect/platform": "^0.96.1", "@effect/platform-node": "^0.106.0", "@modelcontextprotocol/sdk": "^1.29.0", "ai": "^6.0.0", "better-sqlite3": "^11.10.0", "effect": "^3.21.2", "glob": "^13.0.6", "jsonc-parser": "^3.2.0", "reflect-metadata": "^0.2.2", "ws": "^8.16.0", "xdg-basedir": "^5.1.0", "yaml": "^2.3.0", "zod": "^3.25.0", "zod-to-json-schema": "^3.25.0" } }, "sha512-ZcuQ8HaDcj0lCYiHwcJKxvAkZAgbpnFiOMffCnzmyGJ7Yi8rOFj5yropkm6nnWGEy9yfjrv0KDH8eDDzXwDK9Q=="],
+    "@ai-setting/roy-agent-core": ["@ai-setting/roy-agent-core@1.5.102", "", { "dependencies": { "@ai-sdk/anthropic": "^3.0.0", "@ai-sdk/google": "^3.0.0", "@ai-sdk/openai": "^3.0.0", "@ai-sdk/openai-compatible": "^2.0.0", "@effect/platform": "^0.96.1", "@effect/platform-node": "^0.106.0", "@modelcontextprotocol/sdk": "^1.29.0", "ai": "^6.0.0", "better-sqlite3": "^11.10.0", "effect": "^3.21.2", "glob": "^13.0.6", "jsonc-parser": "^3.2.0", "reflect-metadata": "^0.2.2", "ws": "^8.16.0", "xdg-basedir": "^5.1.0", "yaml": "^2.3.0", "zod": "^3.25.0", "zod-to-json-schema": "^3.25.0" } }, "sha512-gc68K+La/llwOqewfOITKOT93ts/SbRh2gQCEFaMCpDJdBPPBh0pbo9PYDqpcaDcTR3u6JorlmNWfZZVuuFz/Q=="],
 
     "@ai-setting/roy-agent-ontology-harness": ["@ai-setting/roy-agent-ontology-harness@1.5.47", "", { "dependencies": { "@ai-setting/roy-agent-coder-harness": "^1.5.46", "@ai-setting/roy-agent-core": "^1.5.47", "markdown-it": "^14.1.1", "vscode-languageserver-types": "^3.17.5", "vscode-uri": "^3.0.8", "yaml": "^2.3.0" } }, "sha512-imqQRYRe5/gvx5XACI+xe5QHer5ySCT3qAnaE8HTj3JOaejI5LIvGfv+sLLCs6PeObUQ256qjgNR1YG0Ad+2MA=="],
 
