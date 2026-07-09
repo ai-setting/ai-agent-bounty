@@ -1,16 +1,24 @@
 /**
  * agent delete command
  * Delete an agent by ID
+ *
+ * Phase feat/bounty-all-commands-server-url:
+ * - 通过 addServerUrlOption helper 复用 --server-url / -u 选项
  */
 
 import type { CommandModule } from 'yargs';
 import chalk from 'chalk';
 import { API_BASE } from '../../config.js';
 import { loadToken } from '../../storage.js';
+import {
+  addServerUrlOption,
+  resolveServerUrl,
+} from '../../lib/server-url-option.js';
 
 interface DeleteAgentOptions {
   id: string;
   force?: boolean;
+  'server-url'?: string;
 }
 
 export const deleteCommand: CommandModule = {
@@ -18,19 +26,21 @@ export const deleteCommand: CommandModule = {
   describe: 'Delete an agent by ID',
 
   builder: (yargs) =>
-    yargs
-      .option('id', {
-        alias: 'i',
-        type: 'string',
-        demandOption: true,
-        description: 'Agent ID to delete',
-      })
-      .option('force', {
-        alias: 'f',
-        type: 'boolean',
-        default: false,
-        description: 'Skip confirmation prompt',
-      }),
+    addServerUrlOption(
+      yargs
+        .option('id', {
+          alias: 'i',
+          type: 'string',
+          demandOption: true,
+          description: 'Agent ID to delete',
+        })
+        .option('force', {
+          alias: 'f',
+          type: 'boolean',
+          default: false,
+          description: 'Skip confirmation prompt',
+        })
+    ),
 
   handler: async (argv) => {
     const options = argv as unknown as DeleteAgentOptions;
@@ -49,7 +59,7 @@ export const deleteCommand: CommandModule = {
       if (!options.force) {
         console.log(chalk.yellow(`\n⚠ You are about to delete agent ${options.id}`));
         console.log('Type "yes" to confirm: ');
-        
+
         const rl = await import('readline');
         const iface = rl.createInterface({
           input: process.stdin,
@@ -67,7 +77,9 @@ export const deleteCommand: CommandModule = {
         }
       }
 
-      const response = await fetch(`${API_BASE}/api/agents/${options.id}`, {
+      const baseUrl = resolveServerUrl(options['server-url'], API_BASE);
+
+      const response = await fetch(`${baseUrl}/api/agents/${options.id}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${token}`,

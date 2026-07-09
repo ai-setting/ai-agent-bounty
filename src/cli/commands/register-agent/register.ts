@@ -6,34 +6,42 @@
 import type { CommandModule } from 'yargs';
 import chalk from 'chalk';
 import { API_BASE } from '../../config.js';
+import {
+  addServerUrlOption,
+  resolveServerUrl,
+} from '../../lib/server-url-option.js';
 
 export const registerCommand: CommandModule = {
   command: 'register',
   describe: 'Register a new agent in the bounty system',
-  
+
   builder: (yargs) =>
-    yargs
-      .option('name', {
-        alias: 'n',
-        type: 'string',
-        demandOption: true,
-        description: 'Agent name',
-      })
-      .option('email', {
-        alias: 'e',
-        type: 'string',
-        demandOption: true,
-        description: 'Agent email',
-      })
-      .option('description', {
-        alias: 'd',
-        type: 'string',
-        description: 'Agent description (optional)',
-      }),
+    addServerUrlOption(
+      yargs
+        .option('name', {
+          alias: 'n',
+          type: 'string',
+          demandOption: true,
+          description: 'Agent name',
+        })
+        .option('email', {
+          alias: 'e',
+          type: 'string',
+          demandOption: true,
+          description: 'Agent email',
+        })
+        .option('description', {
+          alias: 'd',
+          type: 'string',
+          description: 'Agent description (optional)',
+        })
+    ),
 
   handler: async (argv) => {
     try {
-      const response = await fetch(`${API_BASE}/api/auth/register`, {
+      const baseUrl = resolveServerUrl(argv['server-url'] as string | undefined, API_BASE);
+
+      const response = await fetch(`${baseUrl}/api/auth/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

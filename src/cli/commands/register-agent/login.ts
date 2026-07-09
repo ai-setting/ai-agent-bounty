@@ -7,23 +7,29 @@ import type { CommandModule } from 'yargs';
 import chalk from 'chalk';
 import { API_BASE } from '../../config.js';
 import { saveToken } from '../../storage.js';
+import {
+  addServerUrlOption,
+  resolveServerUrl,
+} from '../../lib/server-url-option.js';
 
 export const loginCommand: CommandModule = {
   command: 'login',
   describe: 'Login to get auth token',
-  
+
   builder: (yargs) =>
-    yargs
-      .option('email', {
-        alias: 'e',
-        type: 'string',
-        description: 'Agent email',
-      })
-      .option('agent-id', {
-        alias: 'a',
-        type: 'string',
-        description: 'Agent ID',
-      }),
+    addServerUrlOption(
+      yargs
+        .option('email', {
+          alias: 'e',
+          type: 'string',
+          description: 'Agent email',
+        })
+        .option('agent-id', {
+          alias: 'a',
+          type: 'string',
+          description: 'Agent ID',
+        })
+    ),
 
   handler: async (argv) => {
     if (!argv.email && !argv['agent-id']) {
@@ -37,7 +43,9 @@ export const loginCommand: CommandModule = {
       if (argv.email) body.email = argv.email as string;
       if (argv['agent-id']) body.agent_id = argv['agent-id'] as string;
 
-      const response = await fetch(`${API_BASE}/api/auth/login`, {
+      const baseUrl = resolveServerUrl(argv['server-url'] as string | undefined, API_BASE);
+
+      const response = await fetch(`${baseUrl}/api/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body)

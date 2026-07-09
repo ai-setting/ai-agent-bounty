@@ -7,6 +7,10 @@ import type { CommandModule } from 'yargs';
 import chalk from 'chalk';
 import { API_BASE } from '../../config.js';
 import { loadToken } from '../../storage.js';
+import {
+  addServerUrlOption,
+  resolveServerUrl,
+} from '../../lib/server-url-option.js';
 
 interface Agent {
   id: string;
@@ -20,6 +24,7 @@ interface Agent {
 
 interface ListAgentsOptions {
   status?: string;
+  'server-url'?: string;
 }
 
 export const listCommand: CommandModule = {
@@ -27,11 +32,13 @@ export const listCommand: CommandModule = {
   describe: 'List all registered agents',
 
   builder: (yargs) =>
-    yargs.option('status', {
-      alias: 's',
-      type: 'string',
-      description: 'Filter by agent status (active, pending, suspended)',
-    }),
+    addServerUrlOption(
+      yargs.option('status', {
+        alias: 's',
+        type: 'string',
+        description: 'Filter by agent status (active, pending, suspended)',
+      })
+    ),
 
   handler: async (argv) => {
     const options = argv as unknown as ListAgentsOptions;
@@ -46,7 +53,9 @@ export const listCommand: CommandModule = {
         process.exit(1);
       }
 
-      const response = await fetch(`${API_BASE}/api/agents`, {
+      const baseUrl = resolveServerUrl(options['server-url'], API_BASE);
+
+      const response = await fetch(`${baseUrl}/api/agents`, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`,
