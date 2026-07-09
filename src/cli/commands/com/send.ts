@@ -2,11 +2,16 @@
  * com send command
  * Send message via Agent IM
  *
- * Phase feat/com-send-server-url:
+ * v0.5.0 changes:
+ * - 默认开启 TLS 跳过（无需 -k / --insecure flag），通过 fetch-helper.ts 实现
+ * - 新增 --tls-verify flag 让用户重新开启 TLS 验证（反向开关）
+ * - --insecure / -k 保留为 deprecated 向后兼容（设置 NODE_TLS_REJECT_UNAUTHORIZED=0）
+ * - fetch 调用改用 bountyFetch() helper，自动应用 TLS skip
+ *
+ * Phase feat/com-send-server-url (v0.4.3):
  * - 新增 --server-url / -e 选项：直接指定 IM API base URL（带 scheme，如 https://bounty.example.com:443）。
  *   这对于自签名证书的远程 server 特别有用，避免被 host/port 拼接出错的 scheme。
  * - --server-url 优先级最高：若提供，host/port 被忽略。
- * - 同步更新 help 输出。
  *
  * Roy-Agent 集成：roy-agent 内置 bounty-im handler 现在通过 buildDefaultBountyIMSystemPrompt
  * 把 --server-url 写进 default systemPrompt，从而 agent 在处理 bounty-IM 消息时知道正确的
@@ -19,6 +24,7 @@ import { existsSync, readFileSync } from 'fs';
 import { homedir } from 'os';
 import { join } from 'path';
 import { bountyConfig } from '../../../lib/config/bounty-config.js';
+import { bountyFetch, setTlsVerifyMode } from '../../lib/fetch-helper.js';
 
 /** Default location for saved auth token (written by `bounty auth login`). */
 const TOKEN_FILE = join(homedir(), '.config', 'bounty', 'token');
@@ -39,7 +45,6 @@ export function readAuthToken(): string | undefined {
   }
 }
 
-
 interface SendOptions {
   from: string;
   to: string;
@@ -47,6 +52,8 @@ interface SendOptions {
   host?: string;
   port?: number;
   serverUrl?: string;
+  insecure?: boolean;
+  tlsVerify?: boolean;
 }
 
 export const sendCommand: CommandModule<object, SendOptions> = {
@@ -83,10 +90,18 @@ export const sendCommand: CommandModule<object, SendOptions> = {
       .option('insecure', {
         alias: 'k',
         type: 'boolean',
+        default: undefined,
+        description:
+          '[Deprecated since v0.5.0] TLS skip is now default. Use --tls-verify to opt back in. ' +
+          'Kept for backward compatibility.',
+        hidden: true,
+      })
+      .option('tls-verify', {
+        type: 'boolean',
         default: false,
         description:
-          'Skip TLS certificate verification (for self-signed k8s ingress). ' +
-          'Sets NODE_TLS_REJECT_UNAUTHORIZED=0 for this process.',
+          'Enable TLS certificate verification (default: skip verification for self-signed certs). ' +
+          'When set, NODE_TLS_REJECT_UNAUTHORIZED is unset and Node enforces verification.',
       })
       .option('host', {
         alias: 'H',
@@ -101,11 +116,15 @@ export const sendCommand: CommandModule<object, SendOptions> = {
         default: bountyConfig.port,
       }),
   handler: async (args) => {
-    const { from, to, body, host, port, serverUrl, insecure } = args;
+    const { from, to, body, host, port, serverUrl, tlsVerify } = args;
 
-    // TLS skip-verify：影响本进程所有 fetch
-    if (insecure) {
-      process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
+    // v0.5.0: TLS mode decision
+    // --tls-verify → 开启验证（反向开关）
+    // 默认 → 跳过 TLS 验证（setTlsVerifyMode('off') 由 fetch-helper.ts 初始化时已设）
+    if (tlsVerify) {
+      setTlsVerifyMode('on');
+    } else {
+      setTlsVerifyMode('off');
     }
 
     // Authorization header：自动从 ~/.config/bounty/token 加载（如果存在）
@@ -136,7 +155,8 @@ export const sendCommand: CommandModule<object, SendOptions> = {
       if (authToken) {
         authHeaders['Authorization'] = `Bearer ${authToken}`;
       }
-      const response = await fetch(url, {
+      // v0.5.0: 用 bountyFetch helper（自动应用 TLS skip 默认值）
+      const response = await bountyFetch(url, {
         method: 'POST',
         headers: authHeaders,
         body: JSON.stringify({
