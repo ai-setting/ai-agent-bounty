@@ -1,18 +1,28 @@
 /**
  * auth status command
  * Show current authentication status
+ *
+ * Phase feat/bounty-all-commands-server-url:
+ * - 通过 addServerUrlOption helper 复用 --server-url / -u 选项
+ *   （status.ts 之前没有 builder，需要新增）
  */
 
 import type { CommandModule } from 'yargs';
 import chalk from 'chalk';
 import { getToken, getTokenData } from '../../storage.js';
 import { API_BASE } from '../../config.js';
+import {
+  addServerUrlOption,
+  resolveServerUrl,
+} from '../../lib/server-url-option.js';
 
 export const statusCommand: CommandModule = {
   command: 'status',
   describe: 'Show current authentication status',
 
-  handler: async () => {
+  builder: (yargs) => addServerUrlOption(yargs),
+
+  handler: async (argv) => {
     try {
       const token = await getToken();
 
@@ -36,7 +46,9 @@ export const statusCommand: CommandModule = {
       // Verify token by calling API
       console.log(chalk.cyan('\n🔍 Checking auth status...'));
 
-      const response = await fetch(`${API_BASE}/api/agents/me`, {
+      const baseUrl = resolveServerUrl(argv['server-url'] as string | undefined, API_BASE);
+
+      const response = await fetch(`${baseUrl}/api/agents/me`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }

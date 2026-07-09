@@ -1,24 +1,32 @@
 /**
  * auth send-code command
  * Resend verification code to email
+ *
+ * Phase feat/bounty-all-commands-server-url:
+ * - 通过 addServerUrlOption helper 复用 --server-url / -u 选项
  */
 
 import type { CommandModule } from 'yargs';
 import chalk from 'chalk';
 import { API_BASE } from '../../config.js';
+import {
+  addServerUrlOption,
+  resolveServerUrl,
+} from '../../lib/server-url-option.js';
 
 export const sendCodeCommand: CommandModule = {
   command: 'send-code',
   describe: 'Resend verification code to email',
-  
+
   builder: (yargs) =>
-    yargs
-      .option('email', {
+    addServerUrlOption(
+      yargs.option('email', {
         alias: 'e',
         type: 'string',
         description: 'Agent email',
         demandOption: true,
-      }),
+      })
+    ),
 
   handler: async (argv) => {
     try {
@@ -26,7 +34,9 @@ export const sendCodeCommand: CommandModule = {
 
       console.log(chalk.cyan('\n📧 Sending verification code...'));
 
-      const response = await fetch(`${API_BASE}/api/auth/send-code`, {
+      const baseUrl = resolveServerUrl(argv['server-url'] as string | undefined, API_BASE);
+
+      const response = await fetch(`${baseUrl}/api/auth/send-code`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body)

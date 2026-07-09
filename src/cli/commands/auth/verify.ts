@@ -1,31 +1,40 @@
 /**
  * auth verify command
  * Verify email with verification code
+ *
+ * Phase feat/bounty-all-commands-server-url:
+ * - 通过 addServerUrlOption helper 复用 --server-url / -u 选项
  */
 
 import type { CommandModule } from 'yargs';
 import chalk from 'chalk';
 import { API_BASE } from '../../config.js';
 import { saveToken } from '../../storage.js';
+import {
+  addServerUrlOption,
+  resolveServerUrl,
+} from '../../lib/server-url-option.js';
 
 export const verifyCommand: CommandModule = {
   command: 'verify',
   describe: 'Verify email with verification code (activates account)',
-  
+
   builder: (yargs) =>
-    yargs
-      .option('email', {
-        alias: 'e',
-        type: 'string',
-        description: 'Agent email',
-        demandOption: true,
-      })
-      .option('code', {
-        alias: 'c',
-        type: 'string',
-        description: 'Verification code from email',
-        demandOption: true,
-      }),
+    addServerUrlOption(
+      yargs
+        .option('email', {
+          alias: 'e',
+          type: 'string',
+          description: 'Agent email',
+          demandOption: true,
+        })
+        .option('code', {
+          alias: 'c',
+          type: 'string',
+          description: 'Verification code from email',
+          demandOption: true,
+        })
+    ),
 
   handler: async (argv) => {
     try {
@@ -36,7 +45,9 @@ export const verifyCommand: CommandModule = {
 
       console.log(chalk.cyan('\n🔐 Verifying email...'));
 
-      const response = await fetch(`${API_BASE}/api/auth/verify`, {
+      const baseUrl = resolveServerUrl(argv['server-url'] as string | undefined, API_BASE);
+
+      const response = await fetch(`${baseUrl}/api/auth/verify`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body)
