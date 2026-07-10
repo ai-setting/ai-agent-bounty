@@ -1,7 +1,7 @@
 /**
  * bounty complete command
  *
- * Phase feat/bounty-task-optimize: 重构为 HTTP API 调用
+ * v0.7: address-based publisher identity; legacy --publisher-id remains deprecated.
  */
 
 import type { CommandModule } from 'yargs';
@@ -10,11 +10,14 @@ import { bountyConfig } from '../../../lib/config/bounty-config.js';
 import { addServerUrlOption, resolveServerUrl } from '../../lib/server-url-option.js';
 import { bountyHttp } from '../../lib/bounty-http.js';
 import { resolveCurrentAgent } from '../../lib/current-agent.js';
+import { resolveAgentIdOption } from '../../lib/address-parser.js';
 import { handleBountyError } from './publish.js';
 import { isValidTaskId } from './grab.js';
 
 interface CompleteOptions {
   'task-id': string;
+  'publisher-address'?: string;
+  /** @deprecated Use --publisher-address. */
   'publisher-id'?: string;
   'server-url'?: string;
 }
@@ -40,27 +43,33 @@ export const completeCommand: CommandModule<object, CompleteOptions> = {
           demandOption: true,
           description: 'Task ID',
         })
-        .option('publisher-id', {
+        .option('publisher-address', {
           alias: 'p',
           type: 'string',
-          description:
-            'Publisher agent ID. ' +
-            'Defaults to BOUNTY_IM_ADDRESS env (e.g., "agent-uuid@host" → "agent-uuid").',
+          description: 'Publisher agent address (<uuid>@<host>). Pure <uuid> is also accepted. Defaults to BOUNTY_IM_ADDRESS env.',
+        })
+        .option('publisher-id', {
+          type: 'string',
+          description: '[deprecated] Publisher agent ID. Use --publisher-address instead.',
         })
     ),
 
   handler: async (argv) => {
     const baseUrl = resolveServerUrl(argv['server-url'], bountyConfig.apiUrl);
 
-    let publisherId = argv['publisher-id'] ?? resolveCurrentAgent();
-    if (!publisherId) {
-      console.error(
-        chalk.red(
-          '\n✗ Cannot infer publisher ID. Provide --publisher-id or set BOUNTY_IM_ADDRESS.\n'
-        )
-      );
+    const publisher = resolveAgentIdOption({
+      address: argv['publisher-address'],
+      deprecatedId: argv['publisher-id'],
+      fallback: resolveCurrentAgent(),
+      addressFlag: '--publisher-address',
+      deprecatedFlag: '--publisher-id',
+      missingMessage: '✗ Cannot infer publisher address. Provide --publisher-address or set BOUNTY_IM_ADDRESS.',
+    });
+    if (!publisher.ok) {
+      console.error(chalk.red(`\n${publisher.error}\n`));
       process.exit(2);
     }
+    const publisherId = publisher.value;
 
     if (!argv['task-id']) {
       console.error(chalk.red('\n✗ --task-id is required.\n'));

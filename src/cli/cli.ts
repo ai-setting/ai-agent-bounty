@@ -5,12 +5,11 @@
 
 import yargs from 'yargs';
 import { hideBin } from 'yargs/helpers';
-import { readFileSync } from 'fs';
-import { join } from 'path';
 
 // ========== 统一配置 ==========
 import { bountyConfig } from '../lib/config/bounty-config.js';
 import { setQuietMode } from '@ai-setting/roy-agent-core';
+import { getPackageVersion } from './lib/package-version.js';
 
 // ========== 初始化 Bounty IM EventSource Handler ==========
 // 自动注册 bounty-im handler 到 EventSourceInitHooks
@@ -73,15 +72,13 @@ const BOUNTY_IM_AUTO_ES_NAME = 'bounty-im-auto';
 
 /**
  * Get package.json version
+ *
+ * Delegates to getPackageVersion() which resolves our package's own
+ * version regardless of current working directory. This is important
+ * because the CLI binary is run from arbitrary cwd by users.
  */
 function getVersion(): string {
-  try {
-    const pkgPath = join(process.cwd(), 'package.json');
-    const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8'));
-    return pkg.version;
-  } catch {
-    return '0.1.0';
-  }
+  return getPackageVersion();
 }
 
 /**

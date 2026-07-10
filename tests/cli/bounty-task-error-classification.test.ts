@@ -182,7 +182,7 @@ describe('bounty bounty-task - error classification (exit code mapping)', () => 
     expect(exitCode).toBe(4);
   });
 
-  test('publish: missing --publisher-id and no BOUNTY_IM_ADDRESS → exit 2', async () => {
+  test('publish: missing --publisher-address and no BOUNTY_IM_ADDRESS → exit 2', async () => {
     const { publishCommand } = await import('../../src/cli/commands/bounty-task/publish.js');
 
     let thrown: any = null;
@@ -192,7 +192,7 @@ describe('bounty bounty-task - error classification (exit code mapping)', () => 
         description: 'd',
         type: 'coding',
         reward: 100,
-        // 没有 --publisher-id, 也没有 BOUNTY_IM_ADDRESS
+        // 没有 --publisher-address, 也没有 BOUNTY_IM_ADDRESS
       });
     } catch (e) {
       thrown = e;
@@ -200,7 +200,7 @@ describe('bounty bounty-task - error classification (exit code mapping)', () => 
 
     expect(thrown?.message).toMatch(/EXIT_2/);
     expect(exitCode).toBe(2);
-    expect(consoleErrorOutput.some(s => s.includes('Cannot infer publisher ID'))).toBe(true);
+    expect(consoleErrorOutput.some(s => s.includes('Cannot infer publisher address'))).toBe(true);
   });
 
   test('publish: reward <= 0 → exit 2 (client-side validation)', async () => {

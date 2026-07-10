@@ -15,7 +15,7 @@
  * 2. BOUNTY_IM_ADDRESS 存在时返回 agent-id 部分（去掉 @host 后缀）
  * 3. 只有 token 文件存在时返回 undefined（JWT decode 是后续 phase, 本阶段先聚焦 env）
  * 4. BOUNTY_IM_ADDRESS 优先于 token 文件
- * 5. BOUNTY_IM_ADDRESS 格式错误（没有 @）时返回 undefined（不抛错）
+ * 5. BOUNTY_IM_ADDRESS 可为纯 id（无 @）以兼容旧用法
  * 6. BOUNTY_IM_ADDRESS 为空字符串时回退到 token 文件
  */
 
@@ -76,12 +76,12 @@ describe('resolveCurrentAgent', () => {
     expect(resolveCurrentAgent({ tokenPath })).toBe('agent-abc');
   });
 
-  test('returns undefined for malformed BOUNTY_IM_ADDRESS (no @)', async () => {
+  test('accepts pure id BOUNTY_IM_ADDRESS for backward compatibility', async () => {
     process.env.BOUNTY_IM_ADDRESS = 'no-at-sign-here';
 
     const { resolveCurrentAgent } = await import('../../src/cli/lib/current-agent.js');
     const result = resolveCurrentAgent({ tokenPath });
-    expect(result).toBeUndefined();
+    expect(result).toBe('no-at-sign-here');
   });
 
   test('BOUNTY_IM_ADDRESS takes priority over token file existence', async () => {

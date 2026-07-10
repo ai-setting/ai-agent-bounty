@@ -1,14 +1,17 @@
 /**
  * agent list command
  * List all registered agents
+ *
+ * v0.7: soft auth. A saved token is attached when present, but a missing
+ * local token no longer prevents the request from reaching the server.
  */
 
 import type { CommandModule } from 'yargs';
 import chalk from 'chalk';
 import { API_BASE } from '../../config.js';
-import { loadToken } from '../../storage.js';
 // v0.5.0: TLS skip default — use bountyFetch wrapper
 import { bountyFetch } from '../../lib/fetch-helper.js';
+import { attachSoftAuth } from '../../lib/soft-auth.js';
 
 import {
   addServerUrlOption,
@@ -30,7 +33,7 @@ interface ListAgentsOptions {
   'server-url'?: string;
 }
 
-export const listCommand: CommandModule = {
+export const listCommand: CommandModule<object, ListAgentsOptions> = {
   command: 'list',
   describe: 'List all registered agents',
 
@@ -47,26 +50,16 @@ export const listCommand: CommandModule = {
     const options = argv as unknown as ListAgentsOptions;
 
     try {
-      // Try to load token
-      const token = await loadToken();
-
-      if (!token) {
-        console.log(chalk.yellow('\n⚠ No token found. Please login first.\n'));
-        console.log(chalk.cyan('  bounty register-agent login --email <your-email>\n'));
-        process.exit(1);
-      }
-
       const baseUrl = resolveServerUrl(options['server-url'], API_BASE);
+      const auth = attachSoftAuth({});
 
       const response = await bountyFetch(`${baseUrl}/api/agents`, {
         method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
+        headers: auth.headers,
       });
 
       if (response.status === 401) {
-        console.log(chalk.yellow('\n⚠ Token expired. Please login again.\n'));
+        console.log(chalk.yellow('\n⚠ Unauthorized. Please login if this endpoint requires a token.\n'));
         process.exit(1);
       }
 

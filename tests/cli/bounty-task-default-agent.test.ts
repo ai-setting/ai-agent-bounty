@@ -34,39 +34,60 @@ describe('bounty bounty-task - default agent inference', () => {
     delete process.env.BOUNTY_IM_ADDRESS;
   });
 
-  test('publish.ts: --publisher-id fallback to resolveCurrentAgent()', () => {
+  test('publish.ts: --publisher-address fallback to resolveCurrentAgent()', () => {
     const src = readFileSync(SRC_PUBLISH, 'utf-8');
-    expect(src).toContain("argv['publisher-id'] ?? resolveCurrentAgent()");
+    expect(src).toContain('resolveAgentIdOption');
+    expect(src).toContain("address: argv['publisher-address']");
+    expect(src).toContain("deprecatedId: argv['publisher-id']");
+    expect(src).toContain('fallback: resolveCurrentAgent()');
     // Must have friendly error when neither is available
-    expect(src).toContain('Cannot infer publisher ID');
+    expect(src).toContain('Cannot infer publisher address');
   });
 
-  test('grab.ts: --agent-id fallback to resolveCurrentAgent()', () => {
+  test('grab.ts: --agent-address fallback to resolveCurrentAgent()', () => {
     const src = readFileSync(SRC_GRAB, 'utf-8');
-    expect(src).toContain("argv['agent-id'] ?? resolveCurrentAgent()");
-    expect(src).toContain('Cannot infer agent ID');
+    expect(src).toContain('resolveAgentIdOption');
+    expect(src).toContain("address: argv['agent-address']");
+    expect(src).toContain("deprecatedId: argv['agent-id']");
+    expect(src).toContain('fallback: resolveCurrentAgent()');
+    expect(src).toContain('Cannot infer agent address');
   });
 
-  test('submit.ts: --agent-id fallback to resolveCurrentAgent()', () => {
+  test('submit.ts: --agent-address fallback to resolveCurrentAgent()', () => {
     const src = readFileSync(SRC_SUBMIT, 'utf-8');
-    expect(src).toContain("argv['agent-id'] ?? resolveCurrentAgent()");
-    expect(src).toContain('Cannot infer agent ID');
+    expect(src).toContain('resolveAgentIdOption');
+    expect(src).toContain("address: argv['agent-address']");
+    expect(src).toContain("deprecatedId: argv['agent-id']");
+    expect(src).toContain('fallback: resolveCurrentAgent()');
+    expect(src).toContain('Cannot infer agent address');
   });
 
-  test('complete.ts: --publisher-id fallback to resolveCurrentAgent()', () => {
+  test('complete.ts: --publisher-address fallback to resolveCurrentAgent()', () => {
     const src = readFileSync(SRC_COMPLETE, 'utf-8');
-    expect(src).toContain("argv['publisher-id'] ?? resolveCurrentAgent()");
-    expect(src).toContain('Cannot infer publisher ID');
+    expect(src).toContain('resolveAgentIdOption');
+    expect(src).toContain("address: argv['publisher-address']");
+    expect(src).toContain("deprecatedId: argv['publisher-id']");
+    expect(src).toContain('fallback: resolveCurrentAgent()');
+    expect(src).toContain('Cannot infer publisher address');
   });
 
-  test('cancel.ts: --publisher-id fallback to resolveCurrentAgent()', () => {
+  test('cancel.ts: --publisher-address fallback to resolveCurrentAgent()', () => {
     const src = readFileSync(SRC_CANCEL, 'utf-8');
-    expect(src).toContain("argv['publisher-id'] ?? resolveCurrentAgent()");
-    expect(src).toContain('Cannot infer publisher ID');
+    expect(src).toContain('resolveAgentIdOption');
+    expect(src).toContain("address: argv['publisher-address']");
+    expect(src).toContain("deprecatedId: argv['publisher-id']");
+    expect(src).toContain('fallback: resolveCurrentAgent()');
+    expect(src).toContain('Cannot infer publisher address');
   });
 
   test('resolveCurrentAgent correctly extracts agent-id from BOUNTY_IM_ADDRESS', async () => {
     process.env.BOUNTY_IM_ADDRESS = 'agent-xyz-123@bounty.example.com';
+    const { resolveCurrentAgent } = await import('../../src/cli/lib/current-agent.js');
+    expect(resolveCurrentAgent()).toBe('agent-xyz-123');
+  });
+
+  test('resolveCurrentAgent accepts pure id BOUNTY_IM_ADDRESS for backward compatibility', async () => {
+    process.env.BOUNTY_IM_ADDRESS = 'agent-xyz-123';
     const { resolveCurrentAgent } = await import('../../src/cli/lib/current-agent.js');
     expect(resolveCurrentAgent()).toBe('agent-xyz-123');
   });

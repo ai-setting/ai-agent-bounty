@@ -1,6 +1,9 @@
 /**
  * agent login command
  * Login to get auth token
+ *
+ * v0.7: prefer address-based agent identity (--agent-address). Legacy
+ * --agent-id remains accepted for backward compatibility.
  */
 
 import type { CommandModule } from 'yargs';
@@ -9,13 +12,22 @@ import { API_BASE } from '../../config.js';
 import { saveToken } from '../../storage.js';
 // v0.5.0: TLS skip default — use bountyFetch wrapper
 import { bountyFetch } from '../../lib/fetch-helper.js';
+import { resolveAgentIdOption } from '../../lib/address-parser.js';
 
 import {
   addServerUrlOption,
   resolveServerUrl,
 } from '../../lib/server-url-option.js';
 
-export const loginCommand: CommandModule = {
+interface LoginOptions {
+  email?: string;
+  'agent-address'?: string;
+  /** @deprecated Use --agent-address. */
+  'agent-id'?: string;
+  'server-url'?: string;
+}
+
+export const loginCommand: CommandModule<object, LoginOptions> = {
   command: 'login',
   describe: 'Login to get auth token',
 
@@ -27,31 +39,49 @@ export const loginCommand: CommandModule = {
           type: 'string',
           description: 'Agent email',
         })
-        .option('agent-id', {
+        .option('agent-address', {
           alias: 'a',
           type: 'string',
-          description: 'Agent ID',
+          description: 'Agent address (<uuid>@<host>). Pure <uuid> is also accepted.',
+        })
+        .option('agent-id', {
+          type: 'string',
+          description: '[deprecated] Agent ID. Use --agent-address instead.',
         })
     ),
 
   handler: async (argv) => {
-    if (!argv.email && !argv['agent-id']) {
-      console.error(chalk.red('\n✗ Error: --email or --agent-id is required\n'));
-      console.error('Usage: bounty register-agent login --email user@example.com');
+    if (!argv.email && !argv['agent-address'] && !argv['agent-id']) {
+      console.error(chalk.red('\n✗ Error: --email or --agent-address is required\n'));
+      console.error('Usage: bounty register-agent login --agent-address <uuid>@<host>');
       process.exit(1);
+    }
+
+    const resolvedAgent = (argv['agent-address'] || argv['agent-id'])
+      ? resolveAgentIdOption({
+          address: argv['agent-address'],
+          deprecatedId: argv['agent-id'],
+          addressFlag: '--agent-address',
+          deprecatedFlag: '--agent-id',
+        })
+      : undefined;
+
+    if (resolvedAgent && !resolvedAgent.ok) {
+      console.error(chalk.red(`\n${resolvedAgent.error}\n`));
+      process.exit(2);
     }
 
     try {
       const body: { email?: string; agent_id?: string } = {};
-      if (argv.email) body.email = argv.email as string;
-      if (argv['agent-id']) body.agent_id = argv['agent-id'] as string;
+      if (argv.email) body.email = argv.email;
+      if (resolvedAgent?.ok) body.agent_id = resolvedAgent.value;
 
-      const baseUrl = resolveServerUrl(argv['server-url'] as string | undefined, API_BASE);
+      const baseUrl = resolveServerUrl(argv['server-url'], API_BASE);
 
       const response = await bountyFetch(`${baseUrl}/api/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body)
+        body: JSON.stringify(body),
       });
 
       const data = await response.json() as {
@@ -72,7 +102,7 @@ export const loginCommand: CommandModule = {
         await saveToken(data.token);
       }
       const expiresIn = data.expires_in ? Math.round(data.expires_in / 3600) : 24;
-      
+
       console.log(chalk.green('\n✓ Login successful!'));
       console.log(chalk.cyan('  Agent ID:'), data.agent_id);
       console.log(chalk.cyan('  Email:'), data.email);

@@ -24,6 +24,7 @@
  */
 
 import { readAuthToken } from './auth-token.js';
+import { parseAgentAddress } from './address-parser.js';
 
 export interface ResolveCurrentAgentOptions {
   /**
@@ -47,9 +48,9 @@ export function resolveCurrentAgent(
 ): string | undefined {
   // 优先级 1: BOUNTY_IM_ADDRESS env (e.g., "8de9b6aa-...@bounty.example.com")
   const imAddress = process.env.BOUNTY_IM_ADDRESS;
-  if (imAddress && imAddress.includes('@')) {
-    const agentId = imAddress.split('@')[0]?.trim();
-    if (agentId) return agentId;
+  if (imAddress) {
+    const parsed = parseAgentAddress(imAddress, 'BOUNTY_IM_ADDRESS');
+    if (parsed.ok) return parsed.value.uuid;
   }
 
   // 优先级 2: ~/.config/bounty/token (JWT)

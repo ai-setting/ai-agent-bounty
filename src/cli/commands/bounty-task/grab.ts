@@ -1,7 +1,7 @@
 /**
  * bounty grab command
  *
- * Phase feat/bounty-task-optimize: 重构为 HTTP API 调用
+ * v0.7: address-based agent identity; legacy --agent-id remains deprecated.
  */
 
 import type { CommandModule } from 'yargs';
@@ -10,10 +10,13 @@ import { bountyConfig } from '../../../lib/config/bounty-config.js';
 import { addServerUrlOption, resolveServerUrl } from '../../lib/server-url-option.js';
 import { bountyHttp } from '../../lib/bounty-http.js';
 import { resolveCurrentAgent } from '../../lib/current-agent.js';
+import { resolveAgentIdOption } from '../../lib/address-parser.js';
 import { handleBountyError } from './publish.js';
 
 interface GrabOptions {
   'task-id': string;
+  'agent-address'?: string;
+  /** @deprecated Use --agent-address. */
   'agent-id'?: string;
   'server-url'?: string;
 }
@@ -47,25 +50,33 @@ export const grabCommand: CommandModule<object, GrabOptions> = {
           demandOption: true,
           description: 'Task ID',
         })
-        .option('agent-id', {
+        .option('agent-address', {
           alias: 'a',
           type: 'string',
-          description:
-            'Agent ID (grabber). ' +
-            'Defaults to BOUNTY_IM_ADDRESS env (e.g., "agent-uuid@host" → "agent-uuid").',
+          description: 'Agent address (<uuid>@<host>). Pure <uuid> is also accepted. Defaults to BOUNTY_IM_ADDRESS env.',
+        })
+        .option('agent-id', {
+          type: 'string',
+          description: '[deprecated] Agent ID (grabber). Use --agent-address instead.',
         })
     ),
 
   handler: async (argv) => {
     const baseUrl = resolveServerUrl(argv['server-url'], bountyConfig.apiUrl);
 
-    let agentId = argv['agent-id'] ?? resolveCurrentAgent();
-    if (!agentId) {
-      console.error(
-        chalk.red('\n✗ Cannot infer agent ID. Provide --agent-id or set BOUNTY_IM_ADDRESS.\n')
-      );
+    const agent = resolveAgentIdOption({
+      address: argv['agent-address'],
+      deprecatedId: argv['agent-id'],
+      fallback: resolveCurrentAgent(),
+      addressFlag: '--agent-address',
+      deprecatedFlag: '--agent-id',
+      missingMessage: '✗ Cannot infer agent address. Provide --agent-address or set BOUNTY_IM_ADDRESS.',
+    });
+    if (!agent.ok) {
+      console.error(chalk.red(`\n${agent.error}\n`));
       process.exit(2);
     }
+    const agentId = agent.value;
 
     if (!argv['task-id']) {
       console.error(chalk.red('\n✗ --task-id is required.\n'));
