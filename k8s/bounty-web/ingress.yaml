@@ -1,19 +1,31 @@
-# Ingress — routes:
-#   /api/*, /ws, /health  →  bounty-server (backend)
-#   everything else       →  bounty-web  (frontend SPA)
+# Ingress for bounty-web — exposes the frontend on a dedicated subdomain
+# and proxies /api/* /ws /health to the bounty-server backend.
+# (The / on `bounty.tongagents.example.com` is handled by the existing
+# `bounty-ingress`; this manifest owns only the alt host.)
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: bounty-ingress
+  name: bounty-web-alt-ingress
   namespace: tongagent
   annotations:
+    nginx.ingress.kubernetes.io/proxy-body-size: "8m"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "60"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "60"
     nginx.ingress.kubernetes.io/websocket-services: bounty-server-lb
-    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
-    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: bounty-web-alt-ingress
+  namespace: tongagent
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-body-size: "8m"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "60"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "60"
+    nginx.ingress.kubernetes.io/websocket-services: bounty-server-lb
 spec:
   ingressClassName: nginx
   rules:
-    - host: bounty.tongagents.example.com
+    - host: bounty-web.tongagents.example.com
       http:
         paths:
           - path: /api
