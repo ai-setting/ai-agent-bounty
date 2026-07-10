@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.2] - 2026-07-11
+
+### Fixed (hotfix)
+
+- **Standalone-binary `bounty --version` now reports the correct version**.
+  The version resolver now accepts both `@ai-setting/agent-bounty` AND
+  `@ai-setting/agent-bounty-standalone` as valid package names.
+  Previously the standalone binary's package.json (name = `...-standalone`)
+  was filtered out by the name check, falling back to `0.0.0-unknown`.
+  Test coverage: `tests/cli/package-version.test.ts` (+1 test for standalone name).
+
 ## [0.7.1] - 2026-07-11
 
 ### Fixed (hotfix)

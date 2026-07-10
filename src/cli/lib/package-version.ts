@@ -1,14 +1,18 @@
 /**
  * Package version resolver
  *
- * Resolves @ai-setting/agent-bounty's own package version regardless of
- * the current working directory. This is important because the CLI binary
- * is often run from arbitrary cwd (e.g., `bounty --version` from a user's
- * home directory), and the naive `process.cwd()/package.json` lookup would
- * pick up an unrelated package.json.
+ * Resolves @ai-setting/agent-bounty[-standalone]'s own package version
+ * regardless of the current working directory. This is important because
+ * the CLI binary is often run from arbitrary cwd (e.g., `bounty --version`
+ * from a user's home directory), and the naive `process.cwd()/package.json`
+ * lookup would pick up an unrelated package.json.
+ *
+ * Accepts either of these package names:
+ *   - @ai-setting/agent-bounty        (main package, source/dev mode)
+ *   - @ai-setting/agent-bounty-standalone (standalone binary on npmjs)
  *
  * Resolution strategy (in order):
- *   1. `process.cwd()/package.json` whose `name === "@ai-setting/agent-bounty"` (dev mode)
+ *   1. `process.cwd()/package.json` whose name matches ours (dev mode fast path)
  *   2. Walk up from `process.execPath` (standalone binary like
  *      `bounty-standalone/bin/bounty-linux-x64` → `../package.json`)
  *   3. Walk up from `import.meta.url` (bundled dist like
@@ -20,7 +24,10 @@ import { readFileSync, existsSync } from 'fs';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
 
-const PACKAGE_NAME = '@ai-setting/agent-bounty';
+const OUR_PACKAGE_NAMES = new Set([
+  '@ai-setting/agent-bounty',
+  '@ai-setting/agent-bounty-standalone',
+]);
 const FALLBACK_VERSION = '0.0.0-unknown';
 
 interface PackageJson {
@@ -39,11 +46,16 @@ function tryReadPackage(pkgPath: string): PackageJson | null {
 }
 
 /**
- * Type guard: returns true if pkg is our package and has a string version.
+ * Type guard: returns true if pkg is one of our packages and has a string version.
  * Narrows pkg.version to string when true.
  */
 function isOurPackage(pkg: PackageJson | null): pkg is PackageJson & { version: string } {
-  return pkg !== null && pkg.name === PACKAGE_NAME && typeof pkg.version === 'string';
+  return (
+    pkg !== null &&
+    typeof pkg.name === 'string' &&
+    OUR_PACKAGE_NAMES.has(pkg.name) &&
+    typeof pkg.version === 'string'
+  );
 }
 
 /**

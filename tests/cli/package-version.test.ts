@@ -42,6 +42,26 @@ describe('getPackageVersion()', () => {
     expect(getPackageVersion()).toBe('0.7.0');
   });
 
+  test('returns cwd package version when cwd has our standalone package.json', async () => {
+    // Simulating the standalone binary scenario where the installed
+    // package.json has name === '@ai-setting/agent-bounty-standalone'.
+    const fakeProject = join(tmpDir, 'standalone-install');
+    mkdirSync(fakeProject, { recursive: true });
+    writeFileSync(
+      join(fakeProject, 'package.json'),
+      JSON.stringify({
+        name: '@ai-setting/agent-bounty-standalone',
+        version: '0.7.1',
+      }),
+    );
+    process.chdir(fakeProject);
+
+    const { getPackageVersion } = await import(
+      '../../src/cli/lib/package-version.js'
+    );
+    expect(getPackageVersion()).toBe('0.7.1');
+  });
+
   test('falls back to import.meta.url resolution when cwd has unrelated package.json', async () => {
     // Create an unrelated cwd package.json (simulating running `bounty`
     // from a different project)
