@@ -1,98 +1,185 @@
 /**
  * bounty publish command
- * Publish a new bounty task
+ *
+ * Phase feat/bounty-task-optimize:
+ * - 重构从"本地 DB 直连"为"HTTP API 调用"（与 com send 对齐）
+ * - 新增 --server-url / -u 选项，支持远程 bounty server
+ * - 自动从 ~/.config/bounty/token 读 JWT（readAuthToken helper）
+ * - --publisher-id 缺省时从 BOUNTY_IM_ADDRESS 推断（resolveCurrentAgent helper）
+ * - 用 bountyHttp() 统一错误分类（network/auth/business/server）
+ * - 移除 createContext() 调用，不再直连 SQLite
+ *
+ * 错误体验：失败时根据 BountyHttpError.type 给出友好提示 + 不同 exit code
+ *   - network (连接拒绝/超时) → 提示启动 server
+ *   - auth (401/403) → 提示登录
+ *   - business (4xx) → 显示 server 错误信息
+ *   - server (5xx) → 提示 server 端问题
  */
 
 import type { CommandModule } from 'yargs';
 import chalk from 'chalk';
-import { createContext } from '../../services/context.js';
+import { bountyConfig } from '../../../lib/config/bounty-config.js';
+import { addServerUrlOption, resolveServerUrl } from '../../lib/server-url-option.js';
+import { bountyHttp, BountyHttpError } from '../../lib/bounty-http.js';
+import { resolveCurrentAgent } from '../../lib/current-agent.js';
 
-export const publishCommand: CommandModule = {
+interface PublishOptions {
+  title: string;
+  description: string;
+  type: string;
+  reward: number;
+  'publisher-id'?: string;
+  tags?: string;
+  deadline?: number;
+  'server-url'?: string;
+}
+
+interface BountyTask {
+  id: string;
+  title: string;
+  description: string;
+  type: string;
+  reward: number;
+  status: string;
+  publisherId: string;
+  tags?: string[];
+}
+
+export const publishCommand: CommandModule<object, PublishOptions> = {
   command: 'publish',
-  describe: 'Publish a new bounty task',
-  
+  describe: 'Publish a new bounty task (via HTTP API)',
+
   builder: (yargs) =>
-    yargs
-      .option('title', {
-        alias: 't',
-        type: 'string',
-        demandOption: true,
-        description: 'Task title',
-      })
-      .option('description', {
-        alias: 'd',
-        type: 'string',
-        demandOption: true,
-        description: 'Task description',
-      })
-      .option('type', {
-        alias: 'y',
-        type: 'string',
-        demandOption: true,
-        description: 'Task type (e.g., coding, writing, research)',
-      })
-      .option('reward', {
-        alias: 'r',
-        type: 'number',
-        demandOption: true,
-        description: 'Reward credits',
-      })
-      .option('publisher-id', {
-        alias: 'p',
-        type: 'string',
-        demandOption: true,
-        description: 'Publisher agent ID',
-      })
-      .option('tags', {
-        alias: 'g',
-        type: 'string',
-        description: 'Comma-separated tags',
-      })
-      .option('deadline', {
-        alias: 'l',
-        type: 'number',
-        description: 'Deadline timestamp',
-      }),
+    addServerUrlOption(
+      yargs
+        .option('title', {
+          alias: 't',
+          type: 'string',
+          demandOption: true,
+          description: 'Task title',
+        })
+        .option('description', {
+          alias: 'd',
+          type: 'string',
+          demandOption: true,
+          description: 'Task description',
+        })
+        .option('type', {
+          alias: 'y',
+          type: 'string',
+          demandOption: true,
+          description: 'Task type (e.g., coding, writing, research)',
+        })
+        .option('reward', {
+          alias: 'r',
+          type: 'number',
+          demandOption: true,
+          description: 'Reward credits (must be > 0)',
+        })
+        .option('publisher-id', {
+          alias: 'p',
+          type: 'string',
+          description:
+            'Publisher agent ID. ' +
+            'Defaults to BOUNTY_IM_ADDRESS env (e.g., "agent-uuid@host" → "agent-uuid").',
+        })
+        .option('tags', {
+          alias: 'g',
+          type: 'string',
+          description: 'Comma-separated tags',
+        })
+        .option('deadline', {
+          alias: 'l',
+          type: 'number',
+          description: 'Deadline timestamp (ms since epoch)',
+        })
+    ),
 
   handler: async (argv) => {
-    const ctx = createContext();
+    // 1. Resolve base URL: --server-url > BOUNTY_API_URL env > default
+    const baseUrl = resolveServerUrl(argv['server-url'], bountyConfig.apiUrl);
 
+    // 2. Resolve publisher ID: --publisher-id > BOUNTY_IM_ADDRESS > error
+    let publisherId = argv['publisher-id'] ?? resolveCurrentAgent();
+    if (!publisherId) {
+      console.error(
+        chalk.red(
+          '\n✗ Cannot infer publisher ID. Provide --publisher-id or set BOUNTY_IM_ADDRESS.\n'
+        )
+      );
+      process.exit(2);
+    }
+
+    // 3. Validate inputs (basic client-side checks before HTTP call)
+    if (!argv.reward || argv.reward <= 0) {
+      console.error(chalk.red('\n✗ --reward must be a positive number.\n'));
+      process.exit(2);
+    }
+
+    // 4. Parse tags
+    const tags = argv.tags
+      ? argv.tags.split(',').map((t) => t.trim()).filter(Boolean)
+      : undefined;
+
+    // 5. Call HTTP API
     try {
-      const publisher = ctx.agentService.getById(argv['publisher-id'] as string);
-      if (!publisher) {
-        console.error(chalk.red('\n✗ Error: Publisher agent not found\n'));
-        ctx.db.close();
-        process.exit(1);
-      }
-
-      const tags = argv.tags 
-        ? (argv.tags as string).split(',').map(t => t.trim()) 
-        : undefined;
-
-      const task = ctx.bountyService.publish({
-        title: argv.title as string,
-        description: argv.description as string,
-        type: argv.type as string,
-        reward: argv.reward as number,
-        publisherId: publisher.id,
-        publisherEmail: publisher.email,
-        tags,
-        deadline: argv.deadline as number | undefined,
+      const task = await bountyHttp<BountyTask>({
+        baseUrl,
+        path: '/api/tasks',
+        method: 'POST',
+        body: {
+          title: argv.title.trim(),
+          description: argv.description.trim(),
+          type: argv.type.trim(),
+          reward: argv.reward,
+          tags,
+          deadline: argv.deadline,
+          // Note: server reads publisherId from auth agentId, but we also
+          // pass it in body for token-less / dev mode where server trusts body
+          publisherId,
+        },
       });
 
+      // 6. Pretty output
       console.log(chalk.green('\n✓ Task published successfully\n'));
       console.log(chalk.cyan('  ID:'), task.id);
       console.log(chalk.cyan('  Title:'), task.title);
       console.log(chalk.cyan('  Type:'), task.type);
       console.log(chalk.cyan('  Reward:'), task.reward, 'credits');
       console.log(chalk.cyan('  Status:'), task.status);
+      if (task.tags && task.tags.length > 0) {
+        console.log(chalk.cyan('  Tags:'), task.tags.join(', '));
+      }
       console.log();
-
-      ctx.db.close();
     } catch (error: any) {
-      console.error(chalk.red('\n✗ Error:'), error.message);
-      ctx.db.close();
-      process.exit(1);
+      handleBountyError(error, 'publish task', baseUrl);
     }
   },
 };
+
+/**
+ * Centralized error handler for bounty-task HTTP errors.
+ * Provides user-friendly messages based on error type.
+ */
+export function handleBountyError(error: any, action: string, baseUrl: string): never {
+  if (error instanceof BountyHttpError) {
+    console.error(chalk.red(`\n✗ Failed to ${action}:`));
+    console.error(chalk.red(`  ${error.message}\n`));
+    // Exit code mapping:
+    // - 2: usage error (business)
+    // - 3: auth required
+    // - 4: network/server issue
+    const exitCode =
+      error.type === 'auth' ? 3 :
+      error.type === 'network' || error.type === 'server' ? 4 :
+      2;
+    process.exit(exitCode);
+  }
+
+  console.error(
+    chalk.red(`\n✗ Unexpected error while trying to ${action}:`),
+    error instanceof Error ? error.message : String(error)
+  );
+  console.error(chalk.gray(`  Server: ${baseUrl}\n`));
+  process.exit(1);
+}
