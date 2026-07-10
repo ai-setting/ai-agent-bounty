@@ -32,7 +32,7 @@ spec:
         - name: harbor-cred
       containers:
         - name: bounty-server
-          image: harbor.mybigai.ac.cn/tongos/bounty-server:latest
+          image: harbor.mybigai.ac.cn/tongos/bounty-server:v0.7.2
           imagePullPolicy: Always
           ports:
             - containerPort: 4005
