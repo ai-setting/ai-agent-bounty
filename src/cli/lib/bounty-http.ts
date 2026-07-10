@@ -11,6 +11,7 @@
  *   - 自动从 ~/.config/bounty/token 读 JWT 加 Authorization header
  *   - 抛 `BountyHttpError`（带 status / type / friendlyMessage），让上层
  *     统一处理网络 / 鉴权 / 业务 / 服务端错误
+ *   - 自动重试 transient 失败（网络错误、502/503/504），指数退避 + jitter
  *
  * 错误分类：
  *   - `type=network` — fetch() 本身 reject（连接拒绝、超时等）
@@ -95,44 +96,94 @@ export interface BountyHttpOptions {
    * Default: 30000 (30s).
    */
   timeoutMs?: number;
+  /**
+   * Max retry attempts for transient failures (network errors, 502/503/504).
+   * Default: 2. Set to 0 to disable retry.
+   */
+  maxRetries?: number;
+  /**
+   * Base delay in milliseconds for exponential backoff.
+   * First retry waits ~baseDelayMs, second waits ~2*baseDelayMs, etc.
+   * Default: 200ms.
+   */
+  retryBaseDelayMs?: number;
+}
+
+/** HTTP status codes that should trigger automatic retry. */
+const RETRYABLE_STATUS_CODES = new Set([502, 503, 504]);
+
+/**
+ * Compute backoff delay for a given attempt index with jitter.
+ * attempt=0 (first retry) → baseDelay
+ * attempt=1 → baseDelay * 2
+ * attempt=2 → baseDelay * 4
+ * + up to ±25% jitter to avoid thundering herd
+ */
+function computeBackoffMs(attempt: number, baseDelayMs: number): number {
+  const exponential = baseDelayMs * Math.pow(2, attempt);
+  const jitter = exponential * 0.25 * (Math.random() * 2 - 1); // ±25%
+  return Math.max(0, Math.floor(exponential + jitter));
 }
 
 /**
- * Issue an HTTP request to the bounty server.
- *
- * @throws {BountyHttpError} when the request fails (network, auth, business, server)
+ * Sleep for ms milliseconds.
  */
-export async function bountyHttp<T = unknown>(options: BountyHttpOptions): Promise<T> {
-  const {
-    baseUrl,
-    path,
-    method = 'GET',
-    body,
-    tokenPath = DEFAULT_TOKEN_PATH,
-    signal,
-    timeoutMs = 30000,
-  } = options;
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
-  // URL 拼接: trim 末尾 /，确保 path 以 / 开头
-  const trimmedBase = baseUrl.replace(/\/+$/, '');
-  const normalizedPath = path.startsWith('/') ? path : `/${path}`;
-  const url = `${trimmedBase}${normalizedPath}`;
+/**
+ * Classify an HTTP status into a BountyHttpErrorType.
+ */
+function classifyStatus(status: number): BountyHttpErrorType {
+  if (status === 401 || status === 403) return 'auth';
+  if (status === 400 || status === 404 || status === 409 || status === 422) return 'business';
+  if (status >= 500) return 'server';
+  return 'business';
+}
 
-  // Headers: Content-Type + Authorization (如 token 存在)
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-  };
-  const token = readAuthToken(tokenPath);
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
+/**
+ * Build a friendly error message for a given status + server message.
+ */
+function buildFriendlyMessage(type: BountyHttpErrorType, status: number, serverMessage: string | undefined, url: string): string {
+  if (type === 'auth') {
+    return (
+      `Authentication required (HTTP ${status}). ` +
+      `Run \`bounty auth login\` or check BOUNTY_API_URL. ` +
+      (serverMessage ? `Server: ${serverMessage}` : '')
+    );
   }
+  if (type === 'server') {
+    return (
+      `Bounty server error (HTTP ${status}). ` +
+      `The server may be misconfigured or under load. ` +
+      (serverMessage ? `Server: ${serverMessage}` : '') +
+      ` URL: ${url}`
+    );
+  }
+  // business
+  return `Request failed (HTTP ${status}): ${serverMessage ?? 'unknown error'}`;
+}
 
+/**
+ * Execute a single HTTP attempt (no retry).
+ * Returns the parsed JSON body on 2xx.
+ * Throws BountyHttpError on non-2xx or network failure.
+ */
+async function executeOnce<T>(
+  url: string,
+  method: string,
+  headers: Record<string, string>,
+  body: unknown,
+  timeoutMs: number,
+  callerSignal: AbortSignal | undefined,
+  urlForError: string
+): Promise<T> {
   // Timeout: set up AbortController
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
-  // If caller already has an AbortSignal, wire it up
-  if (signal) {
-    signal.addEventListener('abort', () => controller.abort(), { once: true });
+  if (callerSignal) {
+    callerSignal.addEventListener('abort', () => controller.abort(), { once: true });
   }
 
   let response: Response;
@@ -149,14 +200,14 @@ export async function bountyHttp<T = unknown>(options: BountyHttpOptions): Promi
       throw new BountyHttpError(
         'network',
         0,
-        `Request timeout after ${timeoutMs}ms — bounty server may be unreachable. URL: ${url}`
+        `Request timeout after ${timeoutMs}ms — bounty server may be unreachable. URL: ${urlForError}`
       );
     }
     throw new BountyHttpError(
       'network',
       0,
       `Network error: ${err instanceof Error ? err.message : String(err)}. ` +
-        `Is the bounty server running at ${baseUrl}? Try: bounty server start`
+        `Is the bounty server running? Try: bounty server start. URL: ${urlForError}`
     );
   }
   clearTimeout(timeoutId);
@@ -168,7 +219,6 @@ export async function bountyHttp<T = unknown>(options: BountyHttpOptions): Promi
       const data: any = await response.json();
       serverMessage = data?.error;
     } catch {
-      // response 不是 JSON — 读 raw text
       try {
         serverMessage = await response.text();
       } catch {
@@ -176,29 +226,8 @@ export async function bountyHttp<T = unknown>(options: BountyHttpOptions): Promi
       }
     }
 
-    // 分类
-    let type: BountyHttpErrorType;
-    if (response.status === 401 || response.status === 403) {
-      type = 'auth';
-    } else if (response.status === 400 || response.status === 404 || response.status === 409 || response.status === 422) {
-      type = 'business';
-    } else if (response.status >= 500) {
-      type = 'server';
-    } else {
-      type = 'business';
-    }
-
-    const friendly =
-      type === 'auth'
-        ? `Authentication required (HTTP ${response.status}). ` +
-          `Run \`bounty auth login\` or check BOUNTY_API_URL. ` +
-          (serverMessage ? `Server: ${serverMessage}` : '')
-        : type === 'server'
-        ? `Bounty server error (HTTP ${response.status}). ` +
-          `The server may be misconfigured or under load. ` +
-          (serverMessage ? `Server: ${serverMessage}` : '')
-        : `Request failed (HTTP ${response.status}): ${serverMessage ?? response.statusText ?? 'unknown error'}`;
-
+    const type = classifyStatus(response.status);
+    const friendly = buildFriendlyMessage(type, response.status, serverMessage, urlForError);
     throw new BountyHttpError(type, response.status, friendly, serverMessage);
   }
 
@@ -212,4 +241,71 @@ export async function bountyHttp<T = unknown>(options: BountyHttpOptions): Promi
       `Failed to parse server response as JSON: ${err instanceof Error ? err.message : String(err)}`
     );
   }
+}
+
+/**
+ * Issue an HTTP request to the bounty server with automatic retry on
+ * transient failures.
+ *
+ * Retry behavior:
+ * - Network errors (fetch reject): retryable
+ * - HTTP 502 / 503 / 504: retryable
+ * - Other HTTP errors (400, 401, 404, 500 other): not retryable
+ * - 2xx success: no retry
+ *
+ * @throws {BountyHttpError} when the request ultimately fails (after retries)
+ */
+export async function bountyHttp<T = unknown>(options: BountyHttpOptions): Promise<T> {
+  const {
+    baseUrl,
+    path,
+    method = 'GET',
+    body,
+    tokenPath = DEFAULT_TOKEN_PATH,
+    signal,
+    timeoutMs = 30000,
+    maxRetries = 2,
+    retryBaseDelayMs = 200,
+  } = options;
+
+  // URL 拼接: trim 末尾 /，确保 path 以 / 开头
+  const trimmedBase = baseUrl.replace(/\/+$/, '');
+  const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+  const url = `${trimmedBase}${normalizedPath}`;
+
+  // Headers: Content-Type + Authorization (如 token 存在)
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+  };
+  const token = readAuthToken(tokenPath);
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
+  let lastError: BountyHttpError | null = null;
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await executeOnce<T>(url, method, headers, body, timeoutMs, signal, url);
+    } catch (err: any) {
+      if (!(err instanceof BountyHttpError)) {
+        // 未知错误 — 不重试
+        throw err;
+      }
+      // 判断是否可重试
+      const isNetwork = err.type === 'network';
+      const isRetryableStatus = err.status > 0 && RETRYABLE_STATUS_CODES.has(err.status);
+      const isRetryable = isNetwork || isRetryableStatus;
+
+      if (!isRetryable || attempt === maxRetries) {
+        throw err;
+      }
+
+      lastError = err;
+      const delay = computeBackoffMs(attempt, retryBaseDelayMs);
+      await sleep(delay);
+    }
+  }
+
+  // Should be unreachable because the loop either returns or throws
+  throw lastError ?? new BountyHttpError('network', 0, 'Unexpected: retry loop exited without throwing');
 }
