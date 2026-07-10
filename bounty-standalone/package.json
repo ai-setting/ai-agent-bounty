@@ -1,6 +1,6 @@
 {
   "name": "@ai-setting/agent-bounty-standalone",
-  "version": "0.5.1",
+  "version": "0.6.0",
   "description": "AI Agent Bounty System - Standalone binary for all platforms. v0.5.1: matches @ai-setting/agent-bounty@0.5.1 (bounty-im migrated to roy-agent core, K8s ingress dedupe).",
   "type": "module",
   "bin": {
