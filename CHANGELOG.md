@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.1] - 2026-07-11
+
+### Fixed (hotfix)
+
+- **`bounty --version` now reports the correct version from any cwd**.
+  Previously `getVersion()` read `process.cwd()/package.json`, which returned
+  the wrong version when the CLI was run from a directory containing an
+  unrelated `package.json` (e.g., another project or the parent `roy-agent`
+  monorepo).
+  New `getPackageVersion()` helper walks up from `process.execPath` /
+  `import.meta.url` to find `@ai-setting/agent-bounty`'s own package.json.
+  Test coverage: `tests/cli/package-version.test.ts` (4 tests).
+
 ## [0.7.0] - 2026-07-11
 
 ### Added (agent-address identity + soft auth + tolerant publish — feat/bounty-v0.7-address)
