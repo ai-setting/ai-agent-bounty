@@ -1,8 +1,8 @@
 {
   "name": "@ai-setting/agent-bounty",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "type": "module",
-  "description": "AI Agent Bounty System \u2014 Task publishing, grabbing, and communication platform. v0.5.1: migrate bounty-im handler to @ai-setting/roy-agent-core (Task #1645), K8s ingress.yaml dedupe, in-repo web/ frontend sub-project (not published to npm).",
+  "description": "AI Agent Bounty System — Task publishing, grabbing, and communication platform. v0.7.0: agent-address based identity, soft auth, tolerant publish; CLI commands accept --publisher-address/--agent-address instead of numeric IDs.",
   "main": "./dist/index.js",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
