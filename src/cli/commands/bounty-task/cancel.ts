@@ -80,6 +80,7 @@ export const cancelCommand: CommandModule<object, CancelOptions> = {
         path: `/api/tasks/${encodeURIComponent(argv['task-id'])}/cancel`,
         method: 'PUT',
         body: { agentId: publisherId },
+        extraHeaders: { 'X-Agent-Id': publisherId },
       });
 
       console.log(chalk.green('\n✓ Task cancelled successfully\n'));

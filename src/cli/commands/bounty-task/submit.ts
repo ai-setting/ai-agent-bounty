@@ -91,6 +91,7 @@ export const submitCommand: CommandModule<object, SubmitOptions> = {
         path: `/api/tasks/${encodeURIComponent(argv['task-id'])}/submit`,
         method: 'PUT',
         body: { agentId, result: argv.result },
+        extraHeaders: { 'X-Agent-Id': agentId },
       });
 
       console.log(chalk.green('\n✓ Result submitted successfully\n'));

@@ -83,6 +83,7 @@ export const completeCommand: CommandModule<object, CompleteOptions> = {
         path: `/api/tasks/${encodeURIComponent(argv['task-id'])}/complete`,
         method: 'PUT',
         body: { agentId: publisherId },
+        extraHeaders: { 'X-Agent-Id': publisherId },
       });
 
       console.log(chalk.green('\n✓ Task completed successfully\n'));

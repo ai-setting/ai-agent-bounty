@@ -18,6 +18,7 @@
 
 import type { CommandModule } from 'yargs';
 import chalk from 'chalk';
+import { existsSync, readFileSync } from 'fs';
 import { bountyConfig } from '../../../lib/config/bounty-config.js';
 import { addServerUrlOption, resolveServerUrl } from '../../lib/server-url-option.js';
 import { bountyHttp, BountyHttpError } from '../../lib/bounty-http.js';
@@ -26,7 +27,8 @@ import { generateIdempotencyKey } from '../../lib/idempotency-key.js';
 
 interface PublishOptions {
   title: string;
-  description: string;
+  description?: string;
+  'description-file'?: string;
   type: string;
   reward: number;
   'publisher-id'?: string;
@@ -63,8 +65,15 @@ export const publishCommand: CommandModule<object, PublishOptions> = {
         .option('description', {
           alias: 'd',
           type: 'string',
-          demandOption: true,
-          description: 'Task description',
+          description:
+            'Task description. Optional if --description-file is given.',
+        })
+        .option('description-file', {
+          alias: 'f',
+          type: 'string',
+          description:
+            'Path to a file whose content will be used as the task ' +
+            'description. Useful for large descriptions (>50KB).',
         })
         .option('type', {
           alias: 'y',
@@ -125,6 +134,41 @@ export const publishCommand: CommandModule<object, PublishOptions> = {
       process.exit(2);
     }
 
+    // 3b. Resolve description: --description wins if both given.
+    //     If only --description-file given, read file content.
+    //     Neither given → error.
+    let description: string | undefined = argv.description?.trim();
+    if (!description && argv['description-file']) {
+      const filePath = argv['description-file'];
+      if (!existsSync(filePath)) {
+        console.error(
+          chalk.red(
+            `\n✗ --description-file: file not found: ${filePath}\n`
+          )
+        );
+        process.exit(2);
+      }
+      try {
+        description = readFileSync(filePath, 'utf-8');
+      } catch (err: any) {
+        console.error(
+          chalk.red(
+            `\n✗ --description-file: cannot read ${filePath}: ` +
+              (err instanceof Error ? err.message : String(err)) + '\n'
+          )
+        );
+        process.exit(2);
+      }
+    }
+    if (!description) {
+      console.error(
+        chalk.red(
+          '\n✗ Either --description or --description-file is required.\n'
+        )
+      );
+      process.exit(2);
+    }
+
     // 4. Parse tags
     const tags = argv.tags
       ? argv.tags.split(',').map((t) => t.trim()).filter(Boolean)
@@ -150,7 +194,7 @@ export const publishCommand: CommandModule<object, PublishOptions> = {
         method: 'POST',
         body: {
           title: argv.title.trim(),
-          description: argv.description.trim(),
+          description,
           type: argv.type.trim(),
           reward: argv.reward,
           tags,
@@ -161,6 +205,7 @@ export const publishCommand: CommandModule<object, PublishOptions> = {
         },
         extraHeaders: {
           'Idempotency-Key': idempotencyKey,
+          'X-Agent-Id': publisherId,
         },
       });
 
