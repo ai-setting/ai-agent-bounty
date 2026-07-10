@@ -36,7 +36,7 @@ function loadEnv(): void {
     // intentionally stay silent here to keep the module's import
     // side-effects from polluting stdout. Callers that need to
     // verify the .env was picked up can use isEnvLoaded() below.
-    dotenvConfig({ path: envPath });
+    dotenvConfig({ path: envPath, quiet: true });
   }
   envLoaded = true;
 }
