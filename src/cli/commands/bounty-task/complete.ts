@@ -11,6 +11,7 @@ import { addServerUrlOption, resolveServerUrl } from '../../lib/server-url-optio
 import { bountyHttp } from '../../lib/bounty-http.js';
 import { resolveCurrentAgent } from '../../lib/current-agent.js';
 import { handleBountyError } from './publish.js';
+import { isValidTaskId } from './grab.js';
 
 interface CompleteOptions {
   'task-id': string;
@@ -63,6 +64,16 @@ export const completeCommand: CommandModule<object, CompleteOptions> = {
 
     if (!argv['task-id']) {
       console.error(chalk.red('\n✗ --task-id is required.\n'));
+      process.exit(2);
+    }
+
+    if (!isValidTaskId(argv['task-id'])) {
+      console.error(
+        chalk.red(
+          `\n✗ Invalid --task-id: "${argv['task-id']}". Expected UUID v4 format ` +
+            `(e.g., 8de9b6aa-5781-4a65-be96-45185fb7c8b1).\n`
+        )
+      );
       process.exit(2);
     }
 

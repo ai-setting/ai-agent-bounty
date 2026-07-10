@@ -25,6 +25,15 @@ interface BountyTask {
   assigneeId?: string;
 }
 
+/**
+ * Validate that a task ID is in UUID v4 format.
+ * Bounty server generates UUIDs for task IDs; rejecting malformed IDs
+ * client-side avoids unnecessary HTTP roundtrips and gives clearer errors.
+ */
+export function isValidTaskId(taskId: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(taskId);
+}
+
 export const grabCommand: CommandModule<object, GrabOptions> = {
   command: 'grab',
   describe: 'Grab a bounty task (via HTTP API)',
@@ -60,6 +69,16 @@ export const grabCommand: CommandModule<object, GrabOptions> = {
 
     if (!argv['task-id']) {
       console.error(chalk.red('\n✗ --task-id is required.\n'));
+      process.exit(2);
+    }
+
+    if (!isValidTaskId(argv['task-id'])) {
+      console.error(
+        chalk.red(
+          `\n✗ Invalid --task-id: "${argv['task-id']}". Expected UUID v4 format ` +
+            `(e.g., 8de9b6aa-5781-4a65-be96-45185fb7c8b1).\n`
+        )
+      );
       process.exit(2);
     }
 
