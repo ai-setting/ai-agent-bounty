@@ -88,7 +88,8 @@ export const cancelCommand: CommandModule<object, CancelOptions> = {
         baseUrl,
         path: `/api/tasks/${encodeURIComponent(argv['task-id'])}/cancel`,
         method: 'PUT',
-        body: { agentId: publisherId },
+        // v0.7.2: server resolveActor('publisher') reads publisherId or publisherAddress.
+        body: { publisherId },
         extraHeaders: { 'X-Agent-Id': publisherId },
       });
 

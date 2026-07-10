@@ -91,7 +91,9 @@ export const completeCommand: CommandModule<object, CompleteOptions> = {
         baseUrl,
         path: `/api/tasks/${encodeURIComponent(argv['task-id'])}/complete`,
         method: 'PUT',
-        body: { agentId: publisherId },
+        // v0.7.2: server resolveActor('publisher') reads publisherId or publisherAddress.
+        // Sending { agentId } would trigger 400 "publisherId or publisherAddress required".
+        body: { publisherId },
         extraHeaders: { 'X-Agent-Id': publisherId },
       });
 

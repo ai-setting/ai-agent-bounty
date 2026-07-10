@@ -63,6 +63,15 @@ describe('bounty bounty-task complete - HTTP API migration', () => {
     const src = readFileSync(COMPLETE_SRC, 'utf-8');
     expect(src).toContain("resolveCurrentAgent");
   });
+
+  // v0.7.2 regression: server's resolveActor('publisher') reads body.publisherId or
+  // body.publisherAddress; sending { agentId } triggers "publisherId or publisherAddress required".
+  test('body uses publisherId (server resolveActor contract)', () => {
+    const src = readFileSync(COMPLETE_SRC, 'utf-8');
+    // Must send publisherId/publisherAddress, not agentId
+    expect(src).toMatch(/body:\s*\{\s*publisherId\s*\}/);
+    expect(src).not.toMatch(/body:\s*\{\s*agentId\s*\}/);
+  });
 });
 
 describe('bounty bounty-task cancel - HTTP API migration', () => {
@@ -83,6 +92,14 @@ describe('bounty bounty-task cancel - HTTP API migration', () => {
     expect(src).toContain("/api/tasks");
     expect(src).toContain("/cancel");
     expect(src).toMatch(/method:\s*['"]PUT['"]/);
+  });
+
+  // v0.7.2 regression: server's resolveActor('publisher') reads body.publisherId or
+  // body.publisherAddress; sending { agentId } triggers "publisherId or publisherAddress required".
+  test('body uses publisherId (server resolveActor contract)', () => {
+    const src = readFileSync(CANCEL_SRC, 'utf-8');
+    expect(src).toMatch(/body:\s*\{\s*publisherId\s*\}/);
+    expect(src).not.toMatch(/body:\s*\{\s*agentId\s*\}/);
   });
 });
 
