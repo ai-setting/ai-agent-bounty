@@ -289,7 +289,7 @@ export async function bountyHttp<T = unknown>(options: BountyHttpOptions): Promi
     method = 'GET',
     body,
     tokenPath = DEFAULT_TOKEN_PATH,
-    agentId,
+    extraHeaders,
     signal,
     timeoutMs = 30000,
     maxRetries = 2,
@@ -301,7 +301,7 @@ export async function bountyHttp<T = unknown>(options: BountyHttpOptions): Promi
   const normalizedPath = path.startsWith('/') ? path : `/${path}`;
   const url = `${trimmedBase}${normalizedPath}`;
 
-  // Headers: Content-Type + Authorization (如 token 存在) + X-Agent-Id (dev mode)
+  // Headers: Content-Type + Authorization (如 token 存在)
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
   };
@@ -309,12 +309,9 @@ export async function bountyHttp<T = unknown>(options: BountyHttpOptions): Promi
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
   }
-  if (agentId) {
-    headers['X-Agent-Id'] = agentId;
-  }
   // Merge caller-provided extra headers last so they win on key conflict
-  if (options.extraHeaders) {
-    for (const [key, value] of Object.entries(options.extraHeaders)) {
+  if (extraHeaders) {
+    for (const [key, value] of Object.entries(extraHeaders)) {
       headers[key] = value;
     }
   }
