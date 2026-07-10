@@ -8,7 +8,7 @@ import type { CommandModule } from 'yargs';
 import chalk from 'chalk';
 import { bountyConfig } from '../../../lib/config/bounty-config.js';
 import { addServerUrlOption, resolveServerUrl } from '../../lib/server-url-option.js';
-import { bountyHttp, BountyHttpError } from '../../lib/bounty-http.js';
+import { bountyHttp } from '../../lib/bounty-http.js';
 import { resolveCurrentAgent } from '../../lib/current-agent.js';
 import { handleBountyError } from './publish.js';
 
