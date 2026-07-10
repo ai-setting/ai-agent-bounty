@@ -1,17 +1,18 @@
 /**
  * agent delete command
- * Delete an agent by ID
+ * Delete an agent by address
  *
- * Phase feat/bounty-all-commands-server-url:
- * - 通过 addServerUrlOption helper 复用 --server-url / -u 选项
+ * v0.7: prefer --agent-address (<uuid>@<host>); legacy --id remains
+ * accepted and is translated to the server's agent id path segment.
  */
 
 import type { CommandModule } from 'yargs';
 import chalk from 'chalk';
 import { API_BASE } from '../../config.js';
-import { loadToken } from '../../storage.js';
 // v0.5.0: TLS skip default — use bountyFetch wrapper
 import { bountyFetch } from '../../lib/fetch-helper.js';
+import { resolveAgentIdOption } from '../../lib/address-parser.js';
+import { attachSoftAuth } from '../../lib/soft-auth.js';
 
 import {
   addServerUrlOption,
@@ -19,23 +20,29 @@ import {
 } from '../../lib/server-url-option.js';
 
 interface DeleteAgentOptions {
-  id: string;
+  'agent-address'?: string;
+  /** @deprecated Use --agent-address. */
+  id?: string;
   force?: boolean;
   'server-url'?: string;
 }
 
-export const deleteCommand: CommandModule = {
+export const deleteCommand: CommandModule<object, DeleteAgentOptions> = {
   command: 'delete',
-  describe: 'Delete an agent by ID',
+  describe: 'Delete an agent by address',
 
   builder: (yargs) =>
     addServerUrlOption(
       yargs
+        .option('agent-address', {
+          alias: 'a',
+          type: 'string',
+          description: 'Agent address (<uuid>@<host>). Pure <uuid> is also accepted.',
+        })
         .option('id', {
           alias: 'i',
           type: 'string',
-          demandOption: true,
-          description: 'Agent ID to delete',
+          description: '[deprecated] Agent ID to delete. Use --agent-address instead.',
         })
         .option('force', {
           alias: 'f',
@@ -46,17 +53,21 @@ export const deleteCommand: CommandModule = {
     ),
 
   handler: async (argv) => {
-    const options = argv as unknown as DeleteAgentOptions;
+    const options = argv as unknown as DeleteAgentOptions & { id?: string };
 
     try {
-      // Load token
-      const token = await loadToken();
-
-      if (!token) {
-        console.log(chalk.yellow('\n⚠ No token found. Please login first.\n'));
-        console.log(chalk.cyan('  bounty register-agent login --email <your-email>\n'));
-        process.exit(1);
+      const resolvedAgent = resolveAgentIdOption({
+        address: options['agent-address'],
+        deprecatedId: options.id,
+        addressFlag: '--agent-address',
+        deprecatedFlag: '--id',
+        missingMessage: '✗ --agent-address is required',
+      });
+      if (!resolvedAgent.ok) {
+        console.error(chalk.red(`\n${resolvedAgent.error}\n`));
+        process.exit(2);
       }
+      options.id = resolvedAgent.value;
 
       // Confirm deletion unless --force
       if (!options.force) {
@@ -81,12 +92,11 @@ export const deleteCommand: CommandModule = {
       }
 
       const baseUrl = resolveServerUrl(options['server-url'], API_BASE);
+      const auth = attachSoftAuth({});
 
       const response = await bountyFetch(`${baseUrl}/api/agents/${options.id}`, {
         method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
+        headers: auth.headers,
       });
 
       const data = await response.json() as { message?: string; error?: string };

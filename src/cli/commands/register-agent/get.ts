@@ -1,14 +1,18 @@
 /**
  * agent get command
- * Get details of a specific agent by ID
+ * Get details of a specific agent by address
+ *
+ * v0.7: prefer --agent-address (<uuid>@<host>); legacy --id remains
+ * accepted and is translated to the server's agent id path segment.
  */
 
 import type { CommandModule } from 'yargs';
 import chalk from 'chalk';
 import { API_BASE } from '../../config.js';
-import { loadToken } from '../../storage.js';
 // v0.5.0: TLS skip default — use bountyFetch wrapper
 import { bountyFetch } from '../../lib/fetch-helper.js';
+import { resolveAgentIdOption } from '../../lib/address-parser.js';
+import { attachSoftAuth } from '../../lib/soft-auth.js';
 
 import {
   addServerUrlOption,
@@ -16,7 +20,9 @@ import {
 } from '../../lib/server-url-option.js';
 
 interface GetAgentOptions {
-  id: string;
+  'agent-address'?: string;
+  /** @deprecated Use --agent-address. */
+  id?: string;
   'server-url'?: string;
 }
 
@@ -31,46 +37,53 @@ interface Agent {
   created_at: number;
 }
 
-export const getCommand: CommandModule = {
+export const getCommand: CommandModule<object, GetAgentOptions> = {
   command: 'get',
-  describe: 'Get details of a specific agent by ID',
+  describe: 'Get details of a specific agent by address',
 
   builder: (yargs) =>
     addServerUrlOption(
-      yargs.option('id', {
-        alias: 'i',
-        type: 'string',
-        demandOption: true,
-        description: 'Agent ID',
-      })
+      yargs
+        .option('agent-address', {
+          alias: 'a',
+          type: 'string',
+          description: 'Agent address (<uuid>@<host>). Pure <uuid> is also accepted.',
+        })
+        .option('id', {
+          alias: 'i',
+          type: 'string',
+          description: '[deprecated] Agent ID. Use --agent-address instead.',
+        })
     ),
 
   handler: async (argv) => {
-    const options = argv as unknown as GetAgentOptions;
+    const options = argv as unknown as GetAgentOptions & { id?: string };
 
     try {
-      // Try to load token
-      let token = await loadToken();
-
-      // If no token, prompt for login
-      if (!token) {
-        console.log(chalk.yellow('\n⚠ No token found. Please login first.\n'));
-        console.log(chalk.cyan('  bounty register-agent login --email <your-email>\n'));
-        process.exit(1);
+      const resolvedAgent = resolveAgentIdOption({
+        address: options['agent-address'],
+        deprecatedId: options.id,
+        addressFlag: '--agent-address',
+        deprecatedFlag: '--id',
+        missingMessage: '✗ --agent-address is required',
+      });
+      if (!resolvedAgent.ok) {
+        console.error(chalk.red(`\n${resolvedAgent.error}\n`));
+        process.exit(2);
       }
+      options.id = resolvedAgent.value;
 
       const baseUrl = resolveServerUrl(options['server-url'], API_BASE);
+      const auth = attachSoftAuth({});
 
       const response = await bountyFetch(`${baseUrl}/api/agents/${options.id}`, {
         method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
+        headers: auth.headers,
       });
 
       if (response.status === 401) {
-        // Token expired, try to refresh via login
-        console.log(chalk.yellow('\n⚠ Token expired. Please login again.\n'));
+        // Server may still require auth for some deployments.
+        console.log(chalk.yellow('\n⚠ Unauthorized. Please login if this endpoint requires a token.\n'));
         process.exit(1);
       }
 

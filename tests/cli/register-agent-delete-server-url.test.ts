@@ -37,7 +37,7 @@ describe('bounty register-agent delete - --server-url option', () => {
     expect(src).toMatch(/resolveServerUrl\(.*API_BASE\s*\)/);
   });
 
-  test('T3: fetch URL uses /api/agents/${id}', () => {
+  test('T3: fetch URL uses parsed /api/agents/${options.id}', () => {
     const src = readFileSync(SRC, 'utf-8');
     expect(src).toMatch(/baseUrl.*\/api\/agents\/\$\{options\.id\}/);
   });
