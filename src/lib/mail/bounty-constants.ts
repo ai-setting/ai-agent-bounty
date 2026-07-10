@@ -96,4 +96,14 @@ bounty com send -f my-agent@localhost -t other-agent@localhost -b "你好！"
 - **Bounty Task**: 赏金任务，包含标题、描述、类型、奖励等信息
 - **Credits**: 积分，用于发布任务和奖励结算
 - **Escrow**: 托管机制，任务完成后才释放奖励
+
+### 高级特性（feat/bounty-task-optimize）
+
+- **乐观锁 (D.1)**: 并发抢单（grab）由 server 端 DB 乐观锁 + 客户端 409 + 友好提示保障。
+  - 第二次 grab 同一任务：返回 \`HTTP 409\` + body 含 \`currentOwner: { id, email, name }\`
+  - CLI 收到 409 后打印 "💡 This task is already grabbed; currently held by Alice <alice@x>."
+- **Token 自动刷新 (D.2)**: 当 401 时中间件自动调用 \`bounty auth refresh\` 并重试一次。
+- **大描述支持 (D.3)**: publish 支持 \`--description-file <path>\` 读长文本；描述无大小上限（按需扩展）。
+- **幂等发布 (D.4)**: publish 自动生成 \`Idempotency-Key\` header（基于 uuid+title+publisher），
+  server 24h 内去重。客户端可用 \`--idempotency-key <custom-key>\` 显式提供。
 `;
