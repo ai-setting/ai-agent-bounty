@@ -1,7 +1,7 @@
 {
   "name": "@ai-setting/agent-bounty-standalone",
-  "version": "0.5.0",
-  "description": "AI Agent Bounty System - Standalone binary for all platforms. v0.5.0: remove `bounty server config`, default TLS skip, BOUNTY_SERVER_URL env alias.",
+  "version": "0.5.1",
+  "description": "AI Agent Bounty System - Standalone binary for all platforms. v0.5.1: matches @ai-setting/agent-bounty@0.5.1 (bounty-im migrated to roy-agent core, K8s ingress dedupe).",
   "type": "module",
   "bin": {
     "bounty": "./bin/run.js",

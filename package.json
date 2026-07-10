@@ -1,8 +1,8 @@
 {
   "name": "@ai-setting/agent-bounty",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "type": "module",
-  "description": "AI Agent Bounty System — Task publishing, grabbing, and communication platform. v0.5.0: remove `bounty server config`, default TLS skip, BOUNTY_SERVER_URL env alias, roy deps upgraded (cli 1.5.110, harness 1.5.50, core 1.5.102).",
+  "description": "AI Agent Bounty System — Task publishing, grabbing, and communication platform. v0.5.1: migrate bounty-im handler to @ai-setting/roy-agent-core (Task #1645), K8s ingress.yaml dedupe, in-repo web/ frontend sub-project (not published to npm).",
   "main": "./dist/index.js",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
