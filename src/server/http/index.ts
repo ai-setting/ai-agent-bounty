@@ -206,27 +206,27 @@ export class BountyHTTPServer {
               return this.bountyRoutes.getTaskById(id);
             }
             if (method === 'POST' && path === '/api/tasks') {
-              return await this.bountyRoutes.createTask(req, agentId!);
+              return await this.bountyRoutes.createTask(req, agentId);
             }
             if (method === 'PUT' && path.startsWith('/api/tasks/') && path.endsWith('/grab')) {
               const id = path.slice('/api/tasks/'.length, -'/grab'.length);
-              return this.bountyRoutes.grabTask(id, agentId!);
+              return await this.bountyRoutes.grabTask(req, id, agentId);
             }
             if (method === 'PUT' && path.startsWith('/api/tasks/') && path.endsWith('/submit')) {
               const id = path.slice('/api/tasks/'.length, -'/submit'.length);
-              return await this.bountyRoutes.submitTask(req, id, agentId!);
+              return await this.bountyRoutes.submitTask(req, id, agentId);
             }
             if (method === 'PUT' && path.startsWith('/api/tasks/') && path.endsWith('/complete')) {
               const id = path.slice('/api/tasks/'.length, -'/complete'.length);
-              return await this.bountyRoutes.completeTask(req, id, agentId!);
+              return await this.bountyRoutes.completeTask(req, id, agentId);
             }
             if (method === 'PUT' && path.startsWith('/api/tasks/') && path.endsWith('/cancel')) {
               const id = path.slice('/api/tasks/'.length, -'/cancel'.length);
-              return await this.bountyRoutes.cancelTask(req, id, agentId!);
+              return await this.bountyRoutes.cancelTask(req, id, agentId);
             }
             if (method === 'PUT' && path.startsWith('/api/tasks/') && path.endsWith('/dispute')) {
               const id = path.slice('/api/tasks/'.length, -'/dispute'.length);
-              return await this.bountyRoutes.disputeTask(req, id, agentId!);
+              return await this.bountyRoutes.disputeTask(req, id, agentId);
             }
           }
 

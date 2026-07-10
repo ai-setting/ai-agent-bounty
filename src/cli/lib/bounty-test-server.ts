@@ -214,7 +214,7 @@ async function handleRequest(req: Request, ctx: DispatchCtx): Promise<Response> 
     return await ctx.bountyRoutes.createTask(req, agentId);
   }
   if (method === 'PUT' && grabMatch) {
-    return ctx.bountyRoutes.grabTask(grabMatch[1]!, agentId);
+    return await ctx.bountyRoutes.grabTask(req, grabMatch[1]!, agentId);
   }
   if (method === 'PUT' && submitMatch) {
     return await ctx.bountyRoutes.submitTask(req, submitMatch[1]!, agentId);
