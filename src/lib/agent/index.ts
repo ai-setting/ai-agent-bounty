@@ -4,6 +4,7 @@
 
 import { v4 as uuidv4 } from 'uuid';
 import { Database } from '../storage/database.js';
+import { findAgentByAddress as _findAgentByAddress } from '../../server/lib/address-resolver.js';
 
 /**
  * Agent entity representing a registered agent in the Bounty Platform.
@@ -107,6 +108,24 @@ export class AgentService {
   getById(id: string): Agent | null {
     const row = this.db.prepare('SELECT * FROM agents WHERE id = ?').get(id) as any;
     return row ? this.mapRow(row) : null;
+  }
+
+  /**
+   * Look up an agent by address (`uuid@host`) or bare UUID.
+   *
+   * Delegates to `findAgentByAddress` in `src/server/lib/address-resolver.ts`.
+   * Returns the full `Agent` entity on hit, `null` on miss / invalid input.
+   *
+   * @example
+   *   svc.findByAddress('uuid-1@bounty.local')  // → Agent
+   *   svc.findByAddress('uuid-1')              // → Agent
+   *   svc.findByAddress('nope')                // → null
+   */
+  findByAddress(input: string): Agent | null {
+    const result = _findAgentByAddress(this.db, input);
+    if (!result) return null;
+    // Re-hydrate full Agent row to ensure mapRow is used.
+    return this.getById(result.id);
   }
 
   /**
