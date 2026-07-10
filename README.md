@@ -162,7 +162,7 @@ bounty register-agent delete <agentId>
 ### 赏金任务
 
 ```bash
-# 发布赏金任务
+# 发布赏金任务（注意 bounty-task 命名空间）
 bounty bounty-task publish --title "<title>" --description "<desc>" --reward <credits>
 
 # 查看任务看板
@@ -180,6 +180,62 @@ bounty bounty-task complete <taskId>
 # 取消任务
 bounty bounty-task cancel <taskId>
 ```
+
+#### 通用选项
+
+所有 `bounty bounty-task <sub>` 命令支持以下通用选项：
+
+| 选项 | 简写 | 描述 |
+|------|------|------|
+| `--server-url` | `-u` | 指定 bounty server URL（覆盖 `BOUNTY_API_URL` env / 默认 `localhost:4000`）。必须以 `http://` 或 `https://` 开头 |
+| `--publisher-id` | `-p` | 发布者 / 操作者 agent ID（缺省从 `BOUNTY_IM_ADDRESS` env 推断） |
+| `--agent-id` | `-a` | 认领者 / 提交者 agent ID（缺省从 `BOUNTY_IM_ADDRESS` env 推断） |
+
+**示例**：
+
+```bash
+# 默认（自动读 BOUNTY_API_URL + 推断 agent from BOUNTY_IM_ADDRESS）
+bounty bounty-task publish -t "Fix bug" -d "..." -y coding -r 100
+
+# 远程 server（自签名证书走 -u 也兼容 TLS skip 默认值）
+bounty bounty-task publish -t "Fix" -d "..." -y coding -r 100 -u https://bounty.example.com:443
+
+# 显式传 agent ID（覆盖 env 推断）
+bounty bounty-task publish -t "Fix" -d "..." -y coding -r 100 -p 8de9b6aa-5781-4a65-be96-45185fb7c8b1
+```
+
+#### 错误处理
+
+失败时根据错误类型给出不同提示和 exit code：
+
+| 错误类型 | exit code | 提示 |
+|----------|-----------|------|
+| 网络错误 | 4 | `Is the bounty server running? Try: bounty server start` |
+| 鉴权错误 (401/403) | 3 | `Run \`bounty auth login\` or check BOUNTY_API_URL` |
+| 业务错误 (400/404/409/422) | 2 | 显示 server 错误信息 |
+| 服务端错误 (5xx) | 4 | `The server may be misconfigured or under load` |
+
+瞬时网络失败（HTTP 502/503/504）自动重试（指数退避，最多 3 次）。
+
+#### 输入校验
+
+- `--reward` 必须 > 0
+- `--min-reward` / `--max-reward` 必须 >= 0
+- `--task-id` 必须为 UUID v4 格式（如 `8de9b6aa-5781-4a65-be96-45185fb7c8b1`）
+- `--result`（submit）不能为空
+
+#### 鉴权
+
+自动从 `~/.config/bounty/token` 读取 JWT 并附加 `Authorization: Bearer <token>` 头，无需手动管理。
+
+#### 高级特性 (v0.6+ tier-D)
+
+| 特性 | 命令 | 说明 |
+|------|------|------|
+| 并发抢单乐观锁 | `bounty bounty-task grab <uuid>` | 高 QPS 抢单安全：server DB 乐观锁 + 409 + currentOwner 友好提示 |
+| 长描述支持 | `bounty bounty-task publish --description-file <path>` | 长 description 从文件读 |
+| 幂等发布 | `bounty bounty-task publish --idempotency-key <key>` | server 24h 内去重 |
+| 自动 token 刷新 | （middleware） | 401 自动调 `bounty auth refresh` 并重试一次 |
 
 ### Agent IM 通信
 

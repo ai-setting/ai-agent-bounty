@@ -1,70 +1,105 @@
 /**
  * bounty submit command
- * Submit task result
+ *
+ * Phase feat/bounty-task-optimize: 重构为 HTTP API 调用
  */
 
 import type { CommandModule } from 'yargs';
 import chalk from 'chalk';
-import { createContext } from '../../services/context.js';
+import { bountyConfig } from '../../../lib/config/bounty-config.js';
+import { addServerUrlOption, resolveServerUrl } from '../../lib/server-url-option.js';
+import { bountyHttp } from '../../lib/bounty-http.js';
+import { resolveCurrentAgent } from '../../lib/current-agent.js';
+import { handleBountyError } from './publish.js';
+import { isValidTaskId } from './grab.js';
 
-export const submitCommand: CommandModule = {
+interface SubmitOptions {
+  'task-id': string;
+  'agent-id'?: string;
+  result: string;
+  'server-url'?: string;
+}
+
+interface BountyTask {
+  id: string;
+  status: string;
+  title?: string;
+}
+
+export const submitCommand: CommandModule<object, SubmitOptions> = {
   command: 'submit',
-  describe: 'Submit task result',
-  
+  describe: 'Submit task result (via HTTP API)',
+
   builder: (yargs) =>
-    yargs
-      .option('task-id', {
-        alias: 't',
-        type: 'string',
-        demandOption: true,
-        description: 'Task ID',
-      })
-      .option('agent-id', {
-        alias: 'a',
-        type: 'string',
-        demandOption: true,
-        description: 'Agent ID (assignee)',
-      })
-      .option('result', {
-        alias: 'r',
-        type: 'string',
-        demandOption: true,
-        description: 'Task result',
-      }),
+    addServerUrlOption(
+      yargs
+        .option('task-id', {
+          alias: 't',
+          type: 'string',
+          demandOption: true,
+          description: 'Task ID',
+        })
+        .option('agent-id', {
+          alias: 'a',
+          type: 'string',
+          description:
+            'Agent ID (assignee). ' +
+            'Defaults to BOUNTY_IM_ADDRESS env (e.g., "agent-uuid@host" → "agent-uuid").',
+        })
+        .option('result', {
+          alias: 'r',
+          type: 'string',
+          demandOption: true,
+          description: 'Task result',
+        })
+    ),
 
   handler: async (argv) => {
-    const ctx = createContext();
+    const baseUrl = resolveServerUrl(argv['server-url'], bountyConfig.apiUrl);
+
+    let agentId = argv['agent-id'] ?? resolveCurrentAgent();
+    if (!agentId) {
+      console.error(
+        chalk.red('\n✗ Cannot infer agent ID. Provide --agent-id or set BOUNTY_IM_ADDRESS.\n')
+      );
+      process.exit(2);
+    }
+
+    if (!argv['task-id']) {
+      console.error(chalk.red('\n✗ --task-id is required.\n'));
+      process.exit(2);
+    }
+
+    if (!isValidTaskId(argv['task-id'])) {
+      console.error(
+        chalk.red(
+          `\n✗ Invalid --task-id: "${argv['task-id']}". Expected UUID v4 format ` +
+            `(e.g., 8de9b6aa-5781-4a65-be96-45185fb7c8b1).\n`
+        )
+      );
+      process.exit(2);
+    }
+
+    if (!argv.result || !argv.result.trim()) {
+      console.error(chalk.red('\n✗ --result cannot be empty.\n'));
+      process.exit(2);
+    }
 
     try {
-      const agent = ctx.agentService.getById(argv['agent-id'] as string);
-      if (!agent) {
-        console.error(chalk.red('\n✗ Error: Agent not found\n'));
-        ctx.db.close();
-        process.exit(1);
-      }
-
-      const result = ctx.bountyService.submit(
-        argv['task-id'] as string,
-        agent.id,
-        argv.result as string
-      );
-
-      if (!result.success) {
-        console.error(chalk.red('\n✗ Error:'), result.reason);
-        ctx.db.close();
-        process.exit(1);
-      }
+      const task = await bountyHttp<BountyTask>({
+        baseUrl,
+        path: `/api/tasks/${encodeURIComponent(argv['task-id'])}/submit`,
+        method: 'PUT',
+        body: { agentId, result: argv.result },
+        extraHeaders: { 'X-Agent-Id': agentId },
+      });
 
       console.log(chalk.green('\n✓ Result submitted successfully\n'));
-      console.log(chalk.cyan('  Task ID:'), argv['task-id']);
-      console.log(chalk.cyan('  Submitted by:'), agent.name);
+      console.log(chalk.cyan('  Task ID:'), task.id);
+      console.log(chalk.cyan('  Status:'), task.status);
       console.log();
-
-      ctx.db.close();
     } catch (error: any) {
-      console.error(chalk.red('\n✗ Error:'), error.message);
-      ctx.db.close();
-      process.exit(1);
+      handleBountyError(error, 'submit task result', baseUrl);
     }
   },
 };

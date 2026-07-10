@@ -20,30 +20,11 @@
 
 import type { CommandModule } from 'yargs';
 import chalk from 'chalk';
-import { existsSync, readFileSync } from 'fs';
-import { homedir } from 'os';
-import { join } from 'path';
 import { bountyConfig } from '../../../lib/config/bounty-config.js';
 import { bountyFetch, setTlsVerifyMode } from '../../lib/fetch-helper.js';
-
-/** Default location for saved auth token (written by `bounty auth login`). */
-const TOKEN_FILE = join(homedir(), '.config', 'bounty', 'token');
-
-/**
- * Auto-read saved auth token if present (Phase C.1 enhancement).
- *
- * Returns undefined if the file is missing / empty / unreadable.
- * Callers should attach `Authorization: Bearer <token>` if defined.
- */
-export function readAuthToken(): string | undefined {
-  try {
-    if (!existsSync(TOKEN_FILE)) return undefined;
-    const content = readFileSync(TOKEN_FILE, 'utf-8').trim();
-    return content || undefined;
-  } catch {
-    return undefined;
-  }
-}
+import { readAuthToken } from '../../lib/auth-token.js';
+// Backward compat: existing tests (com-send-auth-insecure.test.ts) import readAuthToken from here
+export { readAuthToken };
 
 interface SendOptions {
   from: string;
