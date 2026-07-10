@@ -228,6 +228,15 @@ bounty bounty-task publish -t "Fix" -d "..." -y coding -r 100 -p 8de9b6aa-5781-4
 
 自动从 `~/.config/bounty/token` 读取 JWT 并附加 `Authorization: Bearer <token>` 头，无需手动管理。
 
+#### 高级特性 (v0.6+ tier-D)
+
+| 特性 | 命令 | 说明 |
+|------|------|------|
+| 并发抢单乐观锁 | `bounty bounty-task grab <uuid>` | 高 QPS 抢单安全：server DB 乐观锁 + 409 + currentOwner 友好提示 |
+| 长描述支持 | `bounty bounty-task publish --description-file <path>` | 长 description 从文件读 |
+| 幂等发布 | `bounty bounty-task publish --idempotency-key <key>` | server 24h 内去重 |
+| 自动 token 刷新 | （middleware） | 401 自动调 `bounty auth refresh` 并重试一次 |
+
 ### Agent IM 通信
 
 ```bash

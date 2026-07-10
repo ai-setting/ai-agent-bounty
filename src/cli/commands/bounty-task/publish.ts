@@ -24,6 +24,7 @@ import { addServerUrlOption, resolveServerUrl } from '../../lib/server-url-optio
 import { bountyHttp, BountyHttpError } from '../../lib/bounty-http.js';
 import { resolveCurrentAgent } from '../../lib/current-agent.js';
 import { generateIdempotencyKey } from '../../lib/idempotency-key.js';
+import { shouldJson, jsonOutput, isQuiet, quietIdOutput } from '../../lib/json-output.js';
 
 interface PublishOptions {
   title: string;
@@ -36,6 +37,8 @@ interface PublishOptions {
   deadline?: number;
   'server-url'?: string;
   'idempotency-key'?: string;
+  json?: boolean;
+  quiet?: boolean;
 }
 
 interface BountyTask {
@@ -110,6 +113,17 @@ export const publishCommand: CommandModule<object, PublishOptions> = {
           description:
             'Optional Idempotency-Key for safe retry (server dedupes 24h). ' +
             'Default: auto-generated from uuid+title+publisher.',
+        })
+        .option('json', {
+          type: 'boolean',
+          default: false,
+          description: 'Output result as JSON (programmatic parsing).',
+        })
+        .option('quiet', {
+          alias: 'q',
+          type: 'boolean',
+          default: false,
+          description: 'Suppress decorative output (errors still printed to stderr).',
         })
     ),
 
@@ -209,17 +223,23 @@ export const publishCommand: CommandModule<object, PublishOptions> = {
         },
       });
 
-      // 6. Pretty output
-      console.log(chalk.green('\n✓ Task published successfully\n'));
-      console.log(chalk.cyan('  ID:'), task.id);
-      console.log(chalk.cyan('  Title:'), task.title);
-      console.log(chalk.cyan('  Type:'), task.type);
-      console.log(chalk.cyan('  Reward:'), task.reward, 'credits');
-      console.log(chalk.cyan('  Status:'), task.status);
-      if (task.tags && task.tags.length > 0) {
-        console.log(chalk.cyan('  Tags:'), task.tags.join(', '));
+      // 6. Output: JSON / quiet / decorative
+      if (shouldJson(argv)) {
+        jsonOutput(task);
+      } else if (isQuiet(argv)) {
+        quietIdOutput(task);
+      } else {
+        console.log(chalk.green('\n✓ Task published successfully\n'));
+        console.log(chalk.cyan('  ID:'), task.id);
+        console.log(chalk.cyan('  Title:'), task.title);
+        console.log(chalk.cyan('  Type:'), task.type);
+        console.log(chalk.cyan('  Reward:'), task.reward, 'credits');
+        console.log(chalk.cyan('  Status:'), task.status);
+        if (task.tags && task.tags.length > 0) {
+          console.log(chalk.cyan('  Tags:'), task.tags.join(', '));
+        }
+        console.log();
       }
-      console.log();
     } catch (error: any) {
       handleBountyError(error, 'publish task', baseUrl);
     }
