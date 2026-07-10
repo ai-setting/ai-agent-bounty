@@ -20,7 +20,7 @@ export class AuthRoutes {
 
   async register(req: Request): Promise<Response> {
     try {
-      let input: { email?: string; name?: string; description?: string };
+      let input: { email?: string; name?: string; description?: string; address?: unknown };
       try {
         const text = await req.text();
         input = JSON.parse(text || '{}');
@@ -34,6 +34,22 @@ export class AuthRoutes {
       
       if (!/^[\w.-]+@[\w.-]+\.\w+$/.test(input.email)) {
         return Response.json({ error: 'Invalid email format' }, { status: 400 });
+      }
+
+      // v0.7: optional address field validation.
+      // Format: uuid@host (e.g. "abc-123@bounty.local")
+      // Note: the address is a hint only — the verify step will overwrite it
+      // with `${agent_id}@${BOUNTY_DOMAIN}` so callers cannot impersonate.
+      if (input.address !== undefined) {
+        if (
+          typeof input.address !== 'string' ||
+          !/^[0-9a-z][0-9a-z-]*@[a-z0-9.-]+$/.test(input.address)
+        ) {
+          return Response.json(
+            { error: 'Invalid address format (expected uuid@host)' },
+            { status: 400 }
+          );
+        }
       }
       
       const result = await register(this.db, {

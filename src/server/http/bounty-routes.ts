@@ -5,7 +5,7 @@
  * credit accounting, status transitions) lives in BountyService; this
  * module is responsible for:
  *   - request body parsing + validation
- *   - looking up the agent by id and resolving the publisher email
+ *   - looking up the agent by id OR address and resolving the publisher email
  *   - mapping service return values to HTTP responses
  *
  * Endpoints:
@@ -13,15 +13,22 @@
  *   POST /api/tasks
  *   PUT  /api/tasks/:id/grab
  *   PUT  /api/tasks/:id/submit
- *   PUT  /api/tasks/:id/complete   (added in H1)
- *   PUT  /api/tasks/:id/cancel     (added in H1)
- *   PUT  /api/tasks/:id/dispute    (added in H1)
- *   GET  /api/tasks/:id            (added in H1)
+ *   PUT  /api/tasks/:id/complete
+ *   PUT  /api/tasks/:id/cancel
+ *   PUT  /api/tasks/:id/dispute
+ *   GET  /api/tasks/:id
+ *
+ * v0.7 additions:
+ *   - Handlers accept `*Address` (uuid@host or bare uuid) in addition to
+ *     legacy `*Id` (auth-derived or explicit body field).
+ *   - When `BOUNTY_TOKEN_CHECK_ENABLED=false`, `agentId` is `undefined`;
+ *     callers MUST supply an address in the body.
  */
 
 import type { Database } from '../../lib/storage/database';
 import { BountyService, type Task, type TaskFilter, TaskStatus } from '../../lib/bounty/index.js';
 import { AgentService } from '../../lib/agent/index.js';
+import { findAgentByAddress } from '../lib/address-resolver.js';
 
 interface JsonBody {
   [k: string]: unknown;
@@ -51,6 +58,55 @@ function forbidden(message: string): Response {
 
 function internalError(message = 'Internal server error'): Response {
   return Response.json({ error: message }, { status: 500 });
+}
+
+/**
+ * Resolve the acting agent from request body + auth fallback.
+ *
+ * Priority:
+ *   1. body[`${fieldName}Address`] (full address `uuid@host` or bare uuid)
+ *   2. body[`${fieldName}Id`] (legacy explicit id)
+ *   3. authId (from JWT — only present when BOUNTY_TOKEN_CHECK_ENABLED=true)
+ *
+ * Returns `null` if no source provided or address lookup fails.
+ * Caller should 400 / 404 as appropriate.
+ */
+function resolveActor(
+  db: Database,
+  body: Record<string, unknown>,
+  fieldName: 'publisher' | 'agent',
+  authId: string | undefined
+): { id: string; email: string } | null {
+  const addrKey = `${fieldName}Address` as const;
+  const idKey = `${fieldName}Id` as const;
+
+  // 1. address field
+  const addr = body[addrKey];
+  if (typeof addr === 'string' && addr.trim()) {
+    const r = findAgentByAddress(db, addr);
+    if (!r) return null;
+    return r;
+  }
+
+  // 2. explicit id field (backward compat)
+  const id = body[idKey];
+  if (typeof id === 'string' && id.trim()) {
+    const row = db
+      .prepare('SELECT id, email FROM agents WHERE id = ?')
+      .get(id) as { id: string; email: string } | undefined;
+    if (row) return row;
+    return null;
+  }
+
+  // 3. authId
+  if (authId) {
+    const row = db
+      .prepare('SELECT id, email FROM agents WHERE id = ?')
+      .get(authId) as { id: string; email: string } | undefined;
+    if (row) return row;
+  }
+
+  return null;
 }
 
 export class BountyRoutes {
@@ -87,7 +143,7 @@ export class BountyRoutes {
 
   // ===== Commands =====
 
-  async createTask(req: Request, agentId: string): Promise<Response> {
+  async createTask(req: Request, authId: string | undefined): Promise<Response> {
     const body = await readJson(req);
     if (body === null) return badRequest('Missing request body');
     if (body === undefined) return badRequest('Invalid JSON');
@@ -102,27 +158,42 @@ export class BountyRoutes {
     if (typeof title !== 'string' || !title.trim()) {
       return badRequest('Missing required field: title');
     }
-    if (typeof description !== 'string' || !description.trim()) {
+
+    // 容错: description 可选 → 缺失用空串, 但最终需要非空 (向后兼容测试)
+    const safeDescription = typeof description === 'string' ? description.trim() : '';
+    if (!safeDescription) {
       return badRequest('Missing required field: description');
     }
-    if (typeof reward !== 'number' || !(reward > 0)) {
+
+    // 容错: reward 类型不对 → 友好提示
+    if (reward !== undefined && (typeof reward !== 'number' || !(reward > 0))) {
+      return badRequest('reward must be a positive number');
+    }
+    const safeReward = typeof reward === 'number' && reward > 0 ? reward : 0;
+    if (safeReward === 0) {
       return badRequest('Missing required field: reward (must be > 0)');
     }
+
     const taskType = typeof type === 'string' && type.trim() ? type : 'bounty';
 
-    const agent = this.db
-      .prepare('SELECT email FROM agents WHERE id = ?')
-      .get(agentId) as { email: string } | undefined;
-    if (!agent) return notFound('Agent not found');
+    // 解析 publisher (address 优先 → body id → auth)
+    const publisher = resolveActor(this.db, body, 'publisher', authId);
+    if (!publisher) {
+      return badRequest(
+        typeof body.publisherAddress === 'string' && body.publisherAddress
+          ? `Agent not found: ${body.publisherAddress}`
+          : 'publisherId or publisherAddress required'
+      );
+    }
 
     try {
       const task = this.bountyService.publish({
         title: title.trim(),
-        description: description.trim(),
+        description: safeDescription,
         type: taskType,
-        reward,
-        publisherId: agentId,
-        publisherEmail: agent.email,
+        reward: safeReward,
+        publisherId: publisher.id,
+        publisherEmail: publisher.email,
       });
       return Response.json(task, { status: 201 });
     } catch (err) {
@@ -130,17 +201,30 @@ export class BountyRoutes {
     }
   }
 
-  grabTask(taskId: string, agentId: string): Response {
-    const agent = this.db
-      .prepare('SELECT email FROM agents WHERE id = ?')
-      .get(agentId) as { email: string } | undefined;
-    if (!agent) return notFound('Agent not found');
+  async grabTask(req: Request, taskId: string, authId: string | undefined): Promise<Response> {
+    // v0.7: grabTask reads body for agentAddress
+    let body: JsonBody = {};
+    const text = await req.text();
+    if (text) {
+      try {
+        body = JSON.parse(text) as JsonBody;
+      } catch {
+        return badRequest('Invalid JSON');
+      }
+    }
 
-    const result = this.bountyService.grab(taskId, agentId, agent.email);
+    const agent = resolveActor(this.db, body, 'agent', authId);
+    if (!agent) {
+      return badRequest(
+        typeof body.agentAddress === 'string' && body.agentAddress
+          ? `Agent not found: ${body.agentAddress}`
+          : 'agentId or agentAddress required'
+      );
+    }
+
+    const result = this.bountyService.grab(taskId, agent.id, agent.email);
     if (!result.success) {
       // D.1: distinguish "already grabbed" (409 Conflict) from generic 400.
-      // The DB-level optimistic lock already ensures only one writer wins;
-      // surfacing 409 + currentOwner lets clients tell the user *who* won.
       if (result.reason === 'Task not found') {
         return notFound('Task not found');
       }
@@ -179,14 +263,24 @@ export class BountyRoutes {
     return Response.json(task);
   }
 
-  async submitTask(req: Request, taskId: string, agentId: string): Promise<Response> {
-    const body = await readJson(req);
+  async submitTask(req: Request, taskId: string, authId: string | undefined): Promise<Response> {
+    const body = (await readJson(req)) ?? {};
     if (body === undefined) return badRequest('Invalid JSON');
-    const resultText = (body?.result as unknown);
-    if (typeof resultText !== 'string') {
-      return badRequest('Missing required field: result');
+
+    // 容错: result 可选 → 缺失/非字符串用空串, 但最终需要非空
+    const resultText = typeof body.result === 'string' ? body.result.trim() : '';
+    if (!resultText) return badRequest('Missing required field: result');
+
+    const agent = resolveActor(this.db, body, 'agent', authId);
+    if (!agent) {
+      return badRequest(
+        typeof body.agentAddress === 'string' && body.agentAddress
+          ? `Agent not found: ${body.agentAddress}`
+          : 'agentId or agentAddress required'
+      );
     }
-    const result = this.bountyService.submit(taskId, agentId, resultText);
+
+    const result = this.bountyService.submit(taskId, agent.id, resultText);
     if (!result.success) {
       const status = result.reason === 'Task not found' ? 404 : 400;
       return Response.json({ error: result.reason }, { status });
@@ -195,45 +289,92 @@ export class BountyRoutes {
     return Response.json(task);
   }
 
-  async completeTask(_req: Request, taskId: string, agentId: string): Promise<Response> {
+  async completeTask(req: Request, taskId: string, authId: string | undefined): Promise<Response> {
+    let body: JsonBody = {};
+    const text = await req.text();
+    if (text) {
+      try {
+        body = JSON.parse(text) as JsonBody;
+      } catch {
+        return badRequest('Invalid JSON');
+      }
+    }
+
+    const publisher = resolveActor(this.db, body, 'publisher', authId);
+    if (!publisher) {
+      return badRequest(
+        typeof body.publisherAddress === 'string' && body.publisherAddress
+          ? `Agent not found: ${body.publisherAddress}`
+          : 'publisherId or publisherAddress required'
+      );
+    }
+
     const task = this.bountyService.getById(taskId);
     if (!task) return notFound('Task not found');
-    if (task.publisherId !== agentId) {
+    if (task.publisherId !== publisher.id) {
       return forbidden('Only the publisher can complete the task');
     }
-    const result = this.bountyService.complete(taskId, agentId);
+    const result = this.bountyService.complete(taskId, publisher.id);
     if (!result.success) {
-      return Response.json({ error: result.reason }, { status: 400 });
-    }
+      return Response.json({ error: result.reason }, { status: 400 });    }
     return Response.json(this.bountyService.getById(taskId));
   }
 
-  async cancelTask(_req: Request, taskId: string, agentId: string): Promise<Response> {
+  async cancelTask(req: Request, taskId: string, authId: string | undefined): Promise<Response> {
+    let body: JsonBody = {};
+    const text = await req.text();
+    if (text) {
+      try {
+        body = JSON.parse(text) as JsonBody;
+      } catch {
+        return badRequest('Invalid JSON');
+      }
+    }
+
+    const publisher = resolveActor(this.db, body, 'publisher', authId);
+    if (!publisher) {
+      return badRequest(
+        typeof body.publisherAddress === 'string' && body.publisherAddress
+          ? `Agent not found: ${body.publisherAddress}`
+          : 'publisherId or publisherAddress required'
+      );
+    }
+
     const task = this.bountyService.getById(taskId);
     if (!task) return notFound('Task not found');
-    if (task.publisherId !== agentId) {
+    if (task.publisherId !== publisher.id) {
       return forbidden('Only the publisher can cancel the task');
     }
-    const result = this.bountyService.cancel(taskId, agentId);
+    const result = this.bountyService.cancel(taskId, publisher.id);
     if (!result.success) {
       return Response.json({ error: result.reason }, { status: 400 });
     }
     return Response.json(this.bountyService.getById(taskId));
   }
 
-  async disputeTask(req: Request, taskId: string, agentId: string): Promise<Response> {
-    const body = await readJson(req);
+  async disputeTask(req: Request, taskId: string, authId: string | undefined): Promise<Response> {
+    const body = (await readJson(req)) ?? {};
     if (body === undefined) return badRequest('Invalid JSON');
-    const reason = body?.reason as unknown;
-    if (typeof reason !== 'string' || !reason.trim()) {
-      return badRequest('Missing required field: reason');
+
+    // 容错: reason 可选 → 缺失用空串, 但最终需要非空
+    const reason = typeof body.reason === 'string' ? body.reason.trim() : '';
+    if (!reason) return badRequest('Missing required field: reason');
+
+    const publisher = resolveActor(this.db, body, 'publisher', authId);
+    if (!publisher) {
+      return badRequest(
+        typeof body.publisherAddress === 'string' && body.publisherAddress
+          ? `Agent not found: ${body.publisherAddress}`
+          : 'publisherId or publisherAddress required'
+      );
     }
+
     const task = this.bountyService.getById(taskId);
     if (!task) return notFound('Task not found');
-    if (task.publisherId !== agentId) {
+    if (task.publisherId !== publisher.id) {
       return forbidden('Only the publisher can dispute the task');
     }
-    const result = this.bountyService.dispute(taskId, agentId, reason.trim());
+    const result = this.bountyService.dispute(taskId, publisher.id, reason);
     if (!result.success) {
       return Response.json({ error: result.reason }, { status: 400 });
     }
