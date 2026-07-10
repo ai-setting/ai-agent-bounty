@@ -1,19 +1,7 @@
 /**
  * bounty publish command
  *
- * Phase feat/bounty-task-optimize:
- * - 重构从"本地 DB 直连"为"HTTP API 调用"（与 com send 对齐）
- * - 新增 --server-url / -u 选项，支持远程 bounty server
- * - 自动从 ~/.config/bounty/token 读 JWT（readAuthToken helper）
- * - --publisher-id 缺省时从 BOUNTY_IM_ADDRESS 推断（resolveCurrentAgent helper）
- * - 用 bountyHttp() 统一错误分类（network/auth/business/server）
- * - 移除 createContext() 调用，不再直连 SQLite
- *
- * 错误体验：失败时根据 BountyHttpError.type 给出友好提示 + 不同 exit code
- *   - network (连接拒绝/超时) → 提示启动 server
- *   - auth (401/403) → 提示登录
- *   - business (4xx) → 显示 server 错误信息
- *   - server (5xx) → 提示 server 端问题
+ * v0.7: address-based publisher identity + tolerant optional fields.
  */
 
 import type { CommandModule } from 'yargs';
@@ -25,16 +13,20 @@ import { bountyHttp, BountyHttpError } from '../../lib/bounty-http.js';
 import { resolveCurrentAgent } from '../../lib/current-agent.js';
 import { generateIdempotencyKey } from '../../lib/idempotency-key.js';
 import { shouldJson, jsonOutput, isQuiet, quietIdOutput } from '../../lib/json-output.js';
+import { resolveAgentIdOption } from '../../lib/address-parser.js';
+import { validatePublishInput } from '../../lib/input-validator.js';
 
 interface PublishOptions {
   title: string;
   description?: string;
   'description-file'?: string;
   type: string;
-  reward: number;
+  reward: number | string;
+  'publisher-address'?: string;
+  /** @deprecated Use --publisher-address. */
   'publisher-id'?: string;
   tags?: string;
-  deadline?: number;
+  deadline?: number | string;
   'server-url'?: string;
   'idempotency-key'?: string;
   json?: boolean;
@@ -44,11 +36,12 @@ interface PublishOptions {
 interface BountyTask {
   id: string;
   title: string;
-  description: string;
+  description?: string;
   type: string;
   reward: number;
   status: string;
   publisherId: string;
+  publisherAddress?: string;
   tags?: string[];
 }
 
@@ -68,15 +61,14 @@ export const publishCommand: CommandModule<object, PublishOptions> = {
         .option('description', {
           alias: 'd',
           type: 'string',
-          description:
-            'Task description. Optional if --description-file is given.',
+          description: 'Task description (optional).',
         })
         .option('description-file', {
           alias: 'f',
           type: 'string',
           description:
             'Path to a file whose content will be used as the task ' +
-            'description. Useful for large descriptions (>50KB).',
+            'description. Useful for large descriptions (>50KB). Optional.',
         })
         .option('type', {
           alias: 'y',
@@ -90,22 +82,26 @@ export const publishCommand: CommandModule<object, PublishOptions> = {
           demandOption: true,
           description: 'Reward credits (must be > 0)',
         })
-        .option('publisher-id', {
+        .option('publisher-address', {
           alias: 'p',
           type: 'string',
           description:
-            'Publisher agent ID. ' +
-            'Defaults to BOUNTY_IM_ADDRESS env (e.g., "agent-uuid@host" → "agent-uuid").',
+            'Publisher agent address (<uuid>@<host>). Pure <uuid> is also accepted. ' +
+            'Defaults to BOUNTY_IM_ADDRESS env.',
+        })
+        .option('publisher-id', {
+          type: 'string',
+          description: '[deprecated] Publisher agent ID. Use --publisher-address instead.',
         })
         .option('tags', {
           alias: 'g',
           type: 'string',
-          description: 'Comma-separated tags',
+          description: 'Comma-separated tags (optional)',
         })
         .option('deadline', {
           alias: 'l',
           type: 'number',
-          description: 'Deadline timestamp (ms since epoch)',
+          description: 'Deadline timestamp (ms since epoch, optional)',
         })
         .option('idempotency-key', {
           alias: 'k',
@@ -128,38 +124,36 @@ export const publishCommand: CommandModule<object, PublishOptions> = {
     ),
 
   handler: async (argv) => {
-    // 1. Resolve base URL: --server-url > BOUNTY_API_URL env > default
     const baseUrl = resolveServerUrl(argv['server-url'], bountyConfig.apiUrl);
 
-    // 2. Resolve publisher ID: --publisher-id > BOUNTY_IM_ADDRESS > error
-    let publisherId = argv['publisher-id'] ?? resolveCurrentAgent();
-    if (!publisherId) {
-      console.error(
-        chalk.red(
-          '\n✗ Cannot infer publisher ID. Provide --publisher-id or set BOUNTY_IM_ADDRESS.\n'
-        )
-      );
+    const validated = validatePublishInput(argv as Record<string, unknown>);
+    if (!validated.ok) {
+      console.error(chalk.red(`\n${validated.error}\n`));
       process.exit(2);
     }
+    const input = validated.value;
 
-    // 3. Validate inputs (basic client-side checks before HTTP call)
-    if (!argv.reward || argv.reward <= 0) {
-      console.error(chalk.red('\n✗ --reward must be a positive number.\n'));
+    const publisher = resolveAgentIdOption({
+      address: argv['publisher-address'],
+      deprecatedId: argv['publisher-id'],
+      fallback: resolveCurrentAgent(),
+      addressFlag: '--publisher-address',
+      deprecatedFlag: '--publisher-id',
+      missingMessage:
+        '✗ Cannot infer publisher address. Provide --publisher-address or set BOUNTY_IM_ADDRESS.',
+    });
+    if (!publisher.ok) {
+      console.error(chalk.red(`\n${publisher.error}\n`));
       process.exit(2);
     }
+    const publisherId = publisher.value;
 
-    // 3b. Resolve description: --description wins if both given.
-    //     If only --description-file given, read file content.
-    //     Neither given → error.
-    let description: string | undefined = argv.description?.trim();
-    if (!description && argv['description-file']) {
-      const filePath = argv['description-file'];
+    // Resolve optional description: --description wins if both are given.
+    let description: string | undefined = input.description;
+    if (!description && input.descriptionFile) {
+      const filePath = input.descriptionFile;
       if (!existsSync(filePath)) {
-        console.error(
-          chalk.red(
-            `\n✗ --description-file: file not found: ${filePath}\n`
-          )
-        );
+        console.error(chalk.red(`\n✗ --description-file: file not found: ${filePath}\n`));
         process.exit(2);
       }
       try {
@@ -174,47 +168,28 @@ export const publishCommand: CommandModule<object, PublishOptions> = {
         process.exit(2);
       }
     }
-    if (!description) {
-      console.error(
-        chalk.red(
-          '\n✗ Either --description or --description-file is required.\n'
-        )
-      );
-      process.exit(2);
-    }
 
-    // 4. Parse tags
-    const tags = argv.tags
-      ? argv.tags.split(',').map((t) => t.trim()).filter(Boolean)
-      : undefined;
-
-    // 5. Resolve Idempotency-Key (D.4):
-    //    user-provided > auto-generated from uuid+title+publisher.
-    //    Server dedupes within 24h window so retried publishes don't
-    //    create duplicate tasks / double-charge credits.
     const idempotencyKey =
-      argv['idempotency-key']?.trim() ||
+      input.idempotencyKey ||
       generateIdempotencyKey({
         uuid: resolveCurrentAgent() ?? publisherId,
-        title: argv.title.trim(),
+        title: input.title,
         publisher: publisherId,
       });
 
-    // 6. Call HTTP API
     try {
       const task = await bountyHttp<BountyTask>({
         baseUrl,
         path: '/api/tasks',
         method: 'POST',
         body: {
-          title: argv.title.trim(),
+          title: input.title,
           description,
-          type: argv.type.trim(),
-          reward: argv.reward,
-          tags,
-          deadline: argv.deadline,
-          // Note: server reads publisherId from auth agentId, but we also
-          // pass it in body for token-less / dev mode where server trusts body
+          type: input.type,
+          reward: input.reward,
+          tags: input.tags,
+          deadline: input.deadline,
+          // Server still accepts legacy id field; CLI derives it from address.
           publisherId,
         },
         extraHeaders: {
@@ -223,7 +198,6 @@ export const publishCommand: CommandModule<object, PublishOptions> = {
         },
       });
 
-      // 6. Output: JSON / quiet / decorative
       if (shouldJson(argv)) {
         jsonOutput(task);
       } else if (isQuiet(argv)) {
@@ -260,9 +234,6 @@ export function handleBountyError(error: any, action: string, baseUrl: string): 
     console.error(chalk.red(`\n✗ Failed to ${action}:`));
     console.error(chalk.red(`  ${error.message}\n`));
 
-    // D.1: For 409 Conflict (e.g., task already grabbed), surface the
-    // current owner so the user knows who beat them. The server passes
-    // `currentOwner: { id, email, name }` and `currentStatus` in the body.
     if (error.status === 409 && error.currentOwner) {
       const co = error.currentOwner;
       const display = co.name ? `${co.name} <${co.email}>` : co.email ?? co.id;

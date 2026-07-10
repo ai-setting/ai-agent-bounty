@@ -27,6 +27,7 @@ interface BountyTask {
   status: string;
   publisherEmail?: string;
   publisherId?: string;
+  publisherAddress?: string;
   tags?: string[];
 }
 
@@ -94,7 +95,7 @@ export const boardCommand: CommandModule<object, BoardOptions> = {
         console.log(chalk.cyan(`[${i + 1}] ${task.title}`));
         console.log(chalk.gray(`    ID: ${task.id}`));
         console.log(chalk.gray(`    Type: ${task.type} | Reward: ${task.reward} credits`));
-        console.log(chalk.gray(`    Publisher: ${task.publisherEmail ?? task.publisherId ?? 'unknown'}`));
+        console.log(chalk.gray(`    Publisher: ${task.publisherAddress ?? task.publisherEmail ?? task.publisherId ?? 'unknown'}`));
         if (task.tags && task.tags.length > 0) {
           console.log(chalk.gray(`    Tags: ${task.tags.join(', ')}`));
         }
