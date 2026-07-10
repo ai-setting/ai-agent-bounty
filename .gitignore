@@ -43,3 +43,4 @@ worktrees/
 # Auth files (must not be committed)
 .npmrc
 
+nohup.out
