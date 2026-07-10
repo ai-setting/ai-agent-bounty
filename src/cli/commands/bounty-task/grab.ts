@@ -88,6 +88,7 @@ export const grabCommand: CommandModule<object, GrabOptions> = {
         path: `/api/tasks/${encodeURIComponent(argv['task-id'])}/grab`,
         method: 'PUT',
         body: { agentId },
+        extraHeaders: { 'X-Agent-Id': agentId },
       });
 
       console.log(chalk.green('\n✓ Task grabbed successfully\n'));

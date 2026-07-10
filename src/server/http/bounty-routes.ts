@@ -138,8 +138,41 @@ export class BountyRoutes {
 
     const result = this.bountyService.grab(taskId, agentId, agent.email);
     if (!result.success) {
-      const status = result.reason === 'Task not found' ? 404 : 400;
-      return Response.json({ error: result.reason }, { status });
+      // D.1: distinguish "already grabbed" (409 Conflict) from generic 400.
+      // The DB-level optimistic lock already ensures only one writer wins;
+      // surfacing 409 + currentOwner lets clients tell the user *who* won.
+      if (result.reason === 'Task not found') {
+        return notFound('Task not found');
+      }
+      if (result.reason!.startsWith('Task is not open')) {
+        const current = this.db
+          .prepare(
+            `SELECT t.status, t.assignee_id, t.assignee_email, a.name AS assignee_name
+               FROM tasks t
+               LEFT JOIN agents a ON a.id = t.assignee_id
+              WHERE t.id = ?`
+          )
+          .get(taskId) as
+          | { status: string; assignee_id: string | null; assignee_email: string | null; assignee_name: string | null }
+          | undefined;
+        const currentOwner =
+          current && current.assignee_id && current.assignee_email
+            ? {
+                id: current.assignee_id,
+                email: current.assignee_email,
+                name: current.assignee_name ?? undefined,
+              }
+            : undefined;
+        return Response.json(
+          {
+            error: result.reason,
+            currentStatus: current?.status,
+            currentOwner,
+          },
+          { status: 409 }
+        );
+      }
+      return badRequest(result.reason!);
     }
 
     const task = this.bountyService.getById(taskId);

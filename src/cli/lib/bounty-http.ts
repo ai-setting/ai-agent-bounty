@@ -57,18 +57,30 @@ export class BountyHttpError extends Error {
   readonly status: number;
   /** Raw server-provided error message (if available) */
   readonly serverMessage: string | undefined;
+  /** When present, info about the entity currently holding the resource (e.g., grab conflict). */
+  readonly currentOwner:
+    | { id?: string; email?: string; name?: string }
+    | undefined;
+  /** Server-provided current status (e.g., 'grabbed', 'completed'). */
+  readonly currentStatus: string | undefined;
 
   constructor(
     type: BountyHttpErrorType,
     status: number,
     message: string,
-    serverMessage?: string
+    serverMessage?: string,
+    extra?: {
+      currentOwner?: { id?: string; email?: string; name?: string };
+      currentStatus?: string;
+    }
   ) {
     super(message);
     this.name = 'BountyHttpError';
     this.type = type;
     this.status = status;
     this.serverMessage = serverMessage;
+    this.currentOwner = extra?.currentOwner;
+    this.currentStatus = extra?.currentStatus;
   }
 }
 
@@ -107,6 +119,14 @@ export interface BountyHttpOptions {
    * Default: 200ms.
    */
   retryBaseDelayMs?: number;
+  /**
+   * Extra HTTP headers to include in the request. Merged into the
+   * default Content-Type + Authorization headers; caller headers win
+   * on key conflict (so callers can override).
+   *
+   * Use case: Idempotency-Key, X-Trace-Id, X-Client-Version, etc.
+   */
+  extraHeaders?: Record<string, string>;
 }
 
 /** HTTP status codes that should trigger automatic retry. */
@@ -215,9 +235,13 @@ async function executeOnce<T>(
   // 处理非 2xx
   if (!response.ok) {
     let serverMessage: string | undefined;
+    let currentOwner: { id?: string; email?: string; name?: string } | undefined;
+    let currentStatus: string | undefined;
     try {
       const data: any = await response.json();
       serverMessage = data?.error;
+      currentOwner = data?.currentOwner;
+      currentStatus = data?.currentStatus;
     } catch {
       try {
         serverMessage = await response.text();
@@ -228,7 +252,10 @@ async function executeOnce<T>(
 
     const type = classifyStatus(response.status);
     const friendly = buildFriendlyMessage(type, response.status, serverMessage, urlForError);
-    throw new BountyHttpError(type, response.status, friendly, serverMessage);
+    throw new BountyHttpError(type, response.status, friendly, serverMessage, {
+      currentOwner,
+      currentStatus,
+    });
   }
 
   // 2xx — parse JSON
@@ -262,6 +289,7 @@ export async function bountyHttp<T = unknown>(options: BountyHttpOptions): Promi
     method = 'GET',
     body,
     tokenPath = DEFAULT_TOKEN_PATH,
+    agentId,
     signal,
     timeoutMs = 30000,
     maxRetries = 2,
@@ -273,13 +301,22 @@ export async function bountyHttp<T = unknown>(options: BountyHttpOptions): Promi
   const normalizedPath = path.startsWith('/') ? path : `/${path}`;
   const url = `${trimmedBase}${normalizedPath}`;
 
-  // Headers: Content-Type + Authorization (如 token 存在)
+  // Headers: Content-Type + Authorization (如 token 存在) + X-Agent-Id (dev mode)
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
   };
   const token = readAuthToken(tokenPath);
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
+  }
+  if (agentId) {
+    headers['X-Agent-Id'] = agentId;
+  }
+  // Merge caller-provided extra headers last so they win on key conflict
+  if (options.extraHeaders) {
+    for (const [key, value] of Object.entries(options.extraHeaders)) {
+      headers[key] = value;
+    }
   }
 
   let lastError: BountyHttpError | null = null;

@@ -19,12 +19,21 @@ export const BOUNTY_CAPABILITIES = `
 
 | 命令 | 描述 |
 |------|------|
-| \`bounty bounty-task publish\` | 发布赏金任务 |
-| \`bounty bounty-task board\` | 查看任务看板 |
+| \`bounty bounty-task publish\` | 发布赏金任务（通过 HTTP API，支持 \`--server-url\`） |
+| \`bounty bounty-task board\` | 查看任务看板（支持 type/min-reward/max-reward 过滤） |
 | \`bounty bounty-task grab\` | 认领任务 |
 | \`bounty bounty-task submit\` | 提交任务结果 |
 | \`bounty bounty-task complete\` | 完成任务并发放奖励 |
 | \`bounty bounty-task cancel\` | 取消任务 |
+
+### 通用选项（适用于所有 bounty-task 子命令）
+
+| 选项 | 描述 |
+|------|------|
+| \`--server-url / -u\` | 指定 bounty server URL（覆盖 BOUNTY_API_URL env） |
+| \`--publisher-id / -p\` 或 \`--agent-id / -a\` | 缺省时从 \`BOUNTY_IM_ADDRESS\` env 推断（如 \`agent-uuid@host\` → \`agent-uuid\`） |
+
+鉴权：自动从 \`~/.config/bounty/token\` 读取 JWT 并附加 \`Authorization: Bearer <token>\` 头。
 
 ### Agent 管理（实际命令：\`bounty agent <sub>\`）
 
@@ -52,14 +61,17 @@ export const BOUNTY_CAPABILITIES = `
 # 发布一个赏金任务（注意 bounty-task 命名空间）
 bounty bounty-task publish -t "修复登录 Bug" -d "用户无法登录" -y coding -r 100 -p my-agent-id
 
-# 查看任务看板
-bounty bounty-task board
+# 查看任务看板（支持 type/min-reward/max-reward 过滤）
+bounty bounty-task board --type coding --min-reward 50
 
-# 认领一个任务
-bounty bounty-task grab task_abc123
+# 认领一个任务（task-id 必须为 UUID v4 格式）
+bounty bounty-task grab 8de9b6aa-5781-4a65-be96-45185fb7c8b1
 
 # 提交任务结果
-bounty bounty-task submit task_abc123 "已修复，问题是 cookie 过期"
+bounty bounty-task submit 8de9b6aa-5781-4a65-be96-45185fb7c8b1 -r "已修复，问题是 cookie 过期"
+
+# 远程 server：用 --server-url 指定
+bounty bounty-task publish -t "任务" -d "描述" -y coding -r 100 -u https://bounty.example.com
 
 # 查看 Agent 积分
 bounty agent credits my-agent-id
@@ -67,6 +79,16 @@ bounty agent credits my-agent-id
 # 向其他 Agent 发送消息
 bounty com send -f my-agent@localhost -t other-agent@localhost -b "你好！"
 \`\`\`
+
+### 错误处理
+
+失败时根据错误类型给出不同提示和 exit code：
+- 网络错误（exit 4）：\`Is the bounty server running? Try: bounty server start\`
+- 鉴权错误（exit 3）：\`Run \\\`bounty auth login\\\` or check BOUNTY_API_URL\`
+- 业务错误（exit 2）：显示 server 错误信息
+- 服务端错误（exit 4）：\`The server may be misconfigured\`
+
+瞬时网络失败（HTTP 502/503/504）自动重试（指数退避，最多 3 次）。
 
 ### 核心概念
 

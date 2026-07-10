@@ -22,6 +22,7 @@ import { bountyConfig } from '../../../lib/config/bounty-config.js';
 import { addServerUrlOption, resolveServerUrl } from '../../lib/server-url-option.js';
 import { bountyHttp, BountyHttpError } from '../../lib/bounty-http.js';
 import { resolveCurrentAgent } from '../../lib/current-agent.js';
+import { generateIdempotencyKey } from '../../lib/idempotency-key.js';
 
 interface PublishOptions {
   title: string;
@@ -32,6 +33,7 @@ interface PublishOptions {
   tags?: string;
   deadline?: number;
   'server-url'?: string;
+  'idempotency-key'?: string;
 }
 
 interface BountyTask {
@@ -93,6 +95,13 @@ export const publishCommand: CommandModule<object, PublishOptions> = {
           type: 'number',
           description: 'Deadline timestamp (ms since epoch)',
         })
+        .option('idempotency-key', {
+          alias: 'k',
+          type: 'string',
+          description:
+            'Optional Idempotency-Key for safe retry (server dedupes 24h). ' +
+            'Default: auto-generated from uuid+title+publisher.',
+        })
     ),
 
   handler: async (argv) => {
@@ -121,7 +130,19 @@ export const publishCommand: CommandModule<object, PublishOptions> = {
       ? argv.tags.split(',').map((t) => t.trim()).filter(Boolean)
       : undefined;
 
-    // 5. Call HTTP API
+    // 5. Resolve Idempotency-Key (D.4):
+    //    user-provided > auto-generated from uuid+title+publisher.
+    //    Server dedupes within 24h window so retried publishes don't
+    //    create duplicate tasks / double-charge credits.
+    const idempotencyKey =
+      argv['idempotency-key']?.trim() ||
+      generateIdempotencyKey({
+        uuid: resolveCurrentAgent() ?? publisherId,
+        title: argv.title.trim(),
+        publisher: publisherId,
+      });
+
+    // 6. Call HTTP API
     try {
       const task = await bountyHttp<BountyTask>({
         baseUrl,
@@ -137,6 +158,9 @@ export const publishCommand: CommandModule<object, PublishOptions> = {
           // Note: server reads publisherId from auth agentId, but we also
           // pass it in body for token-less / dev mode where server trusts body
           publisherId,
+        },
+        extraHeaders: {
+          'Idempotency-Key': idempotencyKey,
         },
       });
 
@@ -160,15 +184,32 @@ export const publishCommand: CommandModule<object, PublishOptions> = {
 /**
  * Centralized error handler for bounty-task HTTP errors.
  * Provides user-friendly messages based on error type.
+ *
+ * Exit code mapping:
+ * - 2: usage error / business validation
+ * - 3: auth required
+ * - 4: network / server issue
  */
 export function handleBountyError(error: any, action: string, baseUrl: string): never {
   if (error instanceof BountyHttpError) {
     console.error(chalk.red(`\n✗ Failed to ${action}:`));
     console.error(chalk.red(`  ${error.message}\n`));
-    // Exit code mapping:
-    // - 2: usage error (business)
-    // - 3: auth required
-    // - 4: network/server issue
+
+    // D.1: For 409 Conflict (e.g., task already grabbed), surface the
+    // current owner so the user knows who beat them. The server passes
+    // `currentOwner: { id, email, name }` and `currentStatus` in the body.
+    if (error.status === 409 && error.currentOwner) {
+      const co = error.currentOwner;
+      const display = co.name ? `${co.name} <${co.email}>` : co.email ?? co.id;
+      console.error(
+        chalk.yellow(
+          `  💡 This task is already ${error.currentStatus ?? 'taken'}; ` +
+            `currently held by ${display}.`
+        )
+      );
+      console.error();
+    }
+
     const exitCode =
       error.type === 'auth' ? 3 :
       error.type === 'network' || error.type === 'server' ? 4 :
