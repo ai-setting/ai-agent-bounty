@@ -1,7 +1,7 @@
 {
   "name": "@ai-setting/agent-bounty-standalone",
-  "version": "0.8.0",
-  "description": "AI Agent Bounty System - Standalone binary for all platforms. v0.8.0: matches @ai-setting/agent-bounty@0.8.0 (im-routes sender identity fix).",
+  "version": "0.9.0",
+  "description": "AI Agent Bounty System - Standalone binary for all platforms. v0.9.0: matches @ai-setting/agent-bounty@0.9.0 (token-policy consistency audit + TDD coverage).",
   "type": "module",
   "bin": {
     "bounty": "./bin/run.js",

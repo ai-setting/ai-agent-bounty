@@ -37,6 +37,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   for ALL `/api/*` routes. Future route additions must call `checkAuth()` so the
   toggle remains authoritative — see `src/server/http/index.ts:handleRequest`.
 
+## [0.9.0] - 2026-07-12
+
+### Documentation / Audit
+
+- Promoted the `[Unreleased]` v0.9 audit entry to a real release. See the
+  audit notes above (lines above `[0.8.0]`) for the full contract spec and
+  TDD coverage list. No production-code diff between v0.8.0 and v0.9.0 —
+  v0.9.0 is a documentation + test-coverage release that locks the
+  `BOUNTY_TOKEN_CHECK_ENABLED` consistency claim between bounty and IM routes.
+
 ## [0.8.0] - 2026-07-11
 
 ### Fixed

@@ -1,8 +1,8 @@
 {
   "name": "@ai-setting/agent-bounty",
-  "version": "0.8.0",
+  "version": "0.9.0",
   "type": "module",
-  "description": "AI Agent Bounty System — Task publishing, grabbing, and communication platform. v0.8.0: im-routes sender identity TDD fix (do not pass undefined agentId to sendMessage when BOUNTY_TOKEN_CHECK_ENABLED=false).",
+  "description": "AI Agent Bounty System — Task publishing, grabbing, and communication platform. v0.9.0: token-policy consistency audit (bounty vs IM) locked via TDD, no behaviour change.",
   "main": "./dist/index.js",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
