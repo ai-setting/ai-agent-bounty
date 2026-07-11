@@ -235,7 +235,15 @@ export class BountyHTTPServer {
             return this.imRoutes!.getMessages(url, { agentId: agentId! });
           }
           if (method === 'POST' && path === '/api/messages') {
-            return await this.imRoutes!.sendMessage(req, { agentId: agentId! });
+            // Phase 4 hardener: only forward a requester to sendMessage when
+            // we actually have an authenticated agentId. Passing
+            // `{ agentId: undefined }` is semantically wrong (suggests
+            // "authenticated agent with no id") and depends on the downstream
+            // im-routes ternary to fall back to body.from. The cleaner
+            // contract — aligned with the legacy path preserved by commit
+            // 4ed7b27 — is to omit the requester arg entirely so body.from
+            // is used unambiguously.
+            return await this.imRoutes!.sendMessage(req, agentId ? { agentId } : undefined);
           }
           if (method === 'GET' && path.startsWith('/api/messages/')) {
             const id = path.slice('/api/messages/'.length);
