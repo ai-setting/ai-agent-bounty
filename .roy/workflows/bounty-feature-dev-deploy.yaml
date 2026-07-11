@@ -1,0 +1,496 @@
+name: bounty-feature-dev-deploy
+version: "1.0"
+description: Bounty 项目端到端 feature 工作流（review → worktree → TDD → 验证 → 合并 → server/web 镜像 → k8s 部署 → e2e 联调 → 任务闭环），可复用
+config:
+  parallel_limit: 1
+  timeout: 3600000
+  maxIterations: 100
+  loopEnabled: false
+tags: [feature-dev, lifecycle, ci-cd, tongagents]
+inputs:
+  feature_description:
+    type: string
+    description: 功能/修复描述（用于 task_create title 与 commit message）
+    required: true
+  feature_name:
+    type: string
+    description: feature 短名称（用于分支名 + worktree 目录）
+    required: true
+  project_path:
+    type: string
+    description: 项目根绝对路径
+    required: true
+  base_branch:
+    type: string
+    description: 基线分支
+    required: false
+    default: main
+  base_version:
+    type: string
+    description: 当前 package.json 版本（用于 K8s image tag）
+    required: false
+    default: "0.9.0"
+  requires_web_image:
+    type: boolean
+    description: 是否同时构建/推送 web 镜像
+    required: false
+    default: true
+  k8s_namespace:
+    type: string
+    description: K8s namespace
+    required: false
+    default: tongagent
+  task_priority:
+    type: string
+    description: Task 优先级（low/medium/high）
+    required: false
+    default: high
+  task_tags:
+    type: string
+    description: Task tags（逗号分隔）
+    required: false
+    default: bounty,feature
+  auto_merge:
+    type: boolean
+    description: 是否自动 merge 到 base_branch
+    required: false
+    default: true
+  auto_cleanup:
+    type: boolean
+    description: merge 后是否删除 worktree + 分支
+    required: false
+    default: true
+nodes:
+  - id: init-task
+    type: agent
+    name: "Phase 1: 创建 task + 激活"
+    config:
+      agent_type: roy
+      prompt: |
+        ## Phase 1: 任务管理
+        工作目录: {{input.project_path}}
+
+        ### Step 1: 创建 Task
+        使用 task_create 创建任务：
+        - title: "{{input.feature_description}}"
+        - description: 端到端 feature 工作流（review → worktree → TDD → 验证 → 合并 → 镜像 → k8s → e2e）
+        - priority: {{input.task_priority}}
+        - status: todo
+        - tags: [{{input.task_tags}}, workflow:bounty-feature-dev-deploy]
+
+        ### Step 2: 激活任务
+        使用 task_update 切换 status=active, progress=5, current_status="Phase 1 启动"
+
+        ### Step 3: 创建 operation 记录
+        task_operation_create(action_type=create, action_title="Bounty feature 工作流启动")
+
+        ### 输出
+        返回 { "task_id": <number>, "task_title": "<title>" }
+        必须捕获 task_id 给下游使用。
+    outputs:
+      - task_id
+
+  - id: setup-worktree
+    type: tool
+    name: "Phase 2: Worktree 隔离（git worktree add）"
+    config:
+      tool: bash
+      command: |
+        set -euo pipefail
+        cd {{input.project_path}}
+        BRANCH="feat/{{input.feature_name}}"
+        WORKTREE=".worktrees/{{input.feature_name}}"
+
+        # 检查是否已存在
+        if git worktree list | grep -q "$WORKTREE"; then
+          echo "WARN: worktree $WORKTREE 已存在, 跳过创建"
+        else
+          git worktree add "$WORKTREE" -b "$BRANCH" {{input.base_branch}}
+        fi
+
+        echo "Worktree: {{input.project_path}}/$WORKTREE"
+        echo "Branch: $BRANCH"
+    depends_on: [init-task]
+
+  - id: tdd-cycle
+    type: agent
+    name: "Phase 3: TDD 严格循环（RED → GREEN → REFACTOR）"
+    config:
+      agent_type: roy
+      prompt: |
+        ## Phase 3: TDD 严格循环
+        工作目录: {{input.project_path}}/.worktrees/{{input.feature_name}}
+
+        ### 任务背景
+        {{input.feature_description}}
+
+        ### Step 1: RED
+        - 写测试用例覆盖功能需求
+        - 运行 `bun test --isolate <新测试文件>` 确认失败
+        - task_operation_create(action_type=progress, action_title="RED: 新测试已添加")
+        - task_update(progress=30)
+
+        ### Step 2: GREEN
+        - 写最小代码让测试通过
+        - 运行 `bun test --isolate` 确认全绿
+        - task_operation_create(action_type=progress, action_title="GREEN: 实现完成")
+        - task_update(progress=50)
+
+        ### Step 3: REFACTOR
+        - 改进命名、提取辅助函数
+        - 保持测试绿色
+        - task_update(progress=65)
+
+        ### Commit
+        - git add -A
+        - git commit -m "feat: {{input.feature_name}} (TDD: RED+GREEN+REFACTOR)"
+
+        ### 输出
+        { "test_count": <number>, "commit_sha": "<sha>", "all_green": true }
+    depends_on: [setup-worktree]
+    outputs:
+      - test_count
+      - commit_sha
+
+  - id: verify-build
+    type: tool
+    name: "Phase 4: Typecheck + 全量回归测试"
+    config:
+      tool: bash
+      command: |
+        set -euo pipefail
+        cd {{input.project_path}}/.worktrees/{{input.feature_name}}
+
+        echo "=== bun run typecheck ==="
+        bunx tsc --noEmit
+
+        echo "=== bun test --isolate ==="
+        bun test --isolate 2>&1 | tail -8
+    depends_on: [tdd-cycle]
+
+  - id: merge-main
+    type: tool
+    name: "Phase 5: 合并到 main（git merge --no-ff）"
+    config:
+      tool: bash
+      command: |
+        set -euo pipefail
+        cd {{input.project_path}}
+
+        if [ "{{input.auto_merge}}" != "true" ]; then
+          echo "auto_merge=false, 跳过合并"
+          exit 0
+        fi
+
+        # 切回 main
+        git checkout {{input.base_branch}}
+        git pull --ff-only || true
+
+        # merge --no-ff
+        git merge --no-ff feat/{{input.feature_name}} \
+          -m "merge: feat/{{input.feature_name}} (workflow bounty-feature-dev-deploy)"
+
+        echo "Merge 完成. HEAD: $(git rev-parse --short HEAD)"
+
+        # cleanup
+        if [ "{{input.auto_cleanup}}" = "true" ]; then
+          git worktree remove .worktrees/{{input.feature_name}} --force || true
+          git branch -d feat/{{input.feature_name}} || true
+          git worktree prune
+        fi
+    depends_on: [verify-build]
+
+  - id: bump-version
+    type: tool
+    name: "Phase 5.5: Bump 版本号（patch）"
+    config:
+      tool: bash
+      command: |
+        set -euo pipefail
+        cd {{input.project_path}}
+
+        # 仅当 auto_merge=true 时跑（merge 后运行）
+        if [ "{{input.auto_merge}}" != "true" ]; then
+          echo "auto_merge=false, 跳过版本 bump"
+          exit 0
+        fi
+
+        # 解析当前版本
+        CURRENT=$(python3 -c "import json; print(json.load(open('package.json'))['version'])")
+        echo "Current version: $CURRENT"
+
+        # bump patch
+        IFS='.' read -r major minor patch <<< "$CURRENT"
+        NEW="$major.$minor.$((patch+1))"
+
+        echo "New version: $NEW"
+
+        # 更新 root package.json
+        python3 -c "
+        import json
+        p = 'package.json'
+        d = json.load(open(p))
+        d['version'] = '$NEW'
+        json.dump(d, open(p, 'w'), indent=2, ensure_ascii=False)
+        "
+
+        # 同步 bounty-standalone
+        if [ -f bounty-standalone/package.json ]; then
+          python3 -c "
+          import json
+          p = 'bounty-standalone/package.json'
+          d = json.load(open(p))
+          d['version'] = '$NEW'
+          json.dump(d, open(p, 'w'), indent=2, ensure_ascii=False)
+          "
+        fi
+
+        # CHANGELOG（追加 placeholder）
+        if [ -f CHANGELOG.md ]; then
+          echo "" >> CHANGELOG.md
+          echo "## [$NEW] - $(date +%Y-%m-%d)" >> CHANGELOG.md
+          echo "" >> CHANGELOG.md
+          echo "### Changed" >> CHANGELOG.md
+          echo "" >> CHANGELOG.md
+          echo "- {{input.feature_description}}" >> CHANGELOG.md
+        fi
+
+        git add package.json bounty-standalone/package.json CHANGELOG.md 2>/dev/null || git add package.json
+        git commit -m "chore(release): bump to $NEW"
+
+        echo "VERSION_BUMPED=$NEW"
+    depends_on: [merge-main]
+    outputs:
+      - version
+
+  - id: build-server-image
+    type: tool
+    name: "Phase 6: 构建并推送 server 镜像"
+    config:
+      tool: bash
+      command: |
+        set -euo pipefail
+        cd {{input.project_path}}
+
+        VERSION=$(python3 -c "import json; print(json.load(open('package.json'))['version'])")
+        SHA=$(git rev-parse --short HEAD)
+
+        SERVER_TAG="harbor.mybigai.ac.cn/tongos/bounty-server:${VERSION}"
+        SERVER_LATEST="harbor.mybigai.ac.cn/tongos/bounty-server:latest"
+
+        echo "=== docker build server (version=${VERSION}, sha=${SHA}) ==="
+        docker build \
+          -t "$SERVER_TAG" \
+          -t "$SERVER_LATEST" \
+          -f Dockerfile .
+
+        docker push "$SERVER_TAG"
+        docker push "$SERVER_LATEST"
+
+        DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' "$SERVER_TAG")
+        echo "SERVER_IMAGE=$SERVER_TAG"
+        echo "SERVER_DIGEST=$DIGEST"
+    depends_on: [bump-version]
+    outputs:
+      - server_image
+      - server_digest
+
+  - id: build-web-image
+    type: tool
+    name: "Phase 7: 构建并推送 web 镜像（条件门控）"
+    config:
+      tool: bash
+      command: |
+        set -euo pipefail
+        cd {{input.project_path}}
+
+        if [ "{{input.requires_web_image}}" != "true" ]; then
+          echo "requires_web_image=false, 跳过 web 镜像构建"
+          echo "WEB_IMAGE=skipped"
+          exit 0
+        fi
+
+        VERSION=$(python3 -c "import json; print(json.load(open('package.json'))['version'])")
+        SHA=$(git rev-parse --short HEAD)
+
+        WEB_TAG="harbor.mybigai.ac.cn/tongos/bounty-web:${VERSION}"
+        WEB_LATEST="harbor.mybigai.ac.cn/tongos/bounty-web:latest"
+
+        echo "=== docker build web (version=${VERSION}, sha=${SHA}) ==="
+        cd web
+        docker build \
+          -t "$WEB_TAG" \
+          -t "$WEB_LATEST" \
+          -f Dockerfile .
+
+        docker push "$WEB_TAG"
+        docker push "$WEB_LATEST"
+
+        cd ..
+        DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' "$WEB_TAG")
+        echo "WEB_IMAGE=$WEB_TAG"
+        echo "WEB_DIGEST=$DIGEST"
+    depends_on: [build-server-image]
+
+  - id: k8s-apply
+    type: tool
+    name: "Phase 8: 更新 K8s + apply + rollout"
+    config:
+      tool: bash
+      command: |
+        set -euo pipefail
+        cd {{input.project_path}}
+
+        VERSION=$(python3 -c "import json; print(json.load(open('package.json'))['version'])")
+        NS={{input.k8s_namespace}}
+
+        echo "=== Update k8s/deployment.yaml ==="
+        # 使用 python 做替换以保证幂等
+        python3 -c "
+        import re
+        p = 'k8s/deployment.yaml'
+        with open(p) as f: s = f.read()
+        s = re.sub(r'image: harbor\.mybigai\.ac\.cn/tongos/bounty-server:v[\d.]+', 'image: harbor.mybigai.ac.cn/tongos/bounty-server:${VERSION}', s)
+        with open(p, 'w') as f: f.write(s)
+        "
+        git add k8s/deployment.yaml
+        git diff --cached --quiet || git commit -m "chore(k8s): pin server to ${VERSION}"
+
+        if [ "{{input.requires_web_image}}" = "true" ]; then
+          echo "=== Update k8s/bounty-web/deployment.yaml ==="
+          python3 -c "
+          import re
+          p = 'k8s/bounty-web/deployment.yaml'
+          with open(p) as f: s = f.read()
+          s = re.sub(r'image: harbor\.mybigai\.ac\.cn/tongos/bounty-web:v[\d.]+|image: harbor\.mybigai\.ac\.cn/tongos/bounty-web:latest', 'image: harbor.mybigai.ac.cn/tongos/bounty-web:${VERSION}', s)
+          with open(p, 'w') as f: f.write(s)
+          "
+          git add k8s/bounty-web/deployment.yaml
+          git diff --cached --quiet || git commit -m "chore(k8s): pin web to ${VERSION}"
+        fi
+
+        echo "=== kubectl apply ==="
+        kubectl apply -n $NS -f k8s/deployment.yaml
+        if [ "{{input.requires_web_image}}" = "true" ]; then
+          kubectl apply -n $NS -f k8s/bounty-web/deployment.yaml
+        fi
+
+        echo "=== rollout restart ==="
+        kubectl -n $NS rollout restart deployment/bounty-server
+        if [ "{{input.requires_web_image}}" = "true" ]; then
+          kubectl -n $NS rollout restart deployment/bounty-web
+        fi
+
+        echo "=== rollout status ==="
+        kubectl -n $NS rollout status deployment/bounty-server --timeout=180s
+        if [ "{{input.requires_web_image}}" = "true" ]; then
+          kubectl -n $NS rollout status deployment/bounty-web --timeout=180s
+        fi
+
+        echo "=== 健康检查 ==="
+        sleep 5
+        curl -sf http://10.1.54.172:4005/health
+        echo ""
+    depends_on: [build-web-image]
+
+  - id: e2e-smoke
+    type: agent
+    name: "Phase 9: E2E 联调（bounty CLI 全流程）"
+    config:
+      agent_type: roy
+      prompt: |
+        ## Phase 9: E2E 联调
+        工作目录: {{input.project_path}}
+
+        ### Step 1: Health check
+        curl -sf http://10.1.54.172:4005/health
+        若失败 → 任务暂停，提示用户检查 pod
+
+        ### Step 2: 用现有 publisher/grabber address（从 K8s pod 数据库读）
+        - kubectl cp <pod>:/app/data/bounty.db /tmp/bounty.db
+        - sqlite3 查 "SELECT id, email, address, credits FROM agents WHERE address != '' AND credits > 50 LIMIT 2"
+        - 提取 publisherAddress 与 grabberAddress
+
+        ### Step 3: 跑完整 flow
+        ```bash
+        export BOUNTY_API_URL=http://10.1.54.172:4005
+
+        # 1. publish
+        TASK_OUT=$(bounty bounty-task publish \
+          --title "workflow-e2e-{{input.feature_name}}" \
+          --description "{{input.feature_description}}" \
+          --type "testing" \
+          --reward 5 \
+          --publisher-address "$PUB_ADDR")
+
+        TASK_ID=$(echo "$TASK_OUT" | grep "ID:" | awk '{print $2}')
+
+        # 2. grab
+        bounty bounty-task grab --task-id "$TASK_ID" --agent-address "$GRAB_ADDR"
+
+        # 3. submit
+        bounty bounty-task submit --task-id "$TASK_ID" --agent-address "$GRAB_ADDR" \
+          --result "Workflow e2e success"
+
+        # 4. complete
+        bounty bounty-task complete --task-id "$TASK_ID" --publisher-address "$PUB_ADDR"
+        ```
+
+        ### Step 4: soft-auth 验证
+        ```bash
+        # 直接 curl 无 Authorization header
+        curl -s -o /dev/null -w "%{http_code}\n" -X POST http://10.1.54.172:4005/api/tasks \
+          -H "Content-Type: application/json" -d "{...publisherAddress...}"
+        # 期望: 201
+
+        curl -s -o /dev/null -w "%{http_code}\n" -X POST http://10.1.54.172:4005/api/messages \
+          -H "Content-Type: application/json" -d "{...from, to, content...}"
+        # 期望: 201
+        ```
+
+        ### Step 5: 失败时
+        - 任意步骤失败：task_operation_create(action_type=problem)
+        - 继续检查 health / pod 状态 / 日志
+        - 报告失败原因
+
+        ### 输出
+        { "task_id": "<uuid>", "soft_auth_ok": true/false, "error": "<msg>" }
+        task_operation_create(action_type=milestone, action_title="E2E 联调通过")
+    depends_on: [k8s-apply]
+    outputs:
+      - task_id
+
+  - id: finalize-task
+    type: agent
+    name: "Phase 10: 任务闭环"
+    config:
+      agent_type: roy
+      prompt: |
+        ## Phase 10: 任务闭环
+        task_update(progress=100, current_status="所有阶段完成")
+        task_operation_create(action_type=completed, action_title="Bounty feature 工作流完成（workflow bounty-feature-dev-deploy v1.0）")
+
+        返回 { "workflow_complete": true }
+        ⚠️ 注意：EXECUTE agent 不要调用 task_complete — 由 Verify agent 收尾
+    depends_on: [e2e-smoke]
+edges:
+  - from: init-task
+    to: setup-worktree
+  - from: setup-worktree
+    to: tdd-cycle
+  - from: tdd-cycle
+    to: verify-build
+  - from: verify-build
+    to: merge-main
+  - from: merge-main
+    to: bump-version
+  - from: bump-version
+    to: build-server-image
+  - from: build-server-image
+    to: build-web-image
+  - from: build-web-image
+    to: k8s-apply
+  - from: k8s-apply
+    to: e2e-smoke
+  - from: e2e-smoke
+    to: finalize-task
