@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-07-11
+
+### Fixed
+
+- **IM sender identity (HTTP `/im/messages`)**: do not pass `{ agentId: undefined }` to
+  `imRoutes.sendMessage`. When `BOUNTY_TOKEN_CHECK_ENABLED=false` and no `Authorization`
+  header is sent, the requester object is now `undefined` so `sendMessage` falls through
+  to its legacy `body.from` path without ambiguity. Previously the route always forwarded
+  a `{ agentId: undefined }` object, which downstream code interpreted as "authenticated
+  user with id undefined" and overrode the client's `body.from` with an undefined sender.
+  TDD coverage: `tests/server/im-routes-sender-identity.test.ts` (+4 cases: no-auth+off,
+  no-auth+on→401, valid-auth, contract-lock spy asserting `sendMessage` is called WITHOUT
+  a requester arg when `tokenCheckOff`).
+
+### Notes
+
+- Single-file fix in `src/server/http/index.ts` (+10/-1). Pure semantic regression —
+  no API or behaviour change for authenticated callers.
+- Branch merged: `fix/im-send-from-identity` → `main` (merge commit `405ced4`).
+
 ## [0.7.2] - 2026-07-11
 
 ### Fixed (hotfix)
