@@ -7,6 +7,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Documentation / Audit
+
+- **Bounty + IM token policy audit (v0.9)**: review of `BOUNTY_TOKEN_CHECK_ENABLED`
+  handling across `BountyRoutes` (publish/grab/submit/complete/cancel/dispute) and
+  `IMRoutes` (send/ack/inbox). Audit confirmed both route groups share an **identical**
+  policy wired through the single `BountyHTTPServer.checkAuth` gate:
+    - Default (env unset / `false` / `0`): `Authorization` header is **optional**;
+      `agentId` in handlers stays `undefined`, callers must supply `*Address` in body.
+    - `BOUNTY_TOKEN_CHECK_ENABLED=true|1`: `Authorization: Bearer <jwt>` is required;
+      missing header → 401; bad token → 401; valid token → `agentId = payload.sub`.
+  No code-level drift found. The only material improvement is **discoverability**:
+    - `.env.example` now documents `BOUNTY_TOKEN_CHECK_ENABLED` with the unified
+      contract (applies to `/api/tasks/*`, `/api/messages/*`, `/api/agents/*`).
+  TDD coverage added: `tests/server/token-policy-consistency.test.ts` (+8 cases:
+  bounty-publish ok/no-token, IM-send ok/no-token, bounty-grab ok/no-token,
+  bounty-publish → 401, IM-send → 401, bounty-grab → 401, bad-token → 401 across
+  both route groups, env state isolation between server instances). Combined with
+  pre-existing `tests/server/{token-check-toggle,soft-auth-no-header-grab,
+  im-routes-auth,bounty-routes-address,bounty-routes-service}.test.ts`, the
+  consistency contract is now locked.
+- **No production code change** — single-file addition is `tests/...consistency.test.ts`
+  and a documentation block in `.env.example`. Behaviour-equivalent refactor.
+
+### Notes
+
+- Audit was performed against commit `a3230c8` (v0.8.0) and verified on the new tests.
+- Resulting strategy: keep `BOUNTY_TOKEN_CHECK_ENABLED` as the single source of truth
+  for ALL `/api/*` routes. Future route additions must call `checkAuth()` so the
+  toggle remains authoritative — see `src/server/http/index.ts:handleRequest`.
+
 ## [0.8.0] - 2026-07-11
 
 ### Fixed
