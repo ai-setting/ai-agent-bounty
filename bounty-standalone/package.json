@@ -1,7 +1,7 @@
 {
   "name": "@ai-setting/agent-bounty-standalone",
-  "version": "0.10.0",
-  "description": "AI Agent Bounty System - Standalone binary for all platforms. v0.10.0: matches @ai-setting/agent-bounty@0.10.0 (BREAKING address unification).",
+  "version": "0.10.1",
+  "description": "AI Agent Bounty System - Standalone binary for all platforms. v0.10.1: matches @ai-setting/agent-bounty@0.10.0 (BREAKING address unification) — rebuilt binaries to include v0.10.0 source changes (0.10.0 npm release had stale binaries pre-dating commit cdd4714).",
   "type": "module",
   "bin": {
     "bounty": "./bin/run.js",

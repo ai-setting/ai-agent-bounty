@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v0.10.1] - 2026-07-12 — Standalone binary rebuild
+
+### Fixed
+
+- `@ai-setting/agent-bounty-standalone@0.10.0` 包内 4 个平台二进制（linux-x64, linux-arm64, darwin-x64, darwin-arm64）构建于 v0.10.0 commit (`cdd4714`) **之前**，导致独立二进制缺少 v0.10.0 BREAKING address-unification 的所有 flag 变更（仍保留 `--publisher-id` / `--agent-id`，不接受 `--*-address` 完整格式）。
+- **0.10.0 npm release 已 `npm deprecate`**：`Broken release: stale binaries pre-date v0.10.0 address-unification commit. Use 0.10.1+`
+- 0.10.1 重新构建 4 个平台二进制 + 验证 `--agent-id` / `--publisher-id` UNKNOWN + `--publisher-address` STRICT uuid@host 校验生效
+
+### Migration
+
+```bash
+# 不需要改代码，只需 bump 安装版本
+npm install -g @ai-setting/agent-bounty-standalone@0.10.1
+
+# 不再 pin 0.10.0（已 deprecated）
+```
+
 ## [v0.10.0] - 2026-07-12 — Address Unification (BREAKING)
 
 ### ⚠️ BREAKING CHANGES
