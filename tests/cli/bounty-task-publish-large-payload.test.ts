@@ -42,7 +42,7 @@ describe('bounty bounty-task publish — large-payload handling (D.3)', () => {
     exitCode = null;
     consoleErrorOutput = [];
     received = [];
-    process.env.BOUNTY_IM_ADDRESS = 'test-agent@host';
+    process.env.BOUNTY_IM_ADDRESS = '8de9b6aa-5781-4a65-be96-45185fb7c8b1@host.local';
 
     spyOn(console, 'error').mockImplementation((...args: any[]) => {
       consoleErrorOutput.push(args.map(String).join(' '));
@@ -54,7 +54,8 @@ describe('bounty bounty-task publish — large-payload handling (D.3)', () => {
 
     server = await createBountyTestServer({
       port: 0,
-      seedAgents: [{ id: 'test-agent', email: 'test@host', name: 'Test', credits: 500 }],
+      // v0.10: seed agent id must be a valid UUID so strict uuid@host match works
+      seedAgents: [{ id: '8de9b6aa-5781-4a65-be96-45185fb7c8b1', email: 'test@host', name: 'Test', credits: 500 }],
     });
   });
 

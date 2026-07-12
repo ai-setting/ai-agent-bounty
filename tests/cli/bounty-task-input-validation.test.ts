@@ -51,7 +51,7 @@ describe('bounty bounty-task - input validation', () => {
 
   test('publish: reward = 0 → exit 2 with friendly error', async () => {
     const { publishCommand } = await import('../../src/cli/commands/bounty-task/publish.js');
-    process.env.BOUNTY_IM_ADDRESS = 'a@host';
+    process.env.BOUNTY_IM_ADDRESS = '8de9b6aa-5781-4a65-be96-45185fb7c8b1@host.local';
 
     let thrown: any = null;
     try {
@@ -63,7 +63,7 @@ describe('bounty bounty-task - input validation', () => {
 
   test('publish: reward = -10 → exit 2 with friendly error', async () => {
     const { publishCommand } = await import('../../src/cli/commands/bounty-task/publish.js');
-    process.env.BOUNTY_IM_ADDRESS = 'a@host';
+    process.env.BOUNTY_IM_ADDRESS = '8de9b6aa-5781-4a65-be96-45185fb7c8b1@host.local';
 
     let thrown: any = null;
     try {
@@ -95,7 +95,7 @@ describe('bounty bounty-task - input validation', () => {
 
   test('grab: task-id "not-a-uuid" → exit 2 with format hint', async () => {
     const { grabCommand } = await import('../../src/cli/commands/bounty-task/grab.js');
-    process.env.BOUNTY_IM_ADDRESS = 'a@host';
+    process.env.BOUNTY_IM_ADDRESS = '8de9b6aa-5781-4a65-be96-45185fb7c8b1@host.local';
 
     let thrown: any = null;
     try {
@@ -107,7 +107,7 @@ describe('bounty bounty-task - input validation', () => {
 
   test('submit: task-id "abc" → exit 2', async () => {
     const { submitCommand } = await import('../../src/cli/commands/bounty-task/submit.js');
-    process.env.BOUNTY_IM_ADDRESS = 'a@host';
+    process.env.BOUNTY_IM_ADDRESS = '8de9b6aa-5781-4a65-be96-45185fb7c8b1@host.local';
 
     let thrown: any = null;
     try {
@@ -118,7 +118,7 @@ describe('bounty bounty-task - input validation', () => {
 
   test('complete: task-id "short" → exit 2', async () => {
     const { completeCommand } = await import('../../src/cli/commands/bounty-task/complete.js');
-    process.env.BOUNTY_IM_ADDRESS = 'a@host';
+    process.env.BOUNTY_IM_ADDRESS = '8de9b6aa-5781-4a65-be96-45185fb7c8b1@host.local';
 
     let thrown: any = null;
     try {
@@ -129,7 +129,7 @@ describe('bounty bounty-task - input validation', () => {
 
   test('cancel: task-id "" → exit 2', async () => {
     const { cancelCommand } = await import('../../src/cli/commands/bounty-task/cancel.js');
-    process.env.BOUNTY_IM_ADDRESS = 'a@host';
+    process.env.BOUNTY_IM_ADDRESS = '8de9b6aa-5781-4a65-be96-45185fb7c8b1@host.local';
 
     let thrown: any = null;
     try {
@@ -140,7 +140,7 @@ describe('bounty bounty-task - input validation', () => {
 
   test('submit: --result empty string → exit 2', async () => {
     const { submitCommand } = await import('../../src/cli/commands/bounty-task/submit.js');
-    process.env.BOUNTY_IM_ADDRESS = 'a@host';
+    process.env.BOUNTY_IM_ADDRESS = '8de9b6aa-5781-4a65-be96-45185fb7c8b1@host.local';
     const validUuid = '8de9b6aa-5781-4a65-be96-45185fb7c8b1';
 
     let thrown: any = null;

@@ -1,7 +1,8 @@
 /**
  * bounty complete command
  *
- * v0.7: address-based publisher identity; legacy --publisher-id remains deprecated.
+ * v0.10: STRICT address-based publisher identity (`<uuid>@<host>` required).
+ * Bare UUID and `--publisher-id` flag REMOVED (BREAKING).
  */
 
 import type { CommandModule } from 'yargs';
@@ -9,16 +10,14 @@ import chalk from 'chalk';
 import { bountyConfig } from '../../../lib/config/bounty-config.js';
 import { addServerUrlOption, resolveServerUrl } from '../../lib/server-url-option.js';
 import { bountyHttp } from '../../lib/bounty-http.js';
-import { resolveCurrentAgent } from '../../lib/current-agent.js';
-import { resolveAgentIdOption } from '../../lib/address-parser.js';
+import { resolveCurrentAgent, resolveCurrentAgentAddress } from '../../lib/current-agent.js';
+import { resolveAddressOption } from '../../lib/address-parser.js';
 import { handleBountyError } from './publish.js';
 import { isValidTaskId } from './grab.js';
 
 interface CompleteOptions {
   'task-id': string;
   'publisher-address'?: string;
-  /** @deprecated Use --publisher-address. */
-  'publisher-id'?: string;
   'server-url'?: string;
 }
 
@@ -46,30 +45,28 @@ export const completeCommand: CommandModule<object, CompleteOptions> = {
         .option('publisher-address', {
           alias: 'p',
           type: 'string',
-          description: 'Publisher agent address (<uuid>@<host>). Pure <uuid> is also accepted. Defaults to BOUNTY_IM_ADDRESS env.',
-        })
-        .option('publisher-id', {
-          type: 'string',
-          description: '[deprecated] Publisher agent ID. Use --publisher-address instead.',
+          description:
+            'Publisher agent address in <uuid>@<host> format (REQUIRED). ' +
+            'Bare UUID is REJECTED in v0.10. Defaults to BOUNTY_IM_ADDRESS env.',
         })
     ),
 
   handler: async (argv) => {
     const baseUrl = resolveServerUrl(argv['server-url'], bountyConfig.apiUrl);
 
-    const publisher = resolveAgentIdOption({
+    const publisher = resolveAddressOption({
       address: argv['publisher-address'],
-      deprecatedId: argv['publisher-id'],
-      fallback: resolveCurrentAgent(),
+      fallback: resolveCurrentAgentAddress(),
       addressFlag: '--publisher-address',
-      deprecatedFlag: '--publisher-id',
-      missingMessage: '✗ Cannot infer publisher address. Provide --publisher-address or set BOUNTY_IM_ADDRESS.',
+      missingMessage:
+        '✗ Cannot infer publisher address. Provide --publisher-address <uuid>@<host> or set BOUNTY_IM_ADDRESS=<uuid>@<host>.',
     });
     if (!publisher.ok) {
       console.error(chalk.red(`\n${publisher.error}\n`));
       process.exit(2);
     }
-    const publisherId = publisher.value;
+    const publisherUuid = publisher.value.uuid;
+    const publisherAddress = publisher.value.raw;
 
     if (!argv['task-id']) {
       console.error(chalk.red('\n✗ --task-id is required.\n'));
@@ -91,10 +88,9 @@ export const completeCommand: CommandModule<object, CompleteOptions> = {
         baseUrl,
         path: `/api/tasks/${encodeURIComponent(argv['task-id'])}/complete`,
         method: 'PUT',
-        // v0.7.2: server resolveActor('publisher') reads publisherId or publisherAddress.
-        // Sending { agentId } would trigger 400 "publisherId or publisherAddress required".
-        body: { publisherId },
-        extraHeaders: { 'X-Agent-Id': publisherId },
+        // v0.10: send full `<uuid>@<host>` (BREAKING — server rejects bare UUID)
+        body: { publisherAddress },
+        extraHeaders: { 'X-Agent-Id': publisherUuid },
       });
 
       console.log(chalk.green('\n✓ Task completed successfully\n'));

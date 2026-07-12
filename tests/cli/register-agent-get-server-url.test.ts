@@ -37,9 +37,10 @@ describe('bounty register-agent get - --server-url option', () => {
     expect(src).toMatch(/resolveServerUrl\(.*API_BASE\s*\)/);
   });
 
-  test('T3: fetch URL uses parsed /api/agents/${options.id}', () => {
+  test('T3: fetch URL uses parsed /api/agents/${agentUuid}', () => {
     const src = readFileSync(SRC, 'utf-8');
-    expect(src).toMatch(/baseUrl.*\/api\/agents\/\$\{options\.id\}/);
+    // v0.10: --agent-address resolves to uuid; URL uses uuid, not options.id
+    expect(src).toMatch(/baseUrl.*\/api\/agents\/\$\{agentUuid\}/);
   });
 
   test('T4: scheme validation is delegated to helper', () => {

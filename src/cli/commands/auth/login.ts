@@ -2,8 +2,8 @@
  * auth login command
  * Login to get auth token (convenience command)
  *
- * v0.7: prefer address-based agent identity (--agent-address). Legacy
- * --agent-id remains accepted for backward compatibility.
+ * v0.10 BREAKING: --agent-id REMOVED. Use --agent-address <uuid>@<host>.
+ * Bare UUID REJECTED.
  */
 
 import type { CommandModule } from 'yargs';
@@ -12,7 +12,7 @@ import { API_BASE } from '../../config.js';
 import { saveToken } from '../../storage.js';
 // v0.5.0: TLS skip default — use bountyFetch wrapper
 import { bountyFetch } from '../../lib/fetch-helper.js';
-import { resolveAgentIdOption } from '../../lib/address-parser.js';
+import { resolveAddressOption } from '../../lib/address-parser.js';
 
 import {
   addServerUrlOption,
@@ -22,8 +22,6 @@ import {
 interface LoginOptions {
   email?: string;
   'agent-address'?: string;
-  /** @deprecated Use --agent-address. */
-  'agent-id'?: string;
   'server-url'?: string;
 }
 
@@ -42,27 +40,24 @@ export const loginCommand: CommandModule<object, LoginOptions> = {
         .option('agent-address', {
           alias: 'a',
           type: 'string',
-          description: 'Agent address (<uuid>@<host>). Pure <uuid> is also accepted.',
-        })
-        .option('agent-id', {
-          type: 'string',
-          description: '[deprecated] Agent ID. Use --agent-address instead.',
+          description:
+            'Agent address in <uuid>@<host> format (REQUIRED). ' +
+            'Bare UUID is REJECTED in v0.10.',
         })
     ),
 
   handler: async (argv) => {
-    if (!argv.email && !argv['agent-address'] && !argv['agent-id']) {
+    if (!argv.email && !argv['agent-address']) {
       console.error(chalk.red('\n✗ Error: --email or --agent-address is required\n'));
       console.error('Usage: bounty auth login --agent-address <uuid>@<host>');
       process.exit(1);
     }
 
-    const resolvedAgent = (argv['agent-address'] || argv['agent-id'])
-      ? resolveAgentIdOption({
+    const resolvedAgent = argv['agent-address']
+      ? resolveAddressOption({
           address: argv['agent-address'],
-          deprecatedId: argv['agent-id'],
           addressFlag: '--agent-address',
-          deprecatedFlag: '--agent-id',
+          missingMessage: '✗ --agent-address is required (<uuid>@<host> format).',
         })
       : undefined;
 
@@ -74,7 +69,8 @@ export const loginCommand: CommandModule<object, LoginOptions> = {
     try {
       const body: { email?: string; agent_id?: string } = {};
       if (argv.email) body.email = argv.email;
-      if (resolvedAgent?.ok) body.agent_id = resolvedAgent.value;
+      // v0.10: send full uuid@host as server resolves by `agents.address`
+      if (resolvedAgent?.ok) body.agent_id = resolvedAgent.value.uuid;
 
       console.log(chalk.cyan('\n🔑 Logging in...'));
 

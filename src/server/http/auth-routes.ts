@@ -10,6 +10,7 @@
 
 import type { Database } from '../../lib/storage/database';
 import { register, verify, login, sendVerificationCode } from '../../auth/service.js';
+import { parseAddress } from '../../lib/address.js';
 
 export class AuthRoutes {
   private db: Database;
@@ -40,13 +41,12 @@ export class AuthRoutes {
       // Format: uuid@host (e.g. "abc-123@bounty.local")
       // Note: the address is a hint only — the verify step will overwrite it
       // with `${agent_id}@${BOUNTY_DOMAIN}` so callers cannot impersonate.
+      // v0.10: strict uuid@host format via shared parser (no inline regex)
       if (input.address !== undefined) {
-        if (
-          typeof input.address !== 'string' ||
-          !/^[0-9a-z][0-9a-z-]*@[a-z0-9.-]+$/.test(input.address)
-        ) {
+        const r = parseAddress(input.address, 'address');
+        if (!r.ok) {
           return Response.json(
-            { error: 'Invalid address format (expected uuid@host)' },
+            { error: r.error.replace(/^✗\s*/, '') },
             { status: 400 }
           );
         }

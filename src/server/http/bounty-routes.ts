@@ -63,10 +63,12 @@ function internalError(message = 'Internal server error'): Response {
 /**
  * Resolve the acting agent from request body + auth fallback.
  *
- * Priority:
- *   1. body[`${fieldName}Address`] (full address `uuid@host` or bare uuid)
- *   2. body[`${fieldName}Id`] (legacy explicit id)
- *   3. authId (from JWT — only present when BOUNTY_TOKEN_CHECK_ENABLED=true)
+ * Priority (v0.10):
+ *   1. body[`${fieldName}Address`] (STRICT uuid@host — bare UUIDs rejected)
+ *   2. authId (from JWT — only present when BOUNTY_TOKEN_CHECK_ENABLED=true)
+ *
+ * v0.10 BREAKING: removed `body[${fieldName}Id]` branch. Callers MUST send
+ * the full address.
  *
  * Returns `null` if no source provided or address lookup fails.
  * Caller should 400 / 404 as appropriate.
@@ -78,9 +80,8 @@ function resolveActor(
   authId: string | undefined
 ): { id: string; email: string } | null {
   const addrKey = `${fieldName}Address` as const;
-  const idKey = `${fieldName}Id` as const;
 
-  // 1. address field
+  // 1. address field (STRICT — must be uuid@host)
   const addr = body[addrKey];
   if (typeof addr === 'string' && addr.trim()) {
     const r = findAgentByAddress(db, addr);
@@ -88,17 +89,7 @@ function resolveActor(
     return r;
   }
 
-  // 2. explicit id field (backward compat)
-  const id = body[idKey];
-  if (typeof id === 'string' && id.trim()) {
-    const row = db
-      .prepare('SELECT id, email FROM agents WHERE id = ?')
-      .get(id) as { id: string; email: string } | undefined;
-    if (row) return row;
-    return null;
-  }
-
-  // 3. authId
+  // 2. authId (JWT-based)
   if (authId) {
     const row = db
       .prepare('SELECT id, email FROM agents WHERE id = ?')
@@ -182,7 +173,7 @@ export class BountyRoutes {
       return badRequest(
         typeof body.publisherAddress === 'string' && body.publisherAddress
           ? `Agent not found: ${body.publisherAddress}`
-          : 'publisherId or publisherAddress required'
+          : 'publisherAddress required (<uuid>@<host>)'
       );
     }
 
@@ -218,7 +209,7 @@ export class BountyRoutes {
       return badRequest(
         typeof body.agentAddress === 'string' && body.agentAddress
           ? `Agent not found: ${body.agentAddress}`
-          : 'agentId or agentAddress required'
+          : 'agentAddress required (<uuid>@<host>)'
       );
     }
 
@@ -276,7 +267,7 @@ export class BountyRoutes {
       return badRequest(
         typeof body.agentAddress === 'string' && body.agentAddress
           ? `Agent not found: ${body.agentAddress}`
-          : 'agentId or agentAddress required'
+          : 'agentAddress required (<uuid>@<host>)'
       );
     }
 
@@ -305,7 +296,7 @@ export class BountyRoutes {
       return badRequest(
         typeof body.publisherAddress === 'string' && body.publisherAddress
           ? `Agent not found: ${body.publisherAddress}`
-          : 'publisherId or publisherAddress required'
+          : 'publisherAddress required (<uuid>@<host>)'
       );
     }
 
@@ -336,7 +327,7 @@ export class BountyRoutes {
       return badRequest(
         typeof body.publisherAddress === 'string' && body.publisherAddress
           ? `Agent not found: ${body.publisherAddress}`
-          : 'publisherId or publisherAddress required'
+          : 'publisherAddress required (<uuid>@<host>)'
       );
     }
 
@@ -365,7 +356,7 @@ export class BountyRoutes {
       return badRequest(
         typeof body.publisherAddress === 'string' && body.publisherAddress
           ? `Agent not found: ${body.publisherAddress}`
-          : 'publisherId or publisherAddress required'
+          : 'publisherAddress required (<uuid>@<host>)'
       );
     }
 

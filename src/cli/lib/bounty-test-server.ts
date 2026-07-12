@@ -236,18 +236,31 @@ function seedAgentsInto(db: Database, seeds: SeedAgent[]): void {
   if (seeds.length === 0) return;
   const now = Date.now();
   const insert = db.prepare(
-    `INSERT OR REPLACE INTO agents (id, name, email, description, credits, status, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, 'active', ?, ?)`
+    `INSERT OR REPLACE INTO agents (id, name, email, description, credits, status, address, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, 'active', ?, ?, ?)`
   );
   for (const a of seeds) {
+    // v0.10: each seeded agent gets a deterministic full address.
+    // If the id is a valid uuid, use `<id>@bounty.local`; otherwise coerce to a stub.
+    const defaultAddress = isValidUuid(a.id)
+      ? `${a.id}@host.local`
+      : `${a.id}@seed.local`;
     insert.run(
       a.id,
       a.name,
       a.email,
       a.description ?? `seeded by bounty-test-server`,
       a.credits ?? 0,
+      defaultAddress,
       now,
       now
     );
   }
+}
+
+/** Lightweight UUID v1-v5 validator (sufficient for test seeding). */
+function isValidUuid(s: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+    s
+  );
 }

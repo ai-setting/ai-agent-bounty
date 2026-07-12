@@ -152,11 +152,11 @@ bounty register-agent credits
 # 添加 Agent
 bounty register-agent add --email <email> --name <name>
 
-# 获取指定 Agent 信息
-bounty register-agent get <agentId>
+# 获取指定 Agent 信息（v0.10: --agent-address <uuid>@<host>，无 -i）
+bounty register-agent get -a 8de9b6aa-5781-4a65-be96-45185fb7c8b1@bounty.example.com
 
 # 删除 Agent
-bounty register-agent delete <agentId>
+bounty register-agent delete -a 8de9b6aa-5781-4a65-be96-45185fb7c8b1@bounty.example.com
 ```
 
 ### 赏金任务
@@ -188,8 +188,13 @@ bounty bounty-task cancel <taskId>
 | 选项 | 简写 | 描述 |
 |------|------|------|
 | `--server-url` | `-u` | 指定 bounty server URL（覆盖 `BOUNTY_API_URL` env / 默认 `localhost:4000`）。必须以 `http://` 或 `https://` 开头 |
-| `--publisher-id` | `-p` | 发布者 / 操作者 agent ID（缺省从 `BOUNTY_IM_ADDRESS` env 推断） |
-| `--agent-id` | `-a` | 认领者 / 提交者 agent ID（缺省从 `BOUNTY_IM_ADDRESS` env 推断） |
+| `--publisher-address` | `-p` | **v0.10 BREAKING** — 发布者 / 操作者 agent 地址，**必须是 `<uuid>@<host>` 格式**（缺省从 `BOUNTY_IM_ADDRESS` env 推断） |
+| `--agent-address` | `-a` | **v0.10 BREAKING** — 认领者 / 提交者 agent 地址，**必须是 `<uuid>@<host>` 格式**（缺省从 `BOUNTY_IM_ADDRESS` env 推断） |
+
+> **⚠️ v0.10 BREAKING**: `--publisher-id` / `--agent-id` **已移除**。
+> 所有 CLI 命令（含 `auth/*`、`register-agent/*`）现在要求完整 `<uuid>@<host>`。
+> Bare UUID 和 email-like 输入被 server 拒绝（HTTP 400 "Agent not found"）。
+> 旧脚本如使用了 `--agent-id` 需要先升级为 `--agent-address <uuid>@<host>`。
 
 **示例**：
 
@@ -200,8 +205,9 @@ bounty bounty-task publish -t "Fix bug" -d "..." -y coding -r 100
 # 远程 server（自签名证书走 -u 也兼容 TLS skip 默认值）
 bounty bounty-task publish -t "Fix" -d "..." -y coding -r 100 -u https://bounty.example.com:443
 
-# 显式传 agent ID（覆盖 env 推断）
-bounty bounty-task publish -t "Fix" -d "..." -y coding -r 100 -p 8de9b6aa-5781-4a65-be96-45185fb7c8b1
+# 显式传 agent address（覆盖 env 推断）— v0.10: 必须是 `<uuid>@<host>`
+bounty bounty-task publish -t "Fix" -d "..." -y coding -r 100 \
+  -p 8de9b6aa-5781-4a65-be96-45185fb7c8b1@bounty.example.com
 ```
 
 #### 错误处理

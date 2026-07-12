@@ -1,22 +1,12 @@
 /**
  * Tests for `resolveCurrentAgent()` — auto-infer current agent from env / token.
  *
- * Phase: feat/bounty-task-optimize
+ * Phase: feat/bounty-task-optimize (v0.10 strict refactor)
  *
- * 设计动机: bounty-task/* 命令当前要求用户必须显式传 `--publisher-id` 或
- * `--agent-id`，但其实这些信息可以通过环境变量自动推断：
- *   1. `BOUNTY_IM_ADDRESS` (形如 `agent-uuid@host`) → 提取 agent-uuid 部分
- *   2. `~/.config/bounty/token` (JWT) → 解码 payload.sub (JWT subject claim = agent id)
+ * v0.10 BREAKING: BOUNTY_IM_ADDRESS must be in `<uuid>@<host>` format.
+ * Bare UUID is REJECTED → resolveCurrentAgent returns undefined.
  *
- * 优先级: BOUNTY_IM_ADDRESS > ~/.config/bounty/token > undefined
- *
- * 测试场景：
- * 1. 不存在任何 env/token 时返回 undefined
- * 2. BOUNTY_IM_ADDRESS 存在时返回 agent-id 部分（去掉 @host 后缀）
- * 3. 只有 token 文件存在时返回 undefined（JWT decode 是后续 phase, 本阶段先聚焦 env）
- * 4. BOUNTY_IM_ADDRESS 优先于 token 文件
- * 5. BOUNTY_IM_ADDRESS 可为纯 id（无 @）以兼容旧用法
- * 6. BOUNTY_IM_ADDRESS 为空字符串时回退到 token 文件
+ * 优先级: BOUNTY_IM_ADDRESS > ~/.config/bounty/token (future) > undefined
  */
 
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
@@ -24,7 +14,7 @@ import { existsSync, mkdirSync, writeFileSync, rmSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
 
-describe('resolveCurrentAgent', () => {
+describe('resolveCurrentAgent (v0.10 strict)', () => {
   let tempDir: string;
   let tokenPath: string;
   let origImAddress: string | undefined;
@@ -60,7 +50,7 @@ describe('resolveCurrentAgent', () => {
     expect(result).toBeUndefined();
   });
 
-  test('extracts agent-id from BOUNTY_IM_ADDRESS (uuid@host format)', async () => {
+  test('extracts uuid from BOUNTY_IM_ADDRESS (uuid@host format)', async () => {
     const agentId = '8de9b6aa-5781-4a65-be96-45185fb7c8b1';
     process.env.BOUNTY_IM_ADDRESS = `${agentId}@bounty.tongagents.example.com`;
 
@@ -69,24 +59,31 @@ describe('resolveCurrentAgent', () => {
     expect(result).toBe(agentId);
   });
 
-  test('handles BOUNTY_IM_ADDRESS without port suffix', async () => {
-    process.env.BOUNTY_IM_ADDRESS = 'agent-abc@localhost';
+  test('handles short hostname (host = "localhost")', async () => {
+    process.env.BOUNTY_IM_ADDRESS = '8de9b6aa-5781-4a65-be96-45185fb7c8b1@localhost';
 
     const { resolveCurrentAgent } = await import('../../src/cli/lib/current-agent.js');
-    expect(resolveCurrentAgent({ tokenPath })).toBe('agent-abc');
+    expect(resolveCurrentAgent({ tokenPath })).toBe('8de9b6aa-5781-4a65-be96-45185fb7c8b1');
   });
 
-  test('accepts pure id BOUNTY_IM_ADDRESS for backward compatibility', async () => {
+  test('v0.10 BREAKING: rejects pure-id BOUNTY_IM_ADDRESS (no @host)', async () => {
     process.env.BOUNTY_IM_ADDRESS = 'no-at-sign-here';
 
     const { resolveCurrentAgent } = await import('../../src/cli/lib/current-agent.js');
     const result = resolveCurrentAgent({ tokenPath });
-    expect(result).toBe('no-at-sign-here');
+    expect(result).toBeUndefined();
+  });
+
+  test('v0.10 BREAKING: rejects BOUNTY_IM_ADDRESS with non-UUID uuid part', async () => {
+    process.env.BOUNTY_IM_ADDRESS = 'not-a-uuid@somewhere.example.com';
+
+    const { resolveCurrentAgent } = await import('../../src/cli/lib/current-agent.js');
+    expect(resolveCurrentAgent({ tokenPath })).toBeUndefined();
   });
 
   test('BOUNTY_IM_ADDRESS takes priority over token file existence', async () => {
-    const agentId = 'priority-agent-id';
-    process.env.BOUNTY_IM_ADDRESS = `${agentId}@host`;
+    const agentId = '8de9b6aa-5781-4a65-be96-45185fb7c8b1';
+    process.env.BOUNTY_IM_ADDRESS = `${agentId}@host.example.com`;
     // 即便 token 文件存在, IM_ADDRESS 优先
     writeFileSync(tokenPath, 'jwt-token-content', 'utf-8');
 

@@ -27,7 +27,7 @@ describe('bounty bounty-task — Tier B --json / --quiet flags', () => {
   let origExit: any;
 
   beforeEach(async () => {
-    process.env.BOUNTY_IM_ADDRESS = 'test-agent@host';
+    process.env.BOUNTY_IM_ADDRESS = '8de9b6aa-5781-4a65-be96-45185fb7c8b1@host.local';
     consoleLogOutput = [];
     consoleErrorOutput = [];
     exitCode = null;
@@ -49,7 +49,7 @@ describe('bounty bounty-task — Tier B --json / --quiet flags', () => {
 
     server = await createBountyTestServer({
       port: 0,
-      seedAgents: [{ id: 'test-agent', email: 'test@host', name: 'Test', credits: 500 }],
+      seedAgents: [{ id: '8de9b6aa-5781-4a65-be96-45185fb7c8b1', email: 'test@host', name: 'Test', credits: 500 }],
     });
   });
 

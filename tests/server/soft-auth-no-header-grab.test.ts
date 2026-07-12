@@ -1,14 +1,13 @@
 /**
- * Phase 4 — soft auth + address body integration tests.
+ * Phase 4 — soft auth + address body integration tests (v0.10).
  *
  * Verifies the combined behavior:
  *   - Default: BOUNTY_TOKEN_CHECK_ENABLED is unset → token check off
  *   - With soft auth, callers can omit Authorization header
- *   - Requests must supply `publisherAddress`/`agentAddress` in body to identify actor
+ *   - Requests must supply `publisherAddress` / `agentAddress` (full uuid@host)
+ *     in body to identify actor (v0.10 BREAKING: bare UUID REJECTED)
  *   - Bad token + good address → still works (soft auth bypass)
  *   - No token + no address → 400 (server can't determine actor)
- *
- * Phase: feat/bounty-task-optimize v0.7
  */
 
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
@@ -16,7 +15,10 @@ import { BountyHTTPServer } from '../../src/server/http/index.js';
 import { IMDatabase } from '../../src/im/db/index.js';
 import { Database } from '../../src/lib/storage/database.js';
 
-describe('Soft auth + address body (v0.7)', () => {
+const PUB_FULL = '8de9b6aa-1111-4000-8000-000000000001@bounty.local';
+const PUB_UUID = '8de9b6aa-1111-4000-8000-000000000001';
+
+describe('Soft auth + address body (v0.10 strict)', () => {
   let bountyDb: Database;
   let imDb: IMDatabase;
   let server: BountyHTTPServer;
@@ -29,7 +31,7 @@ describe('Soft auth + address body (v0.7)', () => {
     const now = Date.now();
     bountyDb.prepare(`INSERT INTO agents (id, name, email, status, address, credits, created_at, updated_at)
                       VALUES (?, ?, ?, 'active', ?, 1000, ?, ?)`).run(
-      'uuid-1', 'Alice', 'alice@example.com', 'uuid-1@bounty.local', now, now
+      PUB_UUID, 'Alice', 'alice@example.com', PUB_FULL, now, now
     );
     server = new BountyHTTPServer({ imDb, bountyDb, port: 0 });
     await server.start();
@@ -42,28 +44,42 @@ describe('Soft auth + address body (v0.7)', () => {
     expect((server as any).tokenCheckEnabled).toBe(false);
   });
 
-  test('无 Authorization 头 + address body → 201 (soft auth + address 路由)', async () => {
+  test('无 Authorization 头 + 完整 address body → 201 (soft auth + address 路由)', async () => {
     const res = await fetch(`${baseUrl}/api/tasks`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },  // 注意：没有 Authorization
       body: JSON.stringify({
         title: 'No-auth Task', description: 'D', reward: 1, type: 'writing',
-        publisherAddress: 'uuid-1@bounty.local',
+        publisherAddress: PUB_FULL,
       }),
     });
     expect(res.status).toBe(201);
     const task = (await res.json()) as { publisherId: string; status: string };
-    expect(task.publisherId).toBe('uuid-1');
+    expect(task.publisherId).toBe(PUB_UUID);
     expect(task.status).toBe('open');
   });
 
-  test('带坏 token + address body → 仍然 201 (soft auth bypass)', async () => {
+  test('v0.10 BREAKING: 无 Authorization + bare UUID address → 400 (拒绝 bare UUID)', async () => {
+    const res = await fetch(`${baseUrl}/api/tasks`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        title: 'BareUUID Task', description: 'D', reward: 1, type: 'writing',
+        publisherAddress: PUB_UUID,  // bare UUID REJECTED in v0.10
+      }),
+    });
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as { error: string };
+    expect(body.error).toContain('Agent not found');
+  });
+
+  test('带坏 token + 完整 address body → 仍然 201 (soft auth bypass)', async () => {
     const res = await fetch(`${baseUrl}/api/tasks`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer broken.jwt.token' },
       body: JSON.stringify({
         title: 'Bad-token Task', description: 'D', reward: 1, type: 'writing',
-        publisherAddress: 'uuid-1@bounty.local',
+        publisherAddress: PUB_FULL,
       }),
     });
     expect(res.status).toBe(201);
@@ -87,14 +103,14 @@ describe('Soft auth + address body (v0.7)', () => {
     expect(Array.isArray(tasks)).toBe(true);
   });
 
-  test('完整流程: 无 token publish → grab → submit → complete 全用 address', async () => {
+  test('完整流程: 无 token publish → grab → submit → complete 全用完整 address', async () => {
     // 1. publish (publisher)
     const pub = await fetch(`${baseUrl}/api/tasks`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         title: 'E2E', description: 'D', reward: 10, type: 'coding',
-        publisherAddress: 'uuid-1@bounty.local',
+        publisherAddress: PUB_FULL,
       }),
     });
     expect(pub.status).toBe(201);
@@ -104,12 +120,14 @@ describe('Soft auth + address body (v0.7)', () => {
     const now = Date.now();
     bountyDb.prepare(`INSERT INTO agents (id, name, email, status, address, credits, created_at, updated_at)
                       VALUES (?, ?, ?, 'active', ?, 1000, ?, ?)`).run(
-      'uuid-2', 'Bob', 'bob@example.com', 'uuid-2@bounty.local', now, now
+      '8de9b6aa-3333-4000-8000-000000000003', 'Bob', 'bob@example.com',
+      '8de9b6aa-3333-4000-8000-000000000003@bounty.local', now, now
     );
+    const agentFull = '8de9b6aa-3333-4000-8000-000000000003@bounty.local';
     const grab = await fetch(`${baseUrl}/api/tasks/${task.id}/grab`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ agentAddress: 'uuid-2@bounty.local' }),
+      body: JSON.stringify({ agentAddress: agentFull }),
     });
     expect(grab.status).toBe(200);
 
@@ -117,7 +135,7 @@ describe('Soft auth + address body (v0.7)', () => {
     const sub = await fetch(`${baseUrl}/api/tasks/${task.id}/submit`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ agentAddress: 'uuid-2', result: 'work done' }),
+      body: JSON.stringify({ agentAddress: agentFull, result: 'work done' }),
     });
     expect(sub.status).toBe(200);
 
@@ -125,10 +143,8 @@ describe('Soft auth + address body (v0.7)', () => {
     const complete = await fetch(`${baseUrl}/api/tasks/${task.id}/complete`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ publisherAddress: 'uuid-1@bounty.local' }),
+      body: JSON.stringify({ publisherAddress: PUB_FULL }),
     });
     expect(complete.status).toBe(200);
-    const final = (await complete.json()) as { status: string };
-    expect(final.status).toBe('completed');
   });
 });

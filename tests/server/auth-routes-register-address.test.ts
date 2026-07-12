@@ -38,7 +38,8 @@ describe('AuthRoutes.register — address field (v0.7)', () => {
       body: JSON.stringify({
         email: 'alice@example.com',
         name: 'Alice',
-        address: 'alice-uuid-123@bounty.local',
+        // v0.10 STRICT: must be a valid uuid@host
+        address: '8de9b6aa-1111-4000-8000-000000000001@bounty.local',
       }),
     });
     // register 不抛错即成功（注意：实际 address 在 verify 阶段被覆盖）

@@ -7,6 +7,81 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v0.10.0] - 2026-07-12 — Address Unification (BREAKING)
+
+### ⚠️ BREAKING CHANGES
+
+**所有 address 参数强制 `<uuid>@<host>` 格式**。Bare UUID、email-like、空
+字符串、多 `@` 字符一律 REJECTED。
+
+#### Removed flags
+
+| 旧 flag (v0.9) | 新 flag (v0.10) |
+|---|---|
+| `--publisher-id` | `--publisher-address <uuid>@<host>` |
+| `--agent-id` | `--agent-address <uuid>@<host>` |
+| `--id` (-i) on `register-agent/{get,delete,info,credits}` | `--agent-address` (无 -i) |
+| `BOUNTY_IM_ADDRESS=agent-uuid` (bare) | `BOUNTY_IM_ADDRESS=<uuid>@<host>` |
+
+#### Server contract change
+
+旧 `resolveActor` 优先级链（v0.7-v0.9）：`body[*Address]` → `body[*Id]` → `authId`
+新 `resolveActor` 优先级链（v0.10）：`body[*Address]` → `authId`（`body[*Id]` 已移除）
+
+- 客户端 `body[*Address]` 现在 MUST 是完整 `<uuid>@<host>`（以前可裸 uuid）
+- 服务器 `body[*Id]` 字段已不再被读取
+- 错误信息：`publisherAddress required (<uuid>@<host>)` / `agentAddress required (<uuid>@<host>)`
+
+### Added
+
+- **`src/lib/address.ts`** — 共享 strict 解析层（102 行，CLI/server 共享）
+  - `parseAddress(input, field)` 严格模式（RFC 4122 v1-v5 UUID + 主机名 labels 校验）
+  - `formatAddress(uuid, host)` 工具函数
+  - `isValidAddress(input)` 简写
+
+- **`src/cli/lib/address-parser.ts`** 新 `resolveAddressOption` helper
+  - 替换旧 `resolveAgentIdOption`
+  - 返回完整 `{ uuid, host, raw }` 三元组（而非仅 uuid）
+  - 接收 string 或 Address object 作为 fallback
+
+- **`src/cli/lib/current-agent.ts`** 新 `resolveCurrentAgentAddress()`
+  - 返回完整 Address（env 必须是 `<uuid>@<host>`）
+
+### Changed
+
+- **`src/server/lib/address-resolver.ts`** — 强化为 strict（移除 bare UUID 兼容）
+- **`src/server/http/bounty-routes.ts`** — `resolveActor` 移除 `${field}Id` 分支
+- 7 个 CLI 命令移除 `--*-id` flag、发送完整 address：
+  - `bounty-task/{publish,grab,submit,complete,cancel}.ts`
+  - `auth/login.ts`, `register-agent/{login,get,delete,info,credits}.ts`
+- `X-Agent-Id` header 仍 = bare uuid（soft-auth 向后兼容）
+- 测试套件：43 个新增 strict cases（src/lib/address 22 + cli helper 11 + 集成 10）
+
+### Upgrade guide
+
+```bash
+# Before (v0.9)
+bounty bounty-task publish -t "x" -y coding -r 100 \
+  --publisher-id ee0dd085-0b66-4640-81bc-f8d4c743c1e6
+
+# After (v0.10)
+bounty bounty-task publish -t "x" -y coding -r 100 \
+  --publisher-address ee0dd085-0b66-4640-81bc-f8d4c743c1e6@bounty.local
+```
+
+- `BOUNTY_IM_ADDRESS` 环境变量也必须升级
+- 旧脚本搜索替换：`--publisher-id` → `--publisher-address`，`--agent-id` → `--agent-address`
+- 然后给每个 UUID 后面补上 `@<host>`（host 可从 server 的 `BOUNTY_DOMAIN` env 取）
+
+### Tests / Verification
+
+- 657 tests / 1855 expects — all green
+- `bunx tsc --noEmit` — 0 errors
+- `bun run build` — 4 bundles success
+- 设计文档：`docs/refactor/address-unification.md`
+
+## [v0.9.0] - 2026-07-12
+
 ### Documentation / Audit
 
 - **Bounty + IM token policy audit (v0.9)**: review of `BOUNTY_TOKEN_CHECK_ENABLED`

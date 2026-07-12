@@ -2,19 +2,16 @@
  * agent credits command
  * Check agent credits and transaction history
  *
- * v0.7: prefer --agent-address (<uuid>@<host>); legacy --id remains
- * accepted and maps to local agent id lookup.
+ * v0.10 BREAKING: --id / -i REMOVED. Use --agent-address <uuid>@<host>.
  */
 
 import type { CommandModule } from 'yargs';
 import chalk from 'chalk';
 import { createContext } from '../../services/context.js';
-import { resolveAgentIdOption } from '../../lib/address-parser.js';
+import { resolveAddressOption } from '../../lib/address-parser.js';
 
 interface CreditsOptions {
   'agent-address'?: string;
-  /** @deprecated Use --agent-address. */
-  id?: string;
   history?: number;
 }
 
@@ -25,10 +22,12 @@ export const creditsCommand: CommandModule<object, CreditsOptions> = {
   builder: (yargs) =>
     yargs
       .option('agent-address', {
-        alias: ['id', 'i'],
+        alias: 'a',
         type: 'string',
         demandOption: true,
-        description: 'Agent address (<uuid>@<host>). Legacy --id / -i pure id is also accepted.',
+        description:
+          'Agent address in <uuid>@<host> format (REQUIRED). ' +
+          'Bare UUID is REJECTED in v0.10.',
       })
       .option('history', {
         alias: 'h',
@@ -38,16 +37,14 @@ export const creditsCommand: CommandModule<object, CreditsOptions> = {
       }),
 
   handler: async (argv) => {
-    const options = argv as unknown as CreditsOptions & { id?: string };
+    const options = argv as unknown as CreditsOptions;
     const ctx = createContext();
 
     try {
-      const resolvedAgent = resolveAgentIdOption({
+      const resolvedAgent = resolveAddressOption({
         address: options['agent-address'],
-        deprecatedId: options.id,
         addressFlag: '--agent-address',
-        deprecatedFlag: '--id',
-        missingMessage: '✗ --agent-address is required',
+        missingMessage: '✗ --agent-address is required (<uuid>@<host> format)',
       });
 
       if (!resolvedAgent.ok) {
@@ -56,7 +53,8 @@ export const creditsCommand: CommandModule<object, CreditsOptions> = {
         process.exit(2);
       }
 
-      const agent = ctx.agentService.getById(resolvedAgent.value);
+      // v0.10: resolve via full address → look up agent
+      const agent = ctx.agentService.findByAddress(resolvedAgent.value.raw);
 
       if (!agent) {
         console.error(chalk.red('\n✗ Error: Agent not found\n'));

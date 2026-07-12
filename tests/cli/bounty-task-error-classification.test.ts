@@ -56,7 +56,7 @@ describe('bounty bounty-task - error classification (exit code mapping)', () => 
 
   test('publish: network error → exit 4 + friendly message', async () => {
     const { publishCommand } = await import('../../src/cli/commands/bounty-task/publish.js');
-    process.env.BOUNTY_IM_ADDRESS = 'test-agent@host';
+    process.env.BOUNTY_IM_ADDRESS = '8de9b6aa-5781-4a65-be96-45185fb7c8b1@host.local';
 
     let thrown: any = null;
     try {
@@ -84,7 +84,7 @@ describe('bounty bounty-task - error classification (exit code mapping)', () => 
         return Response.json({ error: 'Unauthorized' }, { status: 401 });
       },
     });
-    process.env.BOUNTY_IM_ADDRESS = 'test-agent@host';
+    process.env.BOUNTY_IM_ADDRESS = '8de9b6aa-5781-4a65-be96-45185fb7c8b1@host.local';
 
     const { publishCommand } = await import('../../src/cli/commands/bounty-task/publish.js');
 
@@ -113,7 +113,7 @@ describe('bounty bounty-task - error classification (exit code mapping)', () => 
         return Response.json({ error: 'reward must be > 0' }, { status: 400 });
       },
     });
-    process.env.BOUNTY_IM_ADDRESS = 'test-agent@host';
+    process.env.BOUNTY_IM_ADDRESS = '8de9b6aa-5781-4a65-be96-45185fb7c8b1@host.local';
 
     const { publishCommand } = await import('../../src/cli/commands/bounty-task/publish.js');
 
@@ -142,7 +142,7 @@ describe('bounty bounty-task - error classification (exit code mapping)', () => 
         return Response.json({ error: 'Database locked' }, { status: 500 });
       },
     });
-    process.env.BOUNTY_IM_ADDRESS = 'test-agent@host';
+    process.env.BOUNTY_IM_ADDRESS = '8de9b6aa-5781-4a65-be96-45185fb7c8b1@host.local';
 
     const { publishCommand } = await import('../../src/cli/commands/bounty-task/publish.js');
 
@@ -166,7 +166,7 @@ describe('bounty bounty-task - error classification (exit code mapping)', () => 
 
   test('grab: network error → exit 4', async () => {
     const { grabCommand } = await import('../../src/cli/commands/bounty-task/grab.js');
-    process.env.BOUNTY_IM_ADDRESS = 'test-agent@host';
+    process.env.BOUNTY_IM_ADDRESS = '8de9b6aa-5781-4a65-be96-45185fb7c8b1@host.local';
 
     let thrown: any = null;
     try {
@@ -205,7 +205,7 @@ describe('bounty bounty-task - error classification (exit code mapping)', () => 
 
   test('publish: reward <= 0 → exit 2 (client-side validation)', async () => {
     const { publishCommand } = await import('../../src/cli/commands/bounty-task/publish.js');
-    process.env.BOUNTY_IM_ADDRESS = 'test-agent@host';
+    process.env.BOUNTY_IM_ADDRESS = '8de9b6aa-5781-4a65-be96-45185fb7c8b1@host.local';
 
     let thrown: any = null;
     try {
