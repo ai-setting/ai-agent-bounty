@@ -10,10 +10,10 @@ import { existsSync, readFileSync } from 'fs';
 import { bountyConfig } from '../../../lib/config/bounty-config.js';
 import { addServerUrlOption, resolveServerUrl } from '../../lib/server-url-option.js';
 import { bountyHttp, BountyHttpError } from '../../lib/bounty-http.js';
-import { resolveCurrentAgent } from '../../lib/current-agent.js';
+import { resolveCurrentAgent, resolveCurrentAgentAddress } from '../../lib/current-agent.js';
 import { generateIdempotencyKey } from '../../lib/idempotency-key.js';
 import { shouldJson, jsonOutput, isQuiet, quietIdOutput } from '../../lib/json-output.js';
-import { resolveAgentIdOption } from '../../lib/address-parser.js';
+import { resolveAddressOption } from '../../lib/address-parser.js';
 import { validatePublishInput } from '../../lib/input-validator.js';
 
 interface PublishOptions {
@@ -23,8 +23,6 @@ interface PublishOptions {
   type: string;
   reward: number | string;
   'publisher-address'?: string;
-  /** @deprecated Use --publisher-address. */
-  'publisher-id'?: string;
   tags?: string;
   deadline?: number | string;
   'server-url'?: string;
@@ -86,12 +84,9 @@ export const publishCommand: CommandModule<object, PublishOptions> = {
           alias: 'p',
           type: 'string',
           description:
-            'Publisher agent address (<uuid>@<host>). Pure <uuid> is also accepted. ' +
+            'Publisher agent address in <uuid>@<host> format. ' +
+            'Required (<uuid>@<host>) — bare UUID is REJECTED in v0.10. ' +
             'Defaults to BOUNTY_IM_ADDRESS env.',
-        })
-        .option('publisher-id', {
-          type: 'string',
-          description: '[deprecated] Publisher agent ID. Use --publisher-address instead.',
         })
         .option('tags', {
           alias: 'g',
@@ -133,20 +128,19 @@ export const publishCommand: CommandModule<object, PublishOptions> = {
     }
     const input = validated.value;
 
-    const publisher = resolveAgentIdOption({
+    const publisher = resolveAddressOption({
       address: argv['publisher-address'],
-      deprecatedId: argv['publisher-id'],
-      fallback: resolveCurrentAgent(),
+      fallback: resolveCurrentAgentAddress(),
       addressFlag: '--publisher-address',
-      deprecatedFlag: '--publisher-id',
       missingMessage:
-        '✗ Cannot infer publisher address. Provide --publisher-address or set BOUNTY_IM_ADDRESS.',
+        '✗ Cannot infer publisher address. Provide --publisher-address or set BOUNTY_IM_ADDRESS=<uuid>@<host>.',
     });
     if (!publisher.ok) {
       console.error(chalk.red(`\n${publisher.error}\n`));
       process.exit(2);
     }
-    const publisherId = publisher.value;
+    const publisherUuid = publisher.value.uuid;
+    const publisherAddress = publisher.value.raw;
 
     // Resolve optional description: --description wins if both are given.
     let description: string | undefined = input.description;
@@ -172,9 +166,9 @@ export const publishCommand: CommandModule<object, PublishOptions> = {
     const idempotencyKey =
       input.idempotencyKey ||
       generateIdempotencyKey({
-        uuid: resolveCurrentAgent() ?? publisherId,
+        uuid: resolveCurrentAgent() ?? publisherUuid,
         title: input.title,
-        publisher: publisherId,
+        publisher: publisherUuid,
       });
 
     try {
@@ -189,12 +183,13 @@ export const publishCommand: CommandModule<object, PublishOptions> = {
           reward: input.reward,
           tags: input.tags,
           deadline: input.deadline,
-          // Server still accepts legacy id field; CLI derives it from address.
-          publisherId,
+          // v0.10: send full `<uuid>@<host>` address (BREAKING — server rejects bare UUID)
+          publisherAddress,
         },
         extraHeaders: {
           'Idempotency-Key': idempotencyKey,
-          'X-Agent-Id': publisherId,
+          // Soft-auth compatibility: X-Agent-Id header still carries bare uuid
+          'X-Agent-Id': publisherUuid,
         },
       });
 

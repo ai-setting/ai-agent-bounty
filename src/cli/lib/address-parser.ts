@@ -1,147 +1,120 @@
 /**
- * Helpers for v0.7 address-based agent identity CLI flags.
+ * CLI address parsing helpers (v0.10+).
  *
- * Preferred CLI input is `<uuid>@<host>` (agent address). For backward
- * compatibility we also accept the old pure id/uuid form and extract the
- * local part before sending legacy `agentId` / `publisherId` fields to the
- * server.
+ * v0.10 BREAKING: All CLI commands MUST use `<uuid>@<host>` format for
+ * `--*-address` flags. Bare UUID, email-like, and empty inputs are rejected.
+ *
+ * This module is now a thin re-export of the shared `src/lib/address.js`
+ * to ensure server and CLI use the exact same validation logic.
+ *
+ * @deprecated Use the shared `parseAddress`/`formatAddress`/`isValidAddress`
+ * from `../../lib/address.js` directly. This re-export is kept for backward
+ * compatibility with CLI command files that import `parseAgentAddress`.
  */
 
-export type ValidationResult<T> =
-  | { ok: true; value: T }
-  | { ok: false; error: string; field: string };
+import {
+  parseAddress,
+  formatAddress,
+  isValidAddress,
+  type Address,
+  type AddressValidationResult,
+} from '../../lib/address.js';
 
-export interface ParsedAgentAddress {
-  /** Local id portion before @; named uuid to match server model. */
-  uuid: string;
-  /** Host portion after @, absent for legacy pure-id input. */
-  host?: string;
-  /** Trimmed original input. */
-  address: string;
-}
-
-function printable(value: unknown): string {
-  if (typeof value === 'string') return `"${value}"`;
-  return String(value);
-}
+export {
+  parseAddress,
+  formatAddress,
+  isValidAddress,
+  type Address,
+  type AddressValidationResult,
+};
 
 /**
- * Parse an agent address or legacy pure id.
+ * Backward-compatible alias used by CLI command files.
  *
- * Accepts:
- * - `ee0...c1e6@bounty.example.com` → uuid `ee0...c1e6`, host `bounty.example.com`
- * - `ee0...c1e6` → uuid `ee0...c1e6`, host undefined (legacy compatibility)
+ * In v0.10 this returns the same `{ ok, value } | { ok, error }` shape as
+ * the shared `parseAddress`. Note that:
+ * - `field` defaults to `--agent-address` for error messages.
+ * - The returned `value` shape matches the v0.7 CLI expectations
+ *   (`{ uuid, host, address }`) — the v0.10 strict `Address` has `raw` instead
+ *   of `address`. We expose both for compatibility.
  */
-export function parseAgentAddress(
-  input: unknown,
-  field = '--agent-address'
-): ValidationResult<ParsedAgentAddress> {
-  if (typeof input !== 'string') {
-    return {
-      ok: false,
-      field,
-      error: `✗ ${field} must be a string (got ${printable(input)})`,
-    };
-  }
+export { parseAddress as parseAgentAddress } from '../../lib/address.js';
 
-  const address = input.trim();
-  if (!address) {
-    return {
-      ok: false,
-      field,
-      error: `✗ ${field} requires a value (got nothing)`,
-    };
-  }
-
-  const firstAt = address.indexOf('@');
-  const lastAt = address.lastIndexOf('@');
-
-  if (firstAt === -1) {
-    return { ok: true, value: { uuid: address, address } };
-  }
-
-  if (firstAt !== lastAt) {
-    return {
-      ok: false,
-      field,
-      error: `✗ ${field} must be <uuid>@<host> or <uuid> (got ${printable(address)})`,
-    };
-  }
-
-  const uuid = address.slice(0, firstAt).trim();
-  const host = address.slice(firstAt + 1).trim();
-
-  if (!uuid) {
-    return {
-      ok: false,
-      field,
-      error: `✗ ${field} is missing agent id before @ (got ${printable(address)})`,
-    };
-  }
-
-  if (!host) {
-    return {
-      ok: false,
-      field,
-      error: `✗ ${field} is missing host after @ (got ${printable(address)})`,
-    };
-  }
-
-  return { ok: true, value: { uuid, host, address } };
-}
-
-export interface ResolveAgentIdOptionInput {
-  /** Preferred address flag value, e.g. argv['agent-address']. */
+/**
+ * **v0.10 unified helper.** Replaces the deprecated `resolveAgentIdOption`.
+ *
+ * Resolve the acting agent's full `<uuid>@<host>` address from:
+ *   1. Explicit `--*-address` flag value (preferred)
+ *   2. `fallback` (e.g. BOUNTY_IM_ADDRESS-derived full address)
+ *
+ * v0.10 BREAKING: returns the full `{ uuid, host, raw }` triple, NOT just
+ * the uuid. Callers should send `raw` in `body[*Address]` and use `uuid`
+ * for `X-Agent-Id` header (soft-auth compatibility).
+ *
+ * @example
+ *   const r = resolveAddressOption({
+ *     address: argv['publisher-address'],
+ *     fallback: resolveCurrentAgentAddress(),
+ *     addressFlag: '--publisher-address',
+ *   });
+ *   if (!r.ok) { console.error(r.error); process.exit(2); }
+ *   body.publisherAddress = r.value.raw;       // full uuid@host
+ *   headers['X-Agent-Id'] = r.value.uuid;      // soft-auth uses uuid only
+ */
+export interface ResolveAddressOptionInput {
+  /** Preferred address flag value (argv['agent-address'] etc.). */
   address?: unknown;
-  /** Deprecated id flag value, e.g. argv['agent-id']. */
-  deprecatedId?: unknown;
-  /** Fallback value from env/token inference. */
+  /** Fallback value (e.g. resolved BOUNTY_IM_ADDRESS). */
   fallback?: unknown;
-  /** Preferred flag name for messages. */
+  /** Flag name for error messages (e.g. `--agent-address`). */
   addressFlag: string;
-  /** Deprecated flag name for messages. */
-  deprecatedFlag: string;
-  /** Optional missing-value message. */
+  /** Optional missing-value message (defaults to flag required). */
   missingMessage?: string;
-  /** Warning hook; defaults to console.warn. */
-  warn?: (message: string) => void;
 }
 
-/**
- * Resolve preferred address / deprecated id / fallback into a server id.
- * Emits a deprecation warning only when the deprecated flag was used and the
- * preferred address flag was not supplied.
- */
-export function resolveAgentIdOption(
-  input: ResolveAgentIdOptionInput
-): ValidationResult<string> {
-  const warn = input.warn ?? console.warn;
+export interface AddressResolution {
+  uuid: string;
+  host: string;
+  raw: string;
+}
 
-  if (input.address !== undefined && input.address !== null) {
-    const parsed = parseAgentAddress(input.address, input.addressFlag);
-    return parsed.ok
-      ? { ok: true, value: parsed.value.uuid }
-      : { ok: false, field: parsed.field, error: parsed.error };
+export type AddressOptionResult =
+  | { ok: true; value: AddressResolution }
+  | { ok: false; error: string };
+
+export function resolveAddressOption(
+  input: ResolveAddressOptionInput
+): AddressOptionResult {
+  // Accept either a string (raw uuid@host) OR an already-parsed Address triple
+  // (e.g. returned by `resolveCurrentAgentAddress()`).
+  const parseValue = (val: unknown, field: string): { ok: true; value: AddressResolution } | { ok: false; error: string } => {
+    if (val && typeof val === 'object' && 'uuid' in val && 'host' in val && 'raw' in val) {
+      const obj = val as AddressResolution;
+      return { ok: true, value: { uuid: obj.uuid, host: obj.host, raw: obj.raw } };
+    }
+    const r = parseAddress(val, field);
+    if (!r.ok) {
+      return { ok: false, error: r.error };
+    }
+    return { ok: true, value: r.value };
+  };
+
+  // Priority 1: explicit address flag
+  if (input.address !== undefined && input.address !== null && input.address !== '') {
+    const r = parseValue(input.address, input.addressFlag);
+    return r.ok ? r : { ok: false, error: r.error };
   }
 
-  if (input.deprecatedId !== undefined && input.deprecatedId !== null) {
-    warn(`⚠ ${input.deprecatedFlag} is deprecated; use ${input.addressFlag} instead.`);
-    const parsed = parseAgentAddress(input.deprecatedId, input.deprecatedFlag);
-    return parsed.ok
-      ? { ok: true, value: parsed.value.uuid }
-      : { ok: false, field: parsed.field, error: parsed.error };
-  }
-
-  if (input.fallback !== undefined && input.fallback !== null) {
-    const parsed = parseAgentAddress(input.fallback, input.addressFlag);
-    return parsed.ok
-      ? { ok: true, value: parsed.value.uuid }
-      : { ok: false, field: parsed.field, error: parsed.error };
+  // Priority 2: fallback (env, token-derived full address, etc.)
+  if (input.fallback !== undefined && input.fallback !== null && input.fallback !== '') {
+    const r = parseValue(input.fallback, input.addressFlag);
+    return r.ok ? r : { ok: false, error: r.error };
   }
 
   return {
     ok: false,
-    field: input.addressFlag,
-    error: input.missingMessage ?? `✗ ${input.addressFlag} is required`,
+    error:
+      (input.missingMessage ? `${input.missingMessage} (${input.addressFlag})` : null) ??
+      `✗ ${input.addressFlag} is required (<uuid>@<host> format).`,
   };
 }

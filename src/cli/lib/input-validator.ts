@@ -18,8 +18,11 @@ export interface NormalizedPublishInput {
   tags?: string[];
   deadline?: number;
   idempotencyKey?: string;
+  /**
+   * v0.10: full `<uuid>@<host>` publisher address (REQUIRED for server lookup).
+   * v0.9 also accepted `publisherId` (uuid only) — REMOVED in v0.10 BREAKING.
+   */
   publisherAddress?: string;
-  publisherId?: string;
 }
 
 function got(value: unknown): string {
@@ -142,9 +145,6 @@ export function validatePublishInput(
   const publisherAddress = validateOptionalString(opts, 'publisher-address', '--publisher-address');
   if (!publisherAddress.ok) return publisherAddress;
 
-  const publisherId = validateOptionalString(opts, 'publisher-id', '--publisher-id');
-  if (!publisherId.ok) return publisherId;
-
   return {
     ok: true,
     value: {
@@ -157,7 +157,6 @@ export function validatePublishInput(
       deadline: deadline.value,
       idempotencyKey: idempotencyKey.value,
       publisherAddress: publisherAddress.value,
-      publisherId: publisherId.value,
     },
   };
 }

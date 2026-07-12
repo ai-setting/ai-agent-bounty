@@ -64,13 +64,13 @@ describe('bounty bounty-task complete - HTTP API migration', () => {
     expect(src).toContain("resolveCurrentAgent");
   });
 
-  // v0.7.2 regression: server's resolveActor('publisher') reads body.publisherId or
-  // body.publisherAddress; sending { agentId } triggers "publisherId or publisherAddress required".
-  test('body uses publisherId (server resolveActor contract)', () => {
+  // v0.10 BREAKING: server's resolveActor('publisher') reads ONLY body.publisherAddress
+  // (full <uuid>@<host>). Sending { publisherId } is no longer accepted.
+  test('body uses publisherAddress (v0.10 strict resolveActor contract)', () => {
     const src = readFileSync(COMPLETE_SRC, 'utf-8');
-    // Must send publisherId/publisherAddress, not agentId
-    expect(src).toMatch(/body:\s*\{\s*publisherId\s*\}/);
-    expect(src).not.toMatch(/body:\s*\{\s*agentId\s*\}/);
+    // Must send publisherAddress (full address), not publisherId
+    expect(src).toMatch(/body:\s*\{[^}]*publisherAddress\s*[,}]/);
+    expect(src).not.toMatch(/body:\s*\{\s*publisherId\s*[,}]/);
   });
 });
 
@@ -94,12 +94,13 @@ describe('bounty bounty-task cancel - HTTP API migration', () => {
     expect(src).toMatch(/method:\s*['"]PUT['"]/);
   });
 
-  // v0.7.2 regression: server's resolveActor('publisher') reads body.publisherId or
-  // body.publisherAddress; sending { agentId } triggers "publisherId or publisherAddress required".
-  test('body uses publisherId (server resolveActor contract)', () => {
+  // v0.10 BREAKING: server's resolveActor('publisher') reads ONLY body.publisherAddress
+  // (full <uuid>@<host>). Sending { publisherId } is no longer accepted.
+  test('body uses publisherAddress (v0.10 strict resolveActor contract)', () => {
     const src = readFileSync(CANCEL_SRC, 'utf-8');
-    expect(src).toMatch(/body:\s*\{\s*publisherId\s*\}/);
-    expect(src).not.toMatch(/body:\s*\{\s*agentId\s*\}/);
+    // Must send publisherAddress (full address), not publisherId
+    expect(src).toMatch(/body:\s*\{[^}]*publisherAddress\s*[,}]/);
+    expect(src).not.toMatch(/body:\s*\{\s*publisherId\s*[,}]/);
   });
 });
 

@@ -1,7 +1,7 @@
 {
   "name": "@ai-setting/agent-bounty-standalone",
-  "version": "0.9.0",
-  "description": "AI Agent Bounty System - Standalone binary for all platforms. v0.9.0: matches @ai-setting/agent-bounty@0.9.0 (token-policy consistency audit + TDD coverage).",
+  "version": "0.10.0",
+  "description": "AI Agent Bounty System - Standalone binary for all platforms. v0.10.0: matches @ai-setting/agent-bounty@0.10.0 (BREAKING address unification).",
   "type": "module",
   "bin": {
     "bounty": "./bin/run.js",

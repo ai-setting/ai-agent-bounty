@@ -1,9 +1,9 @@
 /**
  * agent get command
- * Get details of a specific agent by address
+ * Get details of a specific agent by uuid
  *
- * v0.7: prefer --agent-address (<uuid>@<host>); legacy --id remains
- * accepted and is translated to the server's agent id path segment.
+ * v0.10 BREAKING: --id / -i REMOVED. Use --agent-address <uuid>@<host>.
+ * Server path uses bare uuid (server looks up by `agents.id`).
  */
 
 import type { CommandModule } from 'yargs';
@@ -11,7 +11,7 @@ import chalk from 'chalk';
 import { API_BASE } from '../../config.js';
 // v0.5.0: TLS skip default — use bountyFetch wrapper
 import { bountyFetch } from '../../lib/fetch-helper.js';
-import { resolveAgentIdOption } from '../../lib/address-parser.js';
+import { resolveAddressOption } from '../../lib/address-parser.js';
 import { attachSoftAuth } from '../../lib/soft-auth.js';
 
 import {
@@ -21,8 +21,6 @@ import {
 
 interface GetAgentOptions {
   'agent-address'?: string;
-  /** @deprecated Use --agent-address. */
-  id?: string;
   'server-url'?: string;
 }
 
@@ -39,7 +37,7 @@ interface Agent {
 
 export const getCommand: CommandModule<object, GetAgentOptions> = {
   command: 'get',
-  describe: 'Get details of a specific agent by address',
+  describe: 'Get details of a specific agent by uuid',
 
   builder: (yargs) =>
     addServerUrlOption(
@@ -47,36 +45,31 @@ export const getCommand: CommandModule<object, GetAgentOptions> = {
         .option('agent-address', {
           alias: 'a',
           type: 'string',
-          description: 'Agent address (<uuid>@<host>). Pure <uuid> is also accepted.',
-        })
-        .option('id', {
-          alias: 'i',
-          type: 'string',
-          description: '[deprecated] Agent ID. Use --agent-address instead.',
+          description:
+            'Agent address in <uuid>@<host> format (REQUIRED). ' +
+            'Bare UUID is REJECTED in v0.10.',
         })
     ),
 
   handler: async (argv) => {
-    const options = argv as unknown as GetAgentOptions & { id?: string };
+    const options = argv as unknown as GetAgentOptions;
 
     try {
-      const resolvedAgent = resolveAgentIdOption({
+      const resolvedAgent = resolveAddressOption({
         address: options['agent-address'],
-        deprecatedId: options.id,
         addressFlag: '--agent-address',
-        deprecatedFlag: '--id',
-        missingMessage: '✗ --agent-address is required',
+        missingMessage: '✗ --agent-address is required (<uuid>@<host> format)',
       });
       if (!resolvedAgent.ok) {
         console.error(chalk.red(`\n${resolvedAgent.error}\n`));
         process.exit(2);
       }
-      options.id = resolvedAgent.value;
+      const agentUuid = resolvedAgent.value.uuid;
 
       const baseUrl = resolveServerUrl(options['server-url'], API_BASE);
       const auth = attachSoftAuth({});
 
-      const response = await bountyFetch(`${baseUrl}/api/agents/${options.id}`, {
+      const response = await bountyFetch(`${baseUrl}/api/agents/${agentUuid}`, {
         method: 'GET',
         headers: auth.headers,
       });

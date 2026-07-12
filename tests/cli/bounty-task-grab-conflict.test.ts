@@ -35,10 +35,11 @@ describe('bounty bounty-task grab — 409 friendly message (D.1 client)', () => 
 
     server = await createBountyTestServer({
       port: 0,
+      // v0.10: seed agent ids must be valid UUIDs so the strict address match works
       seedAgents: [
-        { id: 'pub', email: 'pub@test', name: 'Publisher', credits: 1000 },
-        { id: 'agent-A', email: 'alice@example.com', name: 'Alice', credits: 0 },
-        { id: 'agent-B', email: 'bob@example.com', name: 'Bob', credits: 0 },
+        { id: '8de9b6aa-0000-4000-8000-000000000001', email: 'pub@test', name: 'Publisher', credits: 1000 },
+        { id: '8de9b6aa-0000-4000-8000-000000000002', email: 'alice@example.com', name: 'Alice', credits: 0 },
+        { id: '8de9b6aa-0000-4000-8000-000000000003', email: 'bob@example.com', name: 'Bob', credits: 0 },
       ],
     });
   });
@@ -58,8 +59,8 @@ describe('bounty bounty-task grab — 409 friendly message (D.1 client)', () => 
     // 1) Publish a task
     const pubRes = await fetch(`${server.baseUrl}/api/tasks`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Agent-Id': 'pub' },
-      body: JSON.stringify({ title: 'Race test', description: 'd', reward: 100, type: 'coding' }),
+      headers: { 'Content-Type': 'application/json', 'X-Agent-Id': '8de9b6aa-0000-4000-8000-000000000001' },
+      body: JSON.stringify({ title: 'Race test', description: 'd', reward: 100, type: 'coding', publisherAddress: '8de9b6aa-0000-4000-8000-000000000001@host.local' }),
     });
     expect(pubRes.status).toBe(201);
     const task = (await pubRes.json()) as { id: string };
@@ -67,25 +68,21 @@ describe('bounty bounty-task grab — 409 friendly message (D.1 client)', () => 
     // 2) Alice grabs it first (wins)
     const aliceGrab = await fetch(`${server.baseUrl}/api/tasks/${task.id}/grab`, {
       method: 'PUT',
-      headers: { 'X-Agent-Id': 'agent-A' },
+      headers: { 'X-Agent-Id': '8de9b6aa-0000-4000-8000-000000000002' },
     });
     expect(aliceGrab.status).toBe(200);
 
     // 3) Bob tries to grab via CLI → expect 409 → expect friendly hint
-    // The mock server reads agent identity from X-Agent-Id header, so we
-    // set BOUNTY_IM_ADDRESS and pass it via the CLI (which forwards via
-    // body.agentId). To match the mock server's header-based extraction,
-    // we also need to drive with X-Agent-Id in fetch. We'll use the CLI
-    // handler but mock the fetch to inject the X-Agent-Id header.
-    process.env.BOUNTY_IM_ADDRESS = 'agent-B@host';
+    // v0.10: Bob's BOUNTY_IM_ADDRESS must match a seeded agent (exact uuid@host)
+    process.env.BOUNTY_IM_ADDRESS = '8de9b6aa-0000-4000-8000-000000000003@host.local';
     const { grabCommand } = await import('../../src/cli/commands/bounty-task/grab.js');
 
-    // Intercept fetch to forward X-Agent-Id (mock server reads agentId from
-    // header, not body — real production server reads from JWT).
+    // Intercept fetch to forward X-Agent-Id header (mock server reads agentId from
+    // header in auth-OFF mode). The body's agentAddress is the canonical source.
     const origFetch = globalThis.fetch;
     (globalThis as any).fetch = async (input: any, init?: any) => {
       const headers = new Headers(init?.headers ?? {});
-      headers.set('X-Agent-Id', 'agent-B');
+      headers.set('X-Agent-Id', '8de9b6aa-0000-4000-8000-000000000003');
       return origFetch(input, { ...init, headers });
     };
 

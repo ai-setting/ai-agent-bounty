@@ -460,7 +460,7 @@ inputs:
     required: false
   next_version:
     type: string
-    description: 下一个语义化版本号 (e.g. 0.9.0)
+    description: 下一个语义化版本号 (e.g. 0.10.0)
     required: true
   harbor_registry:
     type: string

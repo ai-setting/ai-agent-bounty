@@ -25,12 +25,14 @@ async function makeStartedServer(): Promise<{
   const bountyDb = new Database({ memory: true });
   const imDb = new IMDatabase({ memory: true });
   const now = Date.now();
+  // v0.10 strict: agents.id must be a valid uuid, address must be valid uuid@host
   bountyDb
     .prepare(
       `INSERT INTO agents (id, name, email, status, address, credits, created_at, updated_at)
        VALUES (?, ?, ?, 'active', ?, 1000, ?, ?)`
     )
-    .run('uuid-tc-1', 'TAlice', 'tAlice@example.com', 'uuid-tc-1@bounty.local', now, now);
+    .run('8de9b6aa-1111-4000-8000-0000000000a1', 'TAlice', 'tAlice@example.com',
+         '8de9b6aa-1111-4000-8000-0000000000a1@bounty.local', now, now);
 
   const server = new BountyHTTPServer({ imDb, bountyDb, port: 0 });
   await server.start();
@@ -71,7 +73,7 @@ describe('Token policy consistency: bounty vs IM (v0.9 audit)', () => {
             description: 'D',
             reward: 1,
             type: 'writing',
-            publisherAddress: 'uuid-tc-1@bounty.local',
+            publisherAddress: '8de9b6aa-1111-4000-8000-0000000000a1@bounty.local',
           }),
         });
         expect(res.status).toBe(201);
@@ -89,7 +91,7 @@ describe('Token policy consistency: bounty vs IM (v0.9 audit)', () => {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             from: 'sender@server.com',
-            to: 'uuid-tc-1@bounty.local',
+            to: '8de9b6aa-1111-4000-8000-0000000000a1@bounty.local',
             content: { type: 'text', body: 'audit' },
           }),
         });
@@ -112,7 +114,7 @@ describe('Token policy consistency: bounty vs IM (v0.9 audit)', () => {
             description: 'D',
             reward: 1,
             type: 'writing',
-            publisherAddress: 'uuid-tc-1@bounty.local',
+            publisherAddress: '8de9b6aa-1111-4000-8000-0000000000a1@bounty.local',
           }),
         });
         const task = (await pub.json()) as { id: string };
@@ -120,7 +122,7 @@ describe('Token policy consistency: bounty vs IM (v0.9 audit)', () => {
         const grabRes = await fetch(`${baseUrl}/api/tasks/${task.id}/grab`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ agentAddress: 'uuid-tc-1@bounty.local' }),
+          body: JSON.stringify({ agentAddress: '8de9b6aa-1111-4000-8000-0000000000a1@bounty.local' }),
         });
         // 注: publisherId 自抢会被 service 拒绝, 但 HTTP 路由接受 → 200/409 均合法
         expect([200, 400, 409]).toContain(grabRes.status);
@@ -143,7 +145,7 @@ describe('Token policy consistency: bounty vs IM (v0.9 audit)', () => {
             description: 'D',
             reward: 1,
             type: 'writing',
-            publisherAddress: 'uuid-tc-1@bounty.local',
+            publisherAddress: '8de9b6aa-1111-4000-8000-0000000000a1@bounty.local',
           }),
         });
         expect(res.status).toBe(401);
@@ -161,7 +163,7 @@ describe('Token policy consistency: bounty vs IM (v0.9 audit)', () => {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             from: 'sender@server.com',
-            to: 'uuid-tc-1@bounty.local',
+            to: '8de9b6aa-1111-4000-8000-0000000000a1@bounty.local',
             content: { type: 'text', body: 'audit' },
           }),
         });
@@ -178,7 +180,7 @@ describe('Token policy consistency: bounty vs IM (v0.9 audit)', () => {
         const grabRes = await fetch(`${baseUrl}/api/tasks/some-id/grab`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ agentAddress: 'uuid-tc-1@bounty.local' }),
+          body: JSON.stringify({ agentAddress: '8de9b6aa-1111-4000-8000-0000000000a1@bounty.local' }),
         });
         expect(grabRes.status).toBe(401);
       } finally {
@@ -198,7 +200,7 @@ describe('Token policy consistency: bounty vs IM (v0.9 audit)', () => {
             description: 'D',
             reward: 1,
             type: 'writing',
-            publisherAddress: 'uuid-tc-1@bounty.local',
+            publisherAddress: '8de9b6aa-1111-4000-8000-0000000000a1@bounty.local',
           }),
         });
         expect(bountyRes.status).toBe(401);
@@ -208,7 +210,7 @@ describe('Token policy consistency: bounty vs IM (v0.9 audit)', () => {
           headers: { 'Content-Type': 'application/json', Authorization: 'Bearer bad.token.here' },
           body: JSON.stringify({
             from: 'sender@server.com',
-            to: 'uuid-tc-1@bounty.local',
+            to: '8de9b6aa-1111-4000-8000-0000000000a1@bounty.local',
             content: { type: 'text', body: 'audit' },
           }),
         });

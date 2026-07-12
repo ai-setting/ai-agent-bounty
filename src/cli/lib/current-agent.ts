@@ -37,20 +37,22 @@ export interface ResolveCurrentAgentOptions {
 /**
  * Resolve the current agent ID from environment / token file.
  *
- * Returns the agent ID string if it can be inferred, otherwise undefined.
- * Never throws — callers are responsible for friendly error messages.
+ * Returns the agent UUID string if it can be inferred, otherwise undefined.
+ * v0.10: `BOUNTY_IM_ADDRESS` MUST be `<uuid>@<host>`; bare UUID is rejected.
  *
  * @param options.tokenPath  Override the token file path (default: ~/.config/bounty/token)
- * @returns                  agent ID string or undefined
+ * @returns                  agent UUID string or undefined
  */
 export function resolveCurrentAgent(
   options: ResolveCurrentAgentOptions = {}
 ): string | undefined {
   // 优先级 1: BOUNTY_IM_ADDRESS env (e.g., "8de9b6aa-...@bounty.example.com")
+  // v0.10 BREAKING: bare UUIDs are rejected (was: lenient fallback in v0.7-v0.9)
   const imAddress = process.env.BOUNTY_IM_ADDRESS;
-  if (imAddress) {
+  if (imAddress && imAddress.trim()) {
     const parsed = parseAgentAddress(imAddress, 'BOUNTY_IM_ADDRESS');
     if (parsed.ok) return parsed.value.uuid;
+    // bare UUID or invalid format → not returned to caller (was: returned in v0.7)
   }
 
   // 优先级 2: ~/.config/bounty/token (JWT)
@@ -62,5 +64,25 @@ export function resolveCurrentAgent(
     // 当前先返回 undefined, 让 caller 走显式参数 fallback
   }
 
+  return undefined;
+}
+
+/**
+ * Resolve the current agent's FULL address (`<uuid>@<host>`) for v0.10 callers
+ * that need to send the address triple to the server (not just the uuid).
+ *
+ * v0.10: bare UUID BOUNTY_IM_ADDRESS returns undefined (rejected, not lenient).
+ *
+ * @param options.tokenPath  Override the token file path (default: ~/.config/bounty/token)
+ * @returns                  full `Address` triple, or undefined
+ */
+export function resolveCurrentAgentAddress(
+  options: ResolveCurrentAgentOptions = {}
+): { uuid: string; host: string; raw: string } | undefined {
+  const imAddress = process.env.BOUNTY_IM_ADDRESS;
+  if (imAddress && imAddress.trim()) {
+    const parsed = parseAgentAddress(imAddress, 'BOUNTY_IM_ADDRESS');
+    if (parsed.ok) return parsed.value;
+  }
   return undefined;
 }

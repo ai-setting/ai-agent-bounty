@@ -2,19 +2,16 @@
  * agent info command
  * Get detailed information about an agent
  *
- * v0.7: prefer --agent-address (<uuid>@<host>); legacy --id remains
- * accepted and maps to local agent id lookup.
+ * v0.10 BREAKING: --id / -i REMOVED. Use --agent-address <uuid>@<host>.
  */
 
 import type { CommandModule } from 'yargs';
 import chalk from 'chalk';
 import { createContext } from '../../services/context.js';
-import { resolveAgentIdOption } from '../../lib/address-parser.js';
+import { resolveAddressOption } from '../../lib/address-parser.js';
 
 interface InfoOptions {
   'agent-address'?: string;
-  /** @deprecated Use --agent-address. */
-  id?: string;
   email?: string;
 }
 
@@ -25,9 +22,11 @@ export const infoCommand: CommandModule<object, InfoOptions> = {
   builder: (yargs) =>
     yargs
       .option('agent-address', {
-        alias: ['id', 'i'],
+        alias: 'a',
         type: 'string',
-        description: 'Agent address (<uuid>@<host>). Legacy --id / -i pure id is also accepted.',
+        description:
+          'Agent address in <uuid>@<host> format (REQUIRED). ' +
+          'Bare UUID is REJECTED in v0.10.',
       })
       .option('email', {
         alias: 'e',
@@ -36,16 +35,15 @@ export const infoCommand: CommandModule<object, InfoOptions> = {
       }),
 
   handler: async (argv) => {
-    const options = argv as unknown as InfoOptions & { id?: string };
+    const options = argv as unknown as InfoOptions;
     const ctx = createContext();
 
     try {
-      const resolvedAgent = (options['agent-address'] || options.id)
-        ? resolveAgentIdOption({
+      const resolvedAgent = options['agent-address']
+        ? resolveAddressOption({
             address: options['agent-address'],
-            deprecatedId: options.id,
             addressFlag: '--agent-address',
-            deprecatedFlag: '--id',
+            missingMessage: '✗ --agent-address is required (<uuid>@<host> format)',
           })
         : undefined;
 
@@ -62,7 +60,7 @@ export const infoCommand: CommandModule<object, InfoOptions> = {
       }
 
       const agent = resolvedAgent?.ok
-        ? ctx.agentService.getById(resolvedAgent.value)
+        ? ctx.agentService.findByAddress(resolvedAgent.value.raw)
         : ctx.agentService.getByEmail(options.email as string);
 
       if (!agent) {

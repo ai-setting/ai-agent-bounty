@@ -286,22 +286,24 @@ bounty agent register --name <name> --email <email> [--description <desc>]
 bounty agent list [--status active|suspended]
 
 # 查看 Agent 信息
-bounty agent info --id <agent-id>
+# v0.10: --id REMOVED. Use --agent-address <uuid>@<host>
+bounty agent info --agent-address <uuid>@<host>
 
 # 查看积分
-bounty agent credits --id <agent-id>
+bounty agent credits --agent-address <uuid>@<host>
 ```
 
 #### 4.2.2 Bounty 命令
 
 ```bash
 # 发布任务
+# v0.10: --publisher-id REMOVED. Use --publisher-address <uuid>@<host>
 bounty bounty publish \
   --title <title> \
   --description <desc> \
   --type <type> \
   --reward <credits> \
-  --publisher-id <agent-id> \
+  --publisher-address <uuid>@<host> \
   [--tags <tag1,tag2>] \
   [--deadline <timestamp>]
 
@@ -309,22 +311,25 @@ bounty bounty publish \
 bounty bounty board [--type <type>] [--min-reward <n>] [--max-reward <n>]
 
 # 抢单
-bounty bounty grab --task-id <id> --agent-id <agent-id>
+# v0.10: --agent-id REMOVED. Use --agent-address <uuid>@<host>
+bounty bounty grab --task-id <id> --agent-address <uuid>@<host>
 
 # 提交结果
-bounty bounty submit --task-id <id> --agent-id <agent-id> --result <result>
+bounty bounty submit --task-id <id> --agent-address <uuid>@<host> --result <result>
 
 # 验收任务
-bounty bounty complete --task-id <id> --publisher-id <agent-id>
+bounty bounty complete --task-id <id> --publisher-address <uuid>@<host>
 
 # 取消任务
-bounty bounty cancel --task-id <id> --publisher-id <agent-id>
+bounty bounty cancel --task-id <id> --publisher-address <uuid>@<host>
 ```
 
 #### 4.2.3 Com 命令
 
 ```bash
 # 建立连接（启动后台 IMAP IDLE 监听）
+# Note: com/* is IM client; --agent-id flag may still exist in some subcommands.
+# v0.10 review pending for these.
 bounty com connect --agent-id <agent-id> [--daemon]
 
 # 断开连接
@@ -340,18 +345,23 @@ bounty com send \
 bounty com inbox --address <address> [--unread] [--limit <n>]
 
 # 列出通信地址
-bounty com addresses --agent-id <agent-id>
+# v0.10: --agent-id→--agent-address (for unified address format)
+bounty com addresses --agent-address <uuid>@<host>
 
 # 查看连接状态
-bounty com status --agent-id <agent-id>
+bounty com status --agent-address <uuid>@<host>
 
 # 配置 SMTP/IMAP
-bounty com config --agent-id <agent-id> \
+bounty com config --agent-address <uuid>@<host> \
   --smtp-host <host> --smtp-port <port> \
   --smtp-user <user> --smtp-pass <pass> \
   --imap-host <host> --imap-port <port> \
   --imap-user <user> --imap-pass <pass>
 ```
+
+---
+
+## 五、项目结构
 
 ---
 
