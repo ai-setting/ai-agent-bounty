@@ -48,6 +48,74 @@ BOUNTY_IM_ADDRESS=<agent-b-address> BOUNTY_PORT=4005 bounty interactive --event-
 
 > **注意**: `bounty-im-auto` 是自动注册的事件源 ID，地址由 `BOUNTY_IM_ADDRESS` 环境变量指定。
 
+## 用户身份（Profile）
+
+bounty 支持多 profile 配置，让你在一台机器上以不同身份运行多个 agent。
+
+### 快速使用
+
+```bash
+# 添加 profile
+bounty profile add alice --api-base https://bounty.example.com
+
+# 切换 profile（当前会话生效）
+bounty --profile alice auth login
+
+# 用环境变量覆写
+BOUNTY_PROFILE=alice bounty auth status
+
+# 列出 / 查看 / 删除
+bounty profile list
+bounty profile show
+bounty profile remove alice --force
+
+# 查看所有命令
+bounty --help
+bounty --help --all  # 完整列表（无分组）
+```
+
+### Profile 配置文件
+
+profile 文件位于 `~/.config/bounty/profiles/<name>.json`：
+
+```json
+{
+  "name": "alice",
+  "api_base": "https://bounty.example.com",
+  "agent_id": "uuid",
+  "email": "alice@example.com",
+  "auth": {
+    "type": "jwt",
+    "access_token": "...",
+    "refresh_token": "...",
+    "expires_at": 1234567890
+  }
+}
+```
+
+全局配置在 `~/.config/bounty/config.json`：
+
+```json
+{ "active_profile": "alice", "version": 1 }
+```
+
+### Profile 优先级链
+
+CLI flag > 环境变量 > active 配置 > 默认 `default`
+
+| 来源 | 优先级 |
+|------|--------|
+| `--profile NAME` (CLI flag) | 🥇 最高 |
+| `BOUNTY_PROFILE` 环境变量 | 🥈 |
+| `~/.config/bounty/config.json` 的 `active_profile` | 🥉 |
+| 字面量 `'default'` | 默认 |
+
+### 详细指南
+
+参见 [docs/profile-guide.md](docs/profile-guide.md)
+
+---
+
 ## 配置
 
 CLI 支持从 `.env` 文件加载环境变量：

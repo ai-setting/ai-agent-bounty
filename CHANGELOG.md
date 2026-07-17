@@ -5,7 +5,54 @@ All notable changes to ai-agent-bounty are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [Unreleased] - Profile 机制 (PR1-PR6)
+
+
+### Added
+
+- **`bounty profile` 命令组**：完整 profile 管理（add / list / show / use / remove / rename）
+- **全局 `--profile / -P` 选项**：所有 CLI 命令支持 profile 切换
+- **`BOUNTY_PROFILE` 环境变量**：作为 profile 兜底
+- **Profile 文件机制**：每个 profile 一个 JSON 文件，atomic write
+- **Token 迁移**：旧 `~/.config/bounty/token` 自动迁移到 `default` profile
+- **`bounty auth refresh` 命令**：用 refresh_token 续期
+- **`--help` 分组**：Quickstart / Bounty / General 三段式 + `--all` 兼容
+- **`BOUNTY_WS_AUTH_REQUIRED` feature flag**：WebSocket 鉴权（默认 false，保守）
+- **`docs/profile-guide.md`**：完整使用指南
+
+### Changed
+
+- **HTTP token 鉴权默认开启**（`BOUNTY_TOKEN_CHECK_ENABLED` 默认 `true`）
+- **6 个 auth 命令改造**：使用 ProfileContext 和 profile.api_base
+- **认证体验统一**：所有命令的鉴权走同一套 ProfileContext
+
+### Breaking Changes
+
+- 🔴 **`BOUNTY_TOKEN` 环境变量移除**：所有 token 配置必须通过 profile 文件
+  ```bash
+  # 旧（已不支持）
+  export BOUNTY_TOKEN=xxx
+  bounty task list
+
+  # 新
+  bounty auth login  # 登录到当前 profile
+  ```
+- 🟡 **Server 默认 token 鉴权开启**：自建 server 不再接受未鉴权请求（除白名单）
+
+### Migration
+
+```bash
+# 从 v0.10 升级
+bun install -g @ai-setting/agent-bounty@latest
+
+# 首次运行自动迁移旧 token
+bounty auth status  # 自动迁移 ~/.config/bounty/token 到 default profile
+
+# 验证
+bounty profile list  # 应该看到 default
+bounty profile show  # token 已脱敏显示
+```
+
 
 ## [v0.10.1] - 2026-07-12 — Standalone binary rebuild
 
