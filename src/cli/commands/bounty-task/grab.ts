@@ -1,14 +1,15 @@
 /**
- * bounty grab command
+ * bounty grab command — v0.14 strict email-only contract.
  *
- * v0.10: STRICT address-based agent identity (`<uuid>@<host>` required).
- * Bare UUID and `--agent-id` flag REMOVED (BREAKING).
- *
- * v0.13: --email is the PRIMARY lookup key; --agent-address remains as a
- *   backward-compatible secondary option. At least one is required.
- *
- * Phase feat/bounty-task-profile (PR7): 改用 ProfileContext 决定 API base，
- *   与 auth/* 命令族行为一致：`--server-url` > active profile.api_base > API_BASE。
+ * v0.10 BREAKING: bare UUIDs REMOVED.
+ * v0.13: --email introduced as PRIMARY; legacy address flag retained.
+ * v0.14 BREAKING:
+ *   - legacy address flag / -a option REMOVED from surface.
+ *   - legacy env fallback REMOVED.
+ *   - --email / -e is the ONLY actor identity input.
+ *   - <uuid>@<host>, bare UUIDs, malformed emails are REJECTED with exit 1
+ *     and a clear "use --email <your-registered-email>" hint.
+ *   - HTTP body uses {agentEmail} only (no agentAddress key).
  */
 
 import type { CommandModule } from 'yargs';
@@ -18,13 +19,11 @@ import { ProfileContext } from '../../config/context.js';
 import { resolveProfileApiBase } from '../../lib/profile-api-base.js';
 import { addServerUrlOption, resolveServerUrl } from '../../lib/server-url-option.js';
 import { bountyHttp } from '../../lib/bounty-http.js';
-import { resolveCurrentAgentAddress } from '../../lib/current-agent.js';
-import { resolveAddressOption } from '../../lib/address-parser.js';
+import { requireEmailFlag, exitWithEmailFlagError } from '../../lib/email-flag.js';
 import { handleBountyError } from './publish.js';
 
 interface GrabOptions {
   'task-id': string;
-  'agent-address'?: string;
   email?: string;
   'server-url'?: string;
 }
@@ -61,23 +60,8 @@ export const grabCommand: CommandModule<object, GrabOptions> = {
         .option('email', {
           alias: 'e',
           type: 'string',
-          description: 'Agent email (v0.13 primary; preferred over --agent-address)',
-        })
-        .option('agent-address', {
-          alias: 'a',
-          type: 'string',
           description:
-            'Agent address in <uuid>@<host> format [LEGACY: prefer --email in v0.13]. ' +
-            'Bare UUID is REJECTED in v0.10. Defaults to BOUNTY_IM_ADDRESS env.',
-        })
-        .check((argv) => {
-          if (!argv.email && !argv['agent-address']) {
-            // Allow env fallback for --agent-address below; only fail if no
-            // fallback can be derived either. We don't validate here because
-            // BOUNTY_IM_ADDRESS may still be set in env.
-            return true;
-          }
-          return true;
+            'Agent email (v0.14 ONLY input). <uuid>@<host> and bare UUIDs REJECTED.',
         })
     ),
 
@@ -89,27 +73,6 @@ export const grabCommand: CommandModule<object, GrabOptions> = {
       profile,
       resolveServerUrlFn: resolveServerUrl,
     });
-
-    // v0.13: email takes priority; falls back to address parser.
-    const body: Record<string, unknown> = {};
-    if (argv.email) {
-      body.agentEmail = argv.email;
-    }
-    if (!argv.email) {
-      // Only parse the address when --email wasn't given.
-      const agent = resolveAddressOption({
-        address: argv['agent-address'],
-        fallback: resolveCurrentAgentAddress(),
-        addressFlag: '--agent-address',
-        missingMessage:
-          '✗ Cannot infer agent identity. Provide --email <email> or --agent-address <uuid>@<host> (or set BOUNTY_IM_ADDRESS=<uuid>@<host>).',
-      });
-      if (!agent.ok) {
-        console.error(chalk.red(`\n${agent.error}\n`));
-        process.exit(2);
-      }
-      body.agentAddress = agent.value.raw;
-    }
 
     if (!argv['task-id']) {
       console.error(chalk.red('\n✗ --task-id is required.\n'));
@@ -126,12 +89,21 @@ export const grabCommand: CommandModule<object, GrabOptions> = {
       process.exit(2);
     }
 
+    // v0.14 strict: --email is the ONLY actor identity input.
+    // requireEmailFlag handles precedence (explicit > ProfileContext.active.email)
+    // and rejects legacy <uuid>@<host> / bare UUIDs / malformed.
+    const parsed = requireEmailFlag('email', argv as Record<string, unknown>);
+    if (!parsed.ok) {
+      exitWithEmailFlagError(parsed);
+    }
+    const agentEmail = parsed.value;
+
     try {
       const task = await bountyHttp<BountyTask>({
         baseUrl,
         path: `/api/tasks/${encodeURIComponent(argv['task-id'])}/grab`,
         method: 'PUT',
-        body,
+        body: { agentEmail },
       });
 
       console.log(chalk.green('\n✓ Task grabbed successfully\n'));

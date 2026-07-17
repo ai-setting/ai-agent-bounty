@@ -1,31 +1,24 @@
 /**
- * Tests for `resolveCurrentAgent()` — auto-infer current agent from env / token.
+ * Tests for `resolveCurrentAgent()` — DEPRECATED in v0.14 (Q5 ✅ DELETE).
  *
- * Phase: feat/bounty-task-optimize (v0.10 strict refactor)
+ * v0.14 BREAKING:
+ *   - `BOUNTY_IM_ADDRESS` env var is REMOVED.
+ *   - `resolveCurrentAgent` is DEPRECATED and unconditionally returns
+ *     `undefined`. Active identity now flows exclusively through
+ *     `ProfileContext.active.email` + `requireEmailFlag`.
  *
- * v0.10 BREAKING: BOUNTY_IM_ADDRESS must be in `<uuid>@<host>` format.
- * Bare UUID is REJECTED → resolveCurrentAgent returns undefined.
- *
- * 优先级: BOUNTY_IM_ADDRESS > ~/.config/bounty/token (future) > undefined
+ * These tests assert the v0.14 contract: the helper is a no-op shim.
+ * Real identity resolution lives in `src/cli/lib/email-flag.ts`.
  */
 
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
-import { existsSync, mkdirSync, writeFileSync, rmSync } from 'fs';
-import { join } from 'path';
-import { tmpdir } from 'os';
 
-describe('resolveCurrentAgent (v0.10 strict)', () => {
-  let tempDir: string;
-  let tokenPath: string;
+describe('resolveCurrentAgent (v0.14 deprecated shim, Q5 ✅ DELETE)', () => {
   let origImAddress: string | undefined;
 
   beforeEach(() => {
     origImAddress = process.env.BOUNTY_IM_ADDRESS;
     delete process.env.BOUNTY_IM_ADDRESS;
-
-    tempDir = join(tmpdir(), `bounty-current-agent-test-${Date.now()}-${Math.random()}`);
-    mkdirSync(tempDir, { recursive: true });
-    tokenPath = join(tempDir, 'token');
   });
 
   afterEach(() => {
@@ -34,9 +27,6 @@ describe('resolveCurrentAgent (v0.10 strict)', () => {
     } else {
       process.env.BOUNTY_IM_ADDRESS = origImAddress;
     }
-    try {
-      rmSync(tempDir, { recursive: true, force: true });
-    } catch {}
   });
 
   test('exports resolveCurrentAgent function', async () => {
@@ -44,58 +34,53 @@ describe('resolveCurrentAgent (v0.10 strict)', () => {
     expect(typeof mod.resolveCurrentAgent).toBe('function');
   });
 
-  test('returns undefined when no BOUNTY_IM_ADDRESS and no token file', async () => {
+  test('v0.14: returns undefined unconditionally (BOUNTY_IM_ADDRESS is REMOVED)', async () => {
     const { resolveCurrentAgent } = await import('../../src/cli/lib/current-agent.js');
-    const result = resolveCurrentAgent({ tokenPath });
-    expect(result).toBeUndefined();
+    expect(resolveCurrentAgent()).toBeUndefined();
   });
 
-  test('extracts uuid from BOUNTY_IM_ADDRESS (uuid@host format)', async () => {
-    const agentId = '8de9b6aa-5781-4a65-be96-45185fb7c8b1';
-    process.env.BOUNTY_IM_ADDRESS = `${agentId}@bounty.tongagents.example.com`;
+  test('v0.14: ignores BOUNTY_IM_ADDRESS even when valid <uuid>@<host>', async () => {
+    process.env.BOUNTY_IM_ADDRESS = '8de9b6aa-5781-4a65-be96-45185fb7c8b1@bounty.example.com';
 
     const { resolveCurrentAgent } = await import('../../src/cli/lib/current-agent.js');
-    const result = resolveCurrentAgent({ tokenPath });
-    expect(result).toBe(agentId);
+    // v0.14: BOUNTY_IM_ADDRESS REMOVED — the value is no longer read.
+    expect(resolveCurrentAgent()).toBeUndefined();
   });
 
-  test('handles short hostname (host = "localhost")', async () => {
-    process.env.BOUNTY_IM_ADDRESS = '8de9b6aa-5781-4a65-be96-45185fb7c8b1@localhost';
+  test('v0.14: ignores BOUNTY_IM_ADDRESS even with bare UUID', async () => {
+    process.env.BOUNTY_IM_ADDRESS = '8de9b6aa-5781-4a65-be96-45185fb7c8b1';
 
     const { resolveCurrentAgent } = await import('../../src/cli/lib/current-agent.js');
-    expect(resolveCurrentAgent({ tokenPath })).toBe('8de9b6aa-5781-4a65-be96-45185fb7c8b1');
+    expect(resolveCurrentAgent()).toBeUndefined();
   });
 
-  test('v0.10 BREAKING: rejects pure-id BOUNTY_IM_ADDRESS (no @host)', async () => {
-    process.env.BOUNTY_IM_ADDRESS = 'no-at-sign-here';
+  test('v0.14: resolveCurrentAgentAddress returns undefined unconditionally', async () => {
+    process.env.BOUNTY_IM_ADDRESS = '8de9b6aa-5781-4a65-be96-45185fb7c8b1@bounty.example.com';
 
-    const { resolveCurrentAgent } = await import('../../src/cli/lib/current-agent.js');
-    const result = resolveCurrentAgent({ tokenPath });
-    expect(result).toBeUndefined();
+    const { resolveCurrentAgentAddress } = await import('../../src/cli/lib/current-agent.js');
+    expect(resolveCurrentAgentAddress()).toBeUndefined();
   });
 
-  test('v0.10 BREAKING: rejects BOUNTY_IM_ADDRESS with non-UUID uuid part', async () => {
-    process.env.BOUNTY_IM_ADDRESS = 'not-a-uuid@somewhere.example.com';
+  test('v0.14: identity resolution goes through ProfileContext + requireEmailFlag', async () => {
+    // Sanity assertion: when active profile has an email, the v0.14 helper
+    // (via ProfileContext.getActive) returns it. This is the new v0.14
+    // contract — register-agent/login writes ProfileContext.active.email.
+    const { ProfileContext } = await import('../../src/cli/config/context.js');
+    const { resolveActiveProfileEmail } = await import('../../src/cli/lib/email-flag.js');
 
-    const { resolveCurrentAgent } = await import('../../src/cli/lib/current-agent.js');
-    expect(resolveCurrentAgent({ tokenPath })).toBeUndefined();
-  });
-
-  test('BOUNTY_IM_ADDRESS takes priority over token file existence', async () => {
-    const agentId = '8de9b6aa-5781-4a65-be96-45185fb7c8b1';
-    process.env.BOUNTY_IM_ADDRESS = `${agentId}@host.example.com`;
-    // 即便 token 文件存在, IM_ADDRESS 优先
-    writeFileSync(tokenPath, 'jwt-token-content', 'utf-8');
-
-    const { resolveCurrentAgent } = await import('../../src/cli/lib/current-agent.js');
-    expect(resolveCurrentAgent({ tokenPath })).toBe(agentId);
-  });
-
-  test('empty BOUNTY_IM_ADDRESS falls back to undefined (not just env)', async () => {
-    process.env.BOUNTY_IM_ADDRESS = '';
-
-    const { resolveCurrentAgent } = await import('../../src/cli/lib/current-agent.js');
-    // 空字符串 = 没设 env, 走 fallback (没 token 时 undefined)
-    expect(resolveCurrentAgent({ tokenPath })).toBeUndefined();
+    const minimalProfile = {
+      name: 'demo',
+      api_base: 'http://localhost:4000',
+      auth: { type: 'jwt' as const, access_token: 'tok', refresh_token: null, expires_at: 0 },
+      email: 'alice@example.com',
+      created_at: 0,
+      updated_at: 0,
+    };
+    ProfileContext.setActive(minimalProfile as any);
+    try {
+      expect(resolveActiveProfileEmail()).toBe('alice@example.com');
+    } finally {
+      ProfileContext.clear();
+    }
   });
 });

@@ -1,23 +1,24 @@
 /**
  * Auth login command.
  *
- * PR3 changes vs PR2 baseline:
- * - 优先使用 `ProfileContext.getApiBase()` 作为 API base（取代硬编码 `${API_BASE}`）。
- * - 登录成功后将 access_token / refresh_token / expires_at 写回 active profile，
- *   而不是只写 `~/.config/bounty/token`。
- * - 兼容 `--server-url` flag：当用户显式传入时仍然优先于 profile（保留逃生通道）。
- * - 删除对 token env 的任何读取（PR1 已移除）。
+ * v0.14 STRICT email-only:
+ *   - Actor identity input is `--email / -e` ONLY.
+ *   - `--agent-address / -a` (`<uuid>@<host>`) is REMOVED.
+ *   - Falls back to `ProfileContext.active.email` when no explicit `--email`.
+ *   - Otherwise exits 1 with friendly "use --email <your-registered-email>"
+ *     or "`bounty profile use <name>`" hint.
  *
- * 兼容行为：
- * - 当没有任何 active profile 时，回退到 `--server-url` 或 `API_BASE`；如果都不存在
- *   就退出 1 并提示用户 `bounty profile add`。
+ * PR3/PROFILE preserved:
+ *   - `ProfileContext.getApiBase()` is preferred over `${API_BASE}`.
+ *   - On success, `access_token`/`refresh_token`/`expires_at` are written
+ *     back to the active profile (not just `~/.config/bounty/token`).
+ *   - `--server-url` overrides profile when explicitly provided.
  */
 
 import type { CommandModule } from 'yargs';
 import chalk from 'chalk';
 import { API_BASE } from '../../config.js';
 import { bountyFetch } from '../../lib/fetch-helper.js';
-import { resolveAddressOption } from '../../lib/address-parser.js';
 import {
   addServerUrlOption,
   resolveServerUrl,
@@ -26,10 +27,13 @@ import { ProfileContext } from '../../config/context.js';
 import { loadProfile, saveProfile, type StoreOptions } from '../../config/store.js';
 import { resolveProfileApiBase } from '../../lib/profile-api-base.js';
 import { writeAuthToProfile } from '../../lib/profile-auth-writer.js';
+import {
+  requireEmailFlag,
+  exitWithEmailFlagError,
+} from '../../lib/email-flag.js';
 
 interface LoginOptions {
   email?: string;
-  'agent-address'?: string;
   'server-url'?: string;
 }
 
@@ -41,50 +45,33 @@ function buildStoreOptions(argv: Record<string, unknown>): StoreOptions {
 
 export const loginCommand: CommandModule<object, LoginOptions> = {
   command: 'login',
-  describe: 'Login to get auth token (for already verified accounts)',
+  describe: 'Login to get auth token (for already verified accounts). v0.14 STRICT: --email only.',
 
   builder: (yargs) =>
     addServerUrlOption(
-      yargs
-        .option('email', {
-          alias: 'e',
-          type: 'string',
-          description: 'Agent email',
-        })
-        .option('agent-address', {
-          alias: 'a',
-          type: 'string',
-          description:
-            'Agent address in <uuid>@<host> format (REQUIRED). ' +
-            'Bare UUID is REJECTED in v0.10.',
-        })
+      yargs.option('email', {
+        alias: 'e',
+        type: 'string',
+        description:
+          'Agent email (v0.14 ONLY input). <uuid>@<host> and bare UUIDs are REJECTED.',
+      })
     ),
 
   handler: async (argv) => {
     const opts = buildStoreOptions(argv as Record<string, unknown>);
-    if (!argv.email && !argv['agent-address']) {
-      console.error(chalk.red('\n✗ Error: --email or --agent-address is required\n'));
-      console.error('Usage: bounty auth login --agent-address <uuid>@<host>');
-      process.exit(1);
-    }
 
-    const resolvedAgent = argv['agent-address']
-      ? resolveAddressOption({
-          address: argv['agent-address'],
-          addressFlag: '--agent-address',
-          missingMessage: '✗ --agent-address is required (<uuid>@<host> format).',
-        })
-      : undefined;
-
-    if (resolvedAgent && !resolvedAgent.ok) {
-      console.error(chalk.red(`\n${resolvedAgent.error}\n`));
-      process.exit(2);
+    // v0.14 strict: --email is the ONLY actor identity input.
+    const parsed = requireEmailFlag(
+      'email',
+      argv as Record<string, unknown>,
+    );
+    if (!parsed.ok) {
+      exitWithEmailFlagError(parsed);
     }
+    const email = parsed.value;
 
     try {
-      const body: { email?: string; agent_id?: string } = {};
-      if (argv.email) body.email = argv.email;
-      if (resolvedAgent?.ok) body.agent_id = resolvedAgent.value.uuid;
+      const body: { email: string } = { email };
 
       console.log(chalk.cyan('\n🔑 Logging in...'));
 
@@ -102,7 +89,7 @@ export const loginCommand: CommandModule<object, LoginOptions> = {
         body: JSON.stringify(body),
       });
 
-      const data = await response.json() as {
+      const data = (await response.json()) as {
         token?: string;
         access_token?: string;
         refresh_token?: string | null;
@@ -135,7 +122,7 @@ export const loginCommand: CommandModule<object, LoginOptions> = {
         refreshToken: data.refresh_token ?? undefined,
         expiresAt,
         agentId: data.agent_id,
-        email: data.email ?? '',
+        email: data.email ?? email,
         loadProfileFn: (name) => loadProfile(name, opts),
         saveProfileFn: (p) => saveProfile(p, opts),
         consoleOut: console.log,
@@ -150,18 +137,19 @@ export const loginCommand: CommandModule<object, LoginOptions> = {
       console.log(chalk.cyan('  Email:'), data.email);
       if (profile) {
         console.log(chalk.cyan('  Profile:'), profile.name, chalk.gray(`(${profile.api_base})`));
-      } else {
-        console.log(chalk.yellow('  No active profile — token not persisted'));
+        console.log(chalk.cyan('  Token:'), chalk.gray('written to profile'));
       }
-      console.log(`  Token saved to active profile. Expires in: ${expiresIn} hours`);
-      console.log('\nYou can now use:');
-      console.log('  bounty auth status');
-      console.log('  bounty profile show');
+      console.log(chalk.cyan('  Expires in:'), expiresIn, 'h');
+      console.log();
     } catch (error) {
-      console.error(chalk.red(`\n✗ Error: ${error instanceof Error ? error.message : 'Login failed'}\n`));
+      console.error(
+        chalk.red(
+          '\n✗ Login failed:',
+          error instanceof Error ? error.message : String(error),
+        ),
+        '\n',
+      );
       process.exit(1);
     }
   },
 };
-
-export default loginCommand;

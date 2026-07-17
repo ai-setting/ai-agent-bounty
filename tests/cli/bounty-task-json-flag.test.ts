@@ -27,7 +27,7 @@ describe('bounty bounty-task — Tier B --json / --quiet flags', () => {
   let origExit: any;
 
   beforeEach(async () => {
-    process.env.BOUNTY_IM_ADDRESS = '8de9b6aa-5781-4a65-be96-45185fb7c8b1@host.local';
+    process.env.BOUNTY_IM_ADDRESS = '';
     consoleLogOutput = [];
     consoleErrorOutput = [];
     exitCode = null;
@@ -49,7 +49,7 @@ describe('bounty bounty-task — Tier B --json / --quiet flags', () => {
 
     server = await createBountyTestServer({
       port: 0,
-      seedAgents: [{ id: '8de9b6aa-5781-4a65-be96-45185fb7c8b1', email: 'test@host', name: 'Test', credits: 500 }],
+      seedAgents: [{ id: '8de9b6aa-5781-4a65-be96-45185fb7c8b1', email: 'test@host.com', name: 'Test', credits: 500 }],
     });
   });
 
@@ -74,6 +74,7 @@ describe('bounty bounty-task — Tier B --json / --quiet flags', () => {
       type: 'coding',
       reward: 100,
       'server-url': server.baseUrl,
+        'publisher-email': 'test@host.com',
       json: true,
     });
 
@@ -96,6 +97,7 @@ describe('bounty bounty-task — Tier B --json / --quiet flags', () => {
       type: 'coding',
       reward: 100,
       'server-url': server.baseUrl,
+        'publisher-email': 'test@host.com',
     });
 
     // Multiple console.log calls: header + ID + Title + ...
@@ -116,6 +118,7 @@ describe('bounty bounty-task — Tier B --json / --quiet flags', () => {
       type: 'coding',
       reward: 100,
       'server-url': server.baseUrl,
+        'publisher-email': 'test@host.com',
       quiet: true,
     });
 
@@ -138,6 +141,7 @@ describe('bounty bounty-task — Tier B --json / --quiet flags', () => {
       type: 'coding',
       reward: 100,
       'server-url': server.baseUrl,
+        'publisher-email': 'test@host.com',
       json: true,
       quiet: true,
     });

@@ -33,13 +33,16 @@ describe('bounty bounty-task submit - HTTP API migration', () => {
     expect(src).toContain("result:");
   });
 
-  test('source uses resolveCurrentAgent as default for --agent-id', () => {
+  test('source uses requireEmailFlag helper (v0.14: resolveCurrentAgent REMOVED)', () => {
     const src = readFileSync(SUBMIT_SRC, 'utf-8');
-    expect(src).toContain("resolveCurrentAgent");
+    // v0.14: --email flow is centralised via requireEmailFlag; resolveCurrentAgent is gone.
+    expect(src).toContain("requireEmailFlag");
+    expect(src).not.toContain("resolveCurrentAgent");
+    expect(src).not.toMatch(/resolveCurrentAgentAddress/);
   });
 });
 
-describe('bounty bounty-task complete - HTTP API migration', () => {
+describe('bounty bounty-task complete - HTTP API migration (v0.14)', () => {
   test('source uses bountyHttp (not createContext)', () => {
     const src = readFileSync(COMPLETE_SRC, 'utf-8');
     expect(src).toContain("from '../../lib/bounty-http.js'");
@@ -59,22 +62,25 @@ describe('bounty bounty-task complete - HTTP API migration', () => {
     expect(src).toMatch(/method:\s*['"]PUT['"]/);
   });
 
-  test('source uses resolveCurrentAgent as default for --publisher-id', () => {
+  test('source uses requireEmailFlag helper (v0.14: resolveCurrentAgent REMOVED)', () => {
     const src = readFileSync(COMPLETE_SRC, 'utf-8');
-    expect(src).toContain("resolveCurrentAgent");
+    // v0.14: --publisher-email flow is centralised via requireEmailFlag; resolveCurrentAgent is gone.
+    expect(src).toContain("requireEmailFlag");
+    expect(src).not.toContain("resolveCurrentAgent");
+    expect(src).not.toMatch(/resolveCurrentAgentAddress/);
   });
 
-  // v0.10 BREAKING: server's resolveActor('publisher') reads ONLY body.publisherAddress
-  // (full <uuid>@<host>). Sending { publisherId } is no longer accepted.
-  test('body uses publisherAddress (v0.10 strict resolveActor contract)', () => {
+  // v0.14 BREAKING: server's resolveActor('publisher') reads ONLY body.publisherEmail.
+  test('body uses publisherEmail (v0.14 strict email-only contract)', () => {
     const src = readFileSync(COMPLETE_SRC, 'utf-8');
-    // Must send publisherAddress (full address), not publisherId
-    expect(src).toMatch(/body:\s*\{[^}]*publisherAddress\s*[,}]/);
+    // Must send publisherEmail (registered email), not publisherAddress / publisherId
+    expect(src).toMatch(/body:\s*\{[^}]*publisherEmail\s*[,}]/);
+    expect(src).not.toMatch(/body:\s*\{\s*publisherAddress\s*[,}]/);
     expect(src).not.toMatch(/body:\s*\{\s*publisherId\s*[,}]/);
   });
 });
 
-describe('bounty bounty-task cancel - HTTP API migration', () => {
+describe('bounty bounty-task cancel - HTTP API migration (v0.14)', () => {
   test('source uses bountyHttp (not createContext)', () => {
     const src = readFileSync(CANCEL_SRC, 'utf-8');
     expect(src).toContain("from '../../lib/bounty-http.js'");
@@ -94,12 +100,11 @@ describe('bounty bounty-task cancel - HTTP API migration', () => {
     expect(src).toMatch(/method:\s*['"]PUT['"]/);
   });
 
-  // v0.10 BREAKING: server's resolveActor('publisher') reads ONLY body.publisherAddress
-  // (full <uuid>@<host>). Sending { publisherId } is no longer accepted.
-  test('body uses publisherAddress (v0.10 strict resolveActor contract)', () => {
+  // v0.14 BREAKING: server's resolveActor('publisher') reads ONLY body.publisherEmail.
+  test('body uses publisherEmail (v0.14 strict email-only contract)', () => {
     const src = readFileSync(CANCEL_SRC, 'utf-8');
-    // Must send publisherAddress (full address), not publisherId
-    expect(src).toMatch(/body:\s*\{[^}]*publisherAddress\s*[,}]/);
+    expect(src).toMatch(/body:\s*\{[^}]*publisherEmail\s*[,}]/);
+    expect(src).not.toMatch(/body:\s*\{\s*publisherAddress\s*[,}]/);
     expect(src).not.toMatch(/body:\s*\{\s*publisherId\s*[,}]/);
   });
 });
@@ -119,7 +124,7 @@ describe('bounty bounty-task submit/complete/cancel - HTTP integration', () => {
     }
   });
 
-  test('submit: PUT /api/tasks/:id/submit with { agentId, result } body', async () => {
+  test('submit: PUT /api/tasks/:id/submit with { agentEmail, result } body (v0.14)', async () => {
     let capturedBody: any = null;
     mockServer = Bun.serve({
       port: 0,
@@ -136,15 +141,16 @@ describe('bounty bounty-task submit/complete/cancel - HTTP integration', () => {
       baseUrl: `http://localhost:${mockServer.port}`,
       path: '/api/tasks/task-1/submit',
       method: 'PUT',
-      body: { agentId: 'a-1', result: 'My work result' },
+      body: { agentEmail: 'bob@example.com', result: 'My work result' },
     });
 
     expect(result.status).toBe('submitted');
-    expect(capturedBody.agentId).toBe('a-1');
+    expect(capturedBody.agentEmail).toBe('bob@example.com');
+    expect(capturedBody.agentId).toBeUndefined();
     expect(capturedBody.result).toBe('My work result');
   });
 
-  test('complete: PUT /api/tasks/:id/complete with { agentId } body', async () => {
+  test('complete: PUT /api/tasks/:id/complete with { publisherEmail } body (v0.14)', async () => {
     let capturedBody: any = null;
     mockServer = Bun.serve({
       port: 0,
@@ -161,14 +167,16 @@ describe('bounty bounty-task submit/complete/cancel - HTTP integration', () => {
       baseUrl: `http://localhost:${mockServer.port}`,
       path: '/api/tasks/task-1/complete',
       method: 'PUT',
-      body: { agentId: 'publisher-1' },
+      body: { publisherEmail: 'alice@example.com' },
     });
 
     expect(result.status).toBe('completed');
-    expect(capturedBody.agentId).toBe('publisher-1');
+    expect(capturedBody.publisherEmail).toBe('alice@example.com');
+    expect(capturedBody.agentId).toBeUndefined();
+    expect(capturedBody.publisherAddress).toBeUndefined();
   });
 
-  test('cancel: PUT /api/tasks/:id/cancel with { agentId } body', async () => {
+  test('cancel: PUT /api/tasks/:id/cancel with { publisherEmail } body (v0.14)', async () => {
     let capturedBody: any = null;
     mockServer = Bun.serve({
       port: 0,
@@ -185,10 +193,12 @@ describe('bounty bounty-task submit/complete/cancel - HTTP integration', () => {
       baseUrl: `http://localhost:${mockServer.port}`,
       path: '/api/tasks/task-1/cancel',
       method: 'PUT',
-      body: { agentId: 'publisher-1' },
+      body: { publisherEmail: 'alice@example.com' },
     });
 
     expect(result.status).toBe('cancelled');
-    expect(capturedBody.agentId).toBe('publisher-1');
+    expect(capturedBody.publisherEmail).toBe('alice@example.com');
+    expect(capturedBody.agentId).toBeUndefined();
+    expect(capturedBody.publisherAddress).toBeUndefined();
   });
 });

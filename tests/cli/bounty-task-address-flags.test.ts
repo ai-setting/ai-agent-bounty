@@ -1,11 +1,11 @@
 /**
- * v0.10 STRICT address-based flag tests for bounty-task commands.
+ * v0.14 STRICT email-based flag tests for bounty-task commands.
  *
- * v0.10 BREAKING:
- * - `--agent-id` / `--publisher-id` REMOVED entirely
- * - Only `--*-address <uuid>@<host>` accepted
- * - Body sends full `*Address` (uuid@host) — NOT just bare uuid
- * - `X-Agent-Id` header carries bare uuid (soft-auth compatibility)
+ * v0.14 BREAKING:
+ * - `--agent-address` / `--publisher-address` / `--*-id` REMOVED entirely
+ * - Only `--*-email <registered-email>` accepted
+ * - Body sends `*Email` ONLY (registered email string)
+ * - `X-Agent-Id` soft-auth header REMOVED (publisherEmail in body is canonical)
  */
 
 import { describe, test, expect, beforeEach, afterEach, spyOn } from 'bun:test';
@@ -13,10 +13,8 @@ import { readFileSync } from 'fs';
 import { resolve } from 'path';
 
 const VALID_TASK_ID = '8de9b6aa-5781-4a65-be96-45185fb7c8b1';
-const PUB_UUID = '8de9b6aa-1111-4000-8000-000000000001';
-const AGENT_UUID = '8de9b6aa-2222-4000-8000-000000000002';
-const PUB_FULL = `${PUB_UUID}@bounty.tongagents.example.com`;
-const AGENT_FULL = `${AGENT_UUID}@host.test`;
+const PUB_EMAIL = 'alice@example.com';
+const AGENT_EMAIL = 'bob@example.com';
 
 const TASK_COMMANDS = {
   publish: resolve(import.meta.dir, '../../src/cli/commands/bounty-task/publish.ts'),
@@ -26,7 +24,7 @@ const TASK_COMMANDS = {
   cancel: resolve(import.meta.dir, '../../src/cli/commands/bounty-task/cancel.ts'),
 };
 
-describe('bounty-task address-based flags (v0.10 strict)', () => {
+describe('bounty-task email-based flags (v0.14 strict)', () => {
   let mockServer: ReturnType<typeof Bun.serve> | null = null;
   let requests: { path: string; method: string; body: any; headers: Record<string, string> }[] = [];
 
@@ -46,22 +44,24 @@ describe('bounty-task address-based flags (v0.10 strict)', () => {
     }
   });
 
-  test('source exposes ONLY preferred address flags (v0.10 BREAKING: --*-id REMOVED)', () => {
-    // publish / complete / cancel: must have publisher-address, MUST NOT have publisher-id
-    expect(readFileSync(TASK_COMMANDS.publish, 'utf-8')).toContain('publisher-address');
-    expect(readFileSync(TASK_COMMANDS.publish, 'utf-8')).not.toContain(".option('publisher-id'");
-    expect(readFileSync(TASK_COMMANDS.complete, 'utf-8')).toContain('publisher-address');
-    expect(readFileSync(TASK_COMMANDS.complete, 'utf-8')).not.toContain(".option('publisher-id'");
-    expect(readFileSync(TASK_COMMANDS.cancel, 'utf-8')).toContain('publisher-address');
-    expect(readFileSync(TASK_COMMANDS.cancel, 'utf-8')).not.toContain(".option('publisher-id'");
-    // grab / submit: must have agent-address, MUST NOT have agent-id
-    expect(readFileSync(TASK_COMMANDS.grab, 'utf-8')).toContain('agent-address');
-    expect(readFileSync(TASK_COMMANDS.grab, 'utf-8')).not.toContain(".option('agent-id'");
-    expect(readFileSync(TASK_COMMANDS.submit, 'utf-8')).toContain('agent-address');
-    expect(readFileSync(TASK_COMMANDS.submit, 'utf-8')).not.toContain(".option('agent-id'");
+  test('source exposes ONLY preferred email flags (v0.14 BREAKING: --*-address / --*-id REMOVED)', () => {
+    // publish / complete / cancel: must have publisher-email, MUST NOT have publisher-address / publisher-id
+    for (const cmd of ['publish', 'complete', 'cancel']) {
+      const src = readFileSync(TASK_COMMANDS[cmd as keyof typeof TASK_COMMANDS], 'utf-8');
+      expect(src).toContain('publisher-email');
+      expect(src).not.toContain(".option('publisher-address'");
+      expect(src).not.toContain(".option('publisher-id'");
+    }
+    // grab / submit: must have email, MUST NOT have agent-address / agent-id
+    for (const cmd of ['grab', 'submit']) {
+      const src = readFileSync(TASK_COMMANDS[cmd as keyof typeof TASK_COMMANDS], 'utf-8');
+      expect(src).toContain("'email'");
+      expect(src).not.toContain(".option('agent-address'");
+      expect(src).not.toContain(".option('agent-id'");
+    }
   });
 
-  test('publish: parses --publisher-address <uuid>@<host> → body.publisherAddress (full address, NOT uuid)', async () => {
+  test('publish: parses --publisher-email <email> → body.publisherEmail (email-shaped, NOT address)', async () => {
     mockServer = Bun.serve({
       port: 0,
       async fetch(req) {
@@ -74,12 +74,12 @@ describe('bounty-task address-based flags (v0.10 strict)', () => {
           headers: Object.fromEntries(req.headers.entries()),
         });
         return Response.json({
-          id: 'task-v010',
+          id: 'task-v014',
           title: body.title,
           description: body.description,
           type: body.type,
           reward: body.reward,
-          publisherId: PUB_UUID,
+          publisherId: '8de9b6aa-1111-4000-8000-000000000001',
           status: 'open',
         }, { status: 201 });
       },
@@ -88,8 +88,8 @@ describe('bounty-task address-based flags (v0.10 strict)', () => {
     const { publishCommand } = await import('../../src/cli/commands/bounty-task/publish.js');
     await (publishCommand as any).handler({
       'server-url': `http://localhost:${mockServer.port}`,
-      'publisher-address': PUB_FULL,
-      title: 'v0.10 strict test',
+      'publisher-email': PUB_EMAIL,
+      title: 'v0.14 strict test',
       type: 'writing',
       reward: 5,
       json: true,
@@ -97,37 +97,105 @@ describe('bounty-task address-based flags (v0.10 strict)', () => {
 
     expect(requests).toHaveLength(1);
     expect(requests[0].path).toBe('/api/tasks');
-    // v0.10 BREAKING: body carries full uuid@host (NOT bare uuid, NOT publisherId field)
-    expect(requests[0].body.publisherAddress).toBe(PUB_FULL);
+    // v0.14 BREAKING: body carries email ONLY (NOT publisherAddress / publisherId field)
+    expect(requests[0].body.publisherEmail).toBe(PUB_EMAIL);
+    expect(requests[0].body.publisherAddress).toBeUndefined();
     expect(requests[0].body.publisherId).toBeUndefined();
-    // X-Agent-Id header carries bare uuid (soft-auth)
-    expect(requests[0].headers['x-agent-id']).toBe(PUB_UUID);
+    // v0.14: X-Agent-Id soft-auth header REMOVED (publisherEmail in body is canonical)
+    expect(requests[0].headers['x-agent-id']).toBeUndefined();
   });
 
-  test('grab: parses --agent-address <uuid>@<host> → body.agentAddress (full address, NOT uuid)', async () => {
+  test('grab: parses --email <email> → body.agentEmail (email-shaped, NOT address)', async () => {
     mockServer = Bun.serve({
       port: 0,
       async fetch(req) {
         const body = await req.json().catch(() => ({}));
         requests.push({ path: new URL(req.url).pathname, method: req.method, body, headers: Object.fromEntries(req.headers.entries()) });
-        return Response.json({ id: VALID_TASK_ID, status: 'grabbed', assigneeId: AGENT_UUID });
+        return Response.json({ id: VALID_TASK_ID, status: 'grabbed', assigneeId: AGENT_EMAIL });
       },
     });
 
     const { grabCommand } = await import('../../src/cli/commands/bounty-task/grab.js');
     await (grabCommand as any).handler({
       'server-url': `http://localhost:${mockServer.port}`,
+      email: AGENT_EMAIL,
       'task-id': VALID_TASK_ID,
-      'agent-address': AGENT_FULL,
     });
 
-    expect(requests[0].path).toBe(`/api/tasks/${VALID_TASK_ID}/grab`);
-    // v0.10 BREAKING: body carries full uuid@host
-    expect(requests[0].body.agentAddress).toBe(AGENT_FULL);
-    expect(requests[0].body.agentId).toBeUndefined();
-    // v0.13: when --email not supplied, X-Agent-Id header is no longer set
-    // (the v0.10 soft-auth hint via X-Agent-Id was removed because the
-    // server now resolves identity via body.agentEmail/agentAddress).
+    expect(requests).toHaveLength(1);
+    expect(requests[0].body.agentEmail).toBe(AGENT_EMAIL);
+    expect(requests[0].body.agentAddress).toBeUndefined();
     expect(requests[0].headers['x-agent-id']).toBeUndefined();
+  });
+
+  test('submit: parses --email <email> → body.agentEmail (email-shaped)', async () => {
+    mockServer = Bun.serve({
+      port: 0,
+      async fetch(req) {
+        const body = await req.json().catch(() => ({}));
+        requests.push({ path: new URL(req.url).pathname, method: req.method, body, headers: Object.fromEntries(req.headers.entries()) });
+        return Response.json({ id: VALID_TASK_ID, status: 'submitted', title: 't' });
+      },
+    });
+
+    const { submitCommand } = await import('../../src/cli/commands/bounty-task/submit.js');
+    await (submitCommand as any).handler({
+      'server-url': `http://localhost:${mockServer.port}`,
+      email: AGENT_EMAIL,
+      'task-id': VALID_TASK_ID,
+      result: 'task completed successfully',
+      json: true,
+    });
+
+    expect(requests).toHaveLength(1);
+    expect(requests[0].body.agentEmail).toBe(AGENT_EMAIL);
+    expect(requests[0].body.agentAddress).toBeUndefined();
+    expect(requests[0].body.result).toBe('task completed successfully');
+  });
+
+  test('complete: parses --publisher-email <email> → body.publisherEmail', async () => {
+    mockServer = Bun.serve({
+      port: 0,
+      async fetch(req) {
+        const body = await req.json().catch(() => ({}));
+        requests.push({ path: new URL(req.url).pathname, method: req.method, body, headers: Object.fromEntries(req.headers.entries()) });
+        return Response.json({ id: VALID_TASK_ID, status: 'completed' });
+      },
+    });
+
+    const { completeCommand } = await import('../../src/cli/commands/bounty-task/complete.js');
+    await (completeCommand as any).handler({
+      'server-url': `http://localhost:${mockServer.port}`,
+      'publisher-email': PUB_EMAIL,
+      'task-id': VALID_TASK_ID,
+      json: true,
+    });
+
+    expect(requests).toHaveLength(1);
+    expect(requests[0].body.publisherEmail).toBe(PUB_EMAIL);
+    expect(requests[0].body.publisherAddress).toBeUndefined();
+  });
+
+  test('cancel: parses --publisher-email <email> → body.publisherEmail', async () => {
+    mockServer = Bun.serve({
+      port: 0,
+      async fetch(req) {
+        const body = await req.json().catch(() => ({}));
+        requests.push({ path: new URL(req.url).pathname, method: req.method, body, headers: Object.fromEntries(req.headers.entries()) });
+        return Response.json({ id: VALID_TASK_ID, status: 'cancelled' });
+      },
+    });
+
+    const { cancelCommand } = await import('../../src/cli/commands/bounty-task/cancel.js');
+    await (cancelCommand as any).handler({
+      'server-url': `http://localhost:${mockServer.port}`,
+      'publisher-email': PUB_EMAIL,
+      'task-id': VALID_TASK_ID,
+      json: true,
+    });
+
+    expect(requests).toHaveLength(1);
+    expect(requests[0].body.publisherEmail).toBe(PUB_EMAIL);
+    expect(requests[0].body.publisherAddress).toBeUndefined();
   });
 });

@@ -1,0 +1,192 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "plan_id": "2026-07-17-bounty-email-only-refactor",
+  "plan_doc_path": "docs/superpowers/plans/2026-07-17-bounty-email-only-refactor.md",
+  "plan_commit": "f7304f3",
+  "worktree": "/home/dzk/work/codework/personal/roy_world/ai-agent-bounty-worktrees/refactor-bounty-email-only",
+  "branch": "refactor/bounty-email-only",
+  "parent_branch": "main",
+  "commits_ahead_of_main": 9,
+  "auto_merge": false,
+  "version_bump": {
+    "from": "0.13.4",
+    "to": "0.14.0",
+    "kind": "BREAKING_MINOR"
+  },
+  "phase": {
+    "name": "phase-3-resume",
+    "previous": "phase-5-code-review-rerun-7-NEEDS_FIX",
+    "next": "phase-4-execute",
+    "milestone_operation_id": 15746
+  },
+  "decisions": {
+    "blocking_user_prompts_remaining": false,
+    "merged_into_existing_plan": true,
+    "items": [
+      {
+        "id": "Q1",
+        "topic": "agents.address DB column",
+        "default_recommended": "Option A — KEEP",
+        "user_confirmed_choice": "KEEP",
+        "rationale": "Canonical primary key in IM model; FK joins from messages.{from,to}_address and tasks.{publisher,assignee}_id depend on it; rename/drop migration out of scope for v0.14.",
+        "surface_implication": "Column survives in schema and internal routing. CLI flags + HTTP body never accept it as input. Surface-level deletion only."
+      },
+      {
+        "id": "Q2",
+        "topic": "GET /api/agents/* lookup path",
+        "default_recommended": "Option A — KEEP /api/agents/by-email",
+        "user_confirmed_choice": "KEEP /api/agents/by-email",
+        "rationale": "Symmetry with by-id; documented and used by k8s prod callers; mid-cycle rename is gratuitous churn.",
+        "surface_implication": "Path unchanged. Returns 200 with agent record, or 404 for unknown (see Q3)."
+      },
+      {
+        "id": "Q3",
+        "topic": "Valid-format unregistered email error code",
+        "default_recommended": "Option A — 404 for unknown; 400 for malformed",
+        "user_confirmed_choice": "404",
+        "rationale": "Clean separation of bad-data (400) vs missing-resource (404); aligns with REST semantics elsewhere in the API.",
+        "surface_implication": "resolveActor / findAgentByEmail / sendMessage return 404 with { error.code: 'agent_not_found', error.message: \"No registered agent for email '<email>'\" }."
+      },
+      {
+        "id": "Q4",
+        "topic": "messages.from/to_address storage format",
+        "default_recommended": "Option A — KEEP canonical <uuid>@<host>",
+        "user_confirmed_choice": "canonical <uuid>@<host>",
+        "rationale": "v0.13.4 fix preserved; downstream WS push and inbox queries integrated against canonical form.",
+        "surface_implication": "Email → canonical mapping server-side in findAgentByEmail. No messages.from_email column added."
+      },
+      {
+        "id": "Q5",
+        "topic": "BOUNTY_IM_ADDRESS env var + EventSource auto-registration",
+        "default_recommended": "Option A — DELETE entirely",
+        "user_confirmed_choice": "DELETE entirely",
+        "rationale": "Task mandate 'no implicit fallback'; leaving the env reintroduces silent-misrouting bug class this refactor fixes.",
+        "surface_implication": "src/cli/cli.ts drops the if (process.env.BOUNTY_IM_ADDRESS) {...} block; resolveCurrentAgentAddress deleted in src/cli/lib/current-agent.ts. Migration: use `bounty profile use <name>` + EventSource config file."
+      },
+      {
+        "id": "Q6",
+        "topic": "com send --server-url CLI alias",
+        "default_recommended": "newly confirmed — alias '-u' instead of '-e'",
+        "user_confirmed_choice": "-u",
+        "rationale": "yargs alias collision would silently merge --server-url -e <url> and --email/-F/-T -e <email> into arrays, breaking the strict-email contract. Standardizing on -u matches the addServerUrlOption helper already shipping for com/{inbox,connect,disconnect}.ts.",
+        "surface_implication": "Task 8 (com/send.ts) changes option from { alias: 'e' } to { alias: 'u' } and routes via addServerUrlOption(). CHANGELOG marks v0.14 BREAKING minor flag-alias rename."
+      }
+    ]
+  },
+  "phase3_resume_blockers": [
+    { "id": "B-1", "summary": "requireEmailFlag / resolveActiveProfileEmail helper absent; 5 bounty commands parse only explicit argv and ignore active profile." },
+    { "id": "B-2", "summary": "bounty-task/board.ts treated as no-op without publisher-email filter / legacy rejection / test." },
+    { "id": "B-3", "summary": "com/send.ts declares --server-url with alias 'e' while Decision Q6 unresolved; would collide with --email/-F/-T." },
+    { "id": "B-4", "summary": "CLI regression grew main 525/8 -> HEAD 504/36 (29 new unique failures) — covers complete/cancel/com/send auth/TLS/transport, publish large-payload, JSON/quiet, network/auth/business/409, multiple profile suites." },
+    { "id": "B-5", "summary": "Email-only tests 39/39 pass narrowly but lack runtime GREEN body assertions and active-profile fallback coverage." },
+    { "id": "B-6", "summary": "com/send.ts --from-email / --to-email flag-only; no active-profile fallback, no parser centralisation, no runtime GREEN body assertion." },
+    { "id": "B-7", "summary": "Tasks 9-18 + 20-22 + 23-27 (cleanup/version bump/CHANGELOG/README/serial suite/final review) still pending." }
+  ],
+  "phase3_repair_plan": [
+    {
+      "id": "R-1",
+      "addresses_blockers": ["B-1", "B-6"],
+      "tdd_ladder": [
+        "RED tests/cli/email-flag.test.ts: requireEmailFlag returns parsed email; without flag returns 1; active-profile read precedence; BOUNTY_IM_ADDRESS ignored (Q5 deletion).",
+        "GREEN: implement src/cli/lib/email-flag.ts with resolveActiveProfileEmail + requireEmailFlag.",
+        "REFACTOR: migrate 7 duplicated email-validation blocks across bounty-task, com, register-agent, auth, profile."
+      ]
+    },
+    {
+      "id": "R-2",
+      "addresses_blockers": ["B-2"],
+      "tdd_ladder": [
+        "RED tests/cli/bounty-task-board-publisher.test.ts: --publisher-email emits query, no flag with active profile uses profile, --publisher-address exits 1.",
+        "GREEN: rewrite board.ts to add --publisher-email / -e and call requireEmailFlag.",
+        "REFACTOR: extract shared query-string assembly with inbox/connect."
+      ]
+    },
+    {
+      "id": "R-3",
+      "addresses_blockers": ["B-3"],
+      "tdd_ladder": [
+        "RED tests/cli/com-send-server-url-alias.test.ts: -u parses, -e rejected, no yargs array collision with --from-email.",
+        "GREEN: change com/send.ts alias 'e' -> 'u'; route warnings through shared error helper.",
+        "REFACTOR: switch send.ts to addServerUrlOption() shared helper."
+      ]
+    },
+    {
+      "id": "R-4",
+      "addresses_blockers": ["B-4"],
+      "tdd_ladder": [
+        "Baseline: BOUNTY_MAIL_DRY_RUN=1 bun test tests/cli --parallel 4 against main; record fail count.",
+        "Per failure: locate *-profile.test.ts / *-network.test.ts, supply valid email via R-1 helper, preserve original assertion.",
+        "Coverage gate: bun run test:cli:fast then default-serial bun test tests/cli.",
+        "Final comparison: HEAD fail count <= main fail count (8)."
+      ]
+    },
+    {
+      "id": "R-5",
+      "addresses_blockers": ["B-5"],
+      "tdd_ladder": [
+        "RED tests/cli/bounty-cli-email-runtime.test.ts: BountyHttpSpy captures agentEmail present + agentAddress absent; active profile case.",
+        "GREEN: existing parseEmail + requireEmailFlag already correct; tests just assert on captured body.",
+        "REFACTOR: extract BountyHttpSpy to tests/cli/helpers/http-spy.ts for reuse across 39 tests."
+      ]
+    },
+    {
+      "id": "R-6",
+      "addresses_blockers": ["B-6"],
+      "tdd_ladder": [
+        "RED tests/cli/com-send-identity.test.ts: --from-email/-to-email sends {from_email,to_email}, active profile case, legacy --from rejected.",
+        "GREEN: replace inline parseEmail ladder with requireEmailFlag(argv, 'fromEmail' | 'toEmail').",
+        "REFACTOR: share helper with R-1."
+      ]
+    },
+    {
+      "id": "R-7",
+      "addresses_blockers": ["B-7"],
+      "tdd_ladder": [
+        "Tasks 9-18: auth/login, register-agent/{info,get,delete,credits,login}, com/{inbox,connect,disconnect,addresses}, profile/add — follow R-1/R-2/R-5 pattern, one commit per command.",
+        "Tasks 19-22: server endpoints (email-resolver.ts, bounty-routes.ts::resolveActor, im-routes.ts, auth-routes.ts); apply Q3/Q4; runtime GREEN via bountyHttp mock.",
+        "Task 23: delete legacy src/lib/address.ts, src/cli/lib/address-parser.ts, src/server/lib/address-resolver.ts, normalizeAgentIdentifier. Grep gate: 0 matches outside src/lib/email-resolver.ts consumers.",
+        "Task 24: src/cli/lib/current-agent.ts becomes resolveActiveProfileEmail-only; BOUNTY_IM_ADDRESS refs deleted in src/cli/cli.ts (Q5).",
+        "Task 25: version bump 0.13.4 -> 0.14.0; CHANGELOG ## [v0.14.0] with Removed/Changed/Migration listing --agent-address/--publisher-address/--from/--to/--address/--agent-id/--id/BOUNTY_IM_ADDRESS/body.*Address/body.agent_id.",
+        "Task 26: bun run typecheck + bun run test:cli:fast + bun test tests/cli serial + bun run build, all exit 0 with no new failures vs main baseline.",
+        "Task 27: stage report + 飞书 notification to user with diff summary, fail-count comparison, merge-to-main approval request.",
+        "Final state: branch refactor/bounty-email-only STOPPED; auto_merge=false until user approval."
+      ]
+    }
+  ],
+  "phase3_exit_criteria": [
+    "All 7 blockers green under bun run test:cli:fast and default-serial bun test tests/cli",
+    "All 18 RED tests in plan Acceptance Criteria pass",
+    "All 7 GREEN tests in plan Acceptance Criteria pass",
+    "grep -rE 'agent-address|publisher-address|BOUNTY_IM_ADDRESS|<uuid>@<host>' src/cli/commands/ src/cli/cli.ts src/cli/lib/ yields 0 matches in active flag descriptions",
+    "Code-review re-run 8 returns APPROVED",
+    "Version on refactor/bounty-email-only HEAD is 0.14.0",
+    "飞书 notification sent; merge-to-main prompt issued; no autonomous merge executed"
+  ],
+  "memory_preservation": {
+    "global": "preserved (no global memory mutated)",
+    "project": "preserved (no project memory mutated)",
+    "worktree_uncommitted_files_at_resume": [
+      ".roy/memory/memory.md (unrelated global capture; restored via git restore in op 15741)",
+      "bounty-standalone/package.json (v0.13.1 release residue; restored via git restore in op 15741)"
+    ]
+  },
+  "iron_rules_preserved": {
+    "auto_merge_main": "FORBIDDEN — user must explicitly approve merge to main",
+    "tdd_discipline": "RED -> GREEN -> REFACTOR per repair step; helper extractions land before command-level rewrites",
+    "no_silent_fallbacks": "Q5 deletes BOUNTY_IM_ADDRESS; Q1 keeps internal canonical id but CLI/HTTP bodies never accept it",
+    "worktree_isolation": "all edits confined to refactor/bounty-email-only worktree; main untouched"
+  },
+  "do_not_do": [
+    "Merge to main without explicit user approval",
+    "git push origin main",
+    "git tag v0.14.0 without explicit approval",
+    "Re-ask Q1-Q6 in user prompts — they are FINAL",
+    "Create a NEW plan file (use existing 2026-07-17-bounty-email-only-refactor.md)"
+  ],
+  "do_proceed": [
+    "Phase 4 Execute R-1 (requireEmailFlag helper) immediately",
+    "Phase 4 Execute R-2..R-7 in order",
+    "Run baseline-vs-HEAD comparison after every 5 commits",
+    "Re-run code-review at the end (re-run 8)"
+  ]
+}

@@ -184,13 +184,19 @@ export class IMRoutes {
   }
 
   getMessages(url: URL, requester: RequesterInfo): Response {
-    // v0.13: prefer `?email=`, fall back to `?address=` (legacy).
-    const rawIdentifier =
-      normalizeAgentIdentifier(url.searchParams.get('email')) ??
-      normalizeAgentIdentifier(url.searchParams.get('address'));
+    // v0.14 BREAKING (RC-3): legacy `?address=` query is REMOVED.
+    // Only `?email=<registered-email>` is accepted. Reject 400 'use ?email='.
+    const legacyAddress = url.searchParams.get('address');
+    if (legacyAddress && legacyAddress.trim()) {
+      return Response.json(
+        { error: 'use ?email=<your-registered-email> (v0.14 BREAKING: legacy ?address= removed)' },
+        { status: 400 }
+      );
+    }
+    const rawIdentifier = normalizeAgentIdentifier(url.searchParams.get('email'));
     if (!rawIdentifier) {
       return Response.json(
-        { error: 'Missing required query parameter: email or address' },
+        { error: 'Missing required query parameter: email' },
         { status: 400 }
       );
     }
@@ -253,12 +259,21 @@ export class IMRoutes {
    * New clients should use the protected `getMessages` instead.
    */
   getMessagesForAddress(url: URL): Response {
-    // v0.13: also accept `?email=` here (legacy callers used `?address=`).
-    const address =
-      normalizeAgentIdentifier(url.searchParams.get('address')) ??
-      normalizeAgentIdentifier(url.searchParams.get('email'));
+    // v0.14 BREAKING (RC-3): legacy `?address=` query is REMOVED.
+    // Only `?email=<registered-email>` is accepted. Reject 400 'use ?email='.
+    const legacyAddress = url.searchParams.get('address');
+    if (legacyAddress && legacyAddress.trim()) {
+      return Response.json(
+        { error: 'use ?email=<your-registered-email> (v0.14 BREAKING: legacy ?address= removed)' },
+        { status: 400 }
+      );
+    }
+    const address = normalizeAgentIdentifier(url.searchParams.get('email'));
     if (!address) {
-      return Response.json([]);
+      return Response.json(
+        { error: 'Missing required query parameter: email' },
+        { status: 400 }
+      );
     }
     return Response.json(this.db.getInbox(address));
   }

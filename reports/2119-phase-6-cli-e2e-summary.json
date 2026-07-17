@@ -1,0 +1,108 @@
+{
+  "schema": "phase-6-cli-e2e-summary/v1",
+  "task_id": 2119,
+  "branch": "refactor/bounty-email-only",
+  "worktree": "/home/dzk/work/codework/personal/roy_world/ai-agent-bounty-worktrees/refactor-bounty-email-only",
+  "head_commit": "9c39e8c",
+  "captured_at": "2026-07-17T15:50:00+08:00",
+  "operator": "roy-agent phase-6 cli-e2e",
+  "auto_merge": false,
+  "cli_e2e_status": "PASS",
+  "build_ok": true,
+  "build_exit_code": 0,
+  "test_ok": true,
+  "test_exit_code": 0,
+  "test_count_passed": 1030,
+  "test_count_failed": 0,
+  "test_files": 137,
+  "test_expect_calls": 2826,
+  "cli_smoke_ok": true,
+  "cli_smoke_exit_code": 0,
+  "fail_reason": "",
+  "baseline_regression_protocol": {
+    "version": "v1.3",
+    "schema": "roy-rd-pipeline-baseline/v1",
+    "task_id": 2119,
+    "stage": "e2e",
+    "worktree_path": "/home/dzk/work/codework/personal/roy_world/ai-agent-bounty-worktrees/refactor-bounty-email-only",
+    "invocation_hash_consistent": true,
+    "command_lines": [
+      "build=bun run typecheck && bun run build:cli",
+      "test=BOUNTY_MAIL_DRY_RUN=1 bun test --parallel=4",
+      "cli-smoke=bun dist/bin/bounty.js --help"
+    ],
+    "preflight_checks": {
+      "command_set_drift": false,
+      "worktree_drift": false,
+      "task_id_drift": false,
+      "stage_drift": false,
+      "missing_categories": false,
+      "capture_status_invalid": false
+    }
+  },
+  "new_regressions": {
+    "build": [],
+    "test": [],
+    "cli-smoke": []
+  },
+  "capture_paths": {
+    "build": {
+      "baseline": "reports/2119-e2e-build-baseline.json",
+      "modified": "reports/2119-e2e-build-modified-failures.json"
+    },
+    "test": {
+      "baseline": "reports/2119-e2e-test-baseline.json",
+      "modified": "reports/2119-e2e-test-modified-failures.json"
+    },
+    "cli-smoke": {
+      "baseline": "reports/2119-e2e-cli-smoke-baseline.json",
+      "modified": "reports/2119-e2e-cli-smoke-modified-failures.json"
+    }
+  },
+  "log_files": {
+    "build": "/tmp/rd_pipeline_build.log",
+    "test": "/tmp/rd_pipeline_test.log",
+    "cli_smoke": "/tmp/rd_pipeline_cli.log"
+  },
+  "build_log_tail": [
+    "$ bun build ./src/cli/cli.ts --outdir=./dist --target=bun --external @ai-setting/roy-agent-cli --external @ai-setting/roy-agent-core",
+    "Bundled 143 modules in 13ms",
+    "",
+    "  cli.js  0.51 MB  (entry point)"
+  ],
+  "test_log_tail": [
+    "(pass) Mailbox Client > ack > acks a message [111.51ms]",
+    "(pass) Mailbox Client > fetchInbox > fetches inbox messages [10.81ms]",
+    "(pass) Mailbox Client > fetchInbox > fetches empty inbox [6.11ms]",
+    "(pass) Mailbox Client > ping > sends ping without error [7.79ms]",
+    "",
+    "tests/cli/bounty-task-error-classification.test.ts:",
+    "(pass) bounty bounty-task - error classification (exit code mapping, v0.14) > publish: network error → exit 4 + friendly message (alias check) [515.62ms]",
+    "(pass) bounty bounty-task - error classification (exit code mapping, v0.14) > grab: network error → exit 4 [574.45ms]",
+    "",
+    " 1030 pass",
+    " 0 fail",
+    " 2826 expect() calls",
+    "Ran 1030 tests across 137 files. [3.05s]"
+  ],
+  "cli_log_tail": [
+    "      --tools",
+    "      --mcp",
+    "",
+    "Options:",
+    "      --quiet  Quiet mode (default: on, use --no-quiet to enable logging)",
+    "                                                       [boolean] [default: true]",
+    "      --all    Show every command (bypasses --help grouping)",
+    "                                                      [boolean] [default: false]",
+    "",
+    "Use --all to see every command (including advanced)."
+  ],
+  "notes": [
+    "Adapted scripts/capture-rd-pipeline-baseline.ts and scripts/verify-rd-pipeline-baseline.ts from roy-agent/scripts/ for ai-agent-bounty (no upstream scripts existed in this repo).",
+    "Two parsing adaptations were made versus the upstream templates:",
+    "(1) Test command uses `--parallel=4` (equals sign) — `--parallel 4` is parsed by bun as `--parallel` (mode) + positional arg `4` (filter), matching zero test files and yielding a misleading exit-1.",
+    "(2) CLI smoke runs `bun dist/bin/bounty.js --help` (the binary entry built from src/bin/bounty.ts which calls runBountyCli()). `bun dist/cli.js --help` exits 0 silently because dist/cli.js is the library form (runBountyCli is exported but never auto-invoked).",
+    "Strict-email contract v0.14 is intact: no legacy *Address fallbacks, BOUNTY_IM_ADDRESS deleted, --publisher-email/--grabber-email/--from-email/--to-email are the only accepted identity flags across all bounty CLI commands and /api/bounty/* + /api/messages/* HTTP surfaces (per Phase 5 code review re-run, FB-1+RC-1/2/3 all RESOLVED).",
+    "auto_merge=false preserved — final stop remains refactor/bounty-email-only at HEAD 9c39e8c, awaiting user merge-to-main approval per the ⚠️ 合并主分支铁律 (global memory)."
+  ]
+}

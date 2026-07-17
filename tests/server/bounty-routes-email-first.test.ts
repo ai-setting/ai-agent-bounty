@@ -95,7 +95,7 @@ describe('BountyRoutes — email-first API (v0.13)', () => {
     expect(task.status).toBe('open');
   });
 
-  test('createTask publisherAddress 仍可用（v0.10 legacy 兼容）', async () => {
+  test('v0.14: createTask REJECTS legacy body.publisherAddress — 400', async () => {
     const res = await fetch(`${baseUrl}/api/tasks`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -107,9 +107,9 @@ describe('BountyRoutes — email-first API (v0.13)', () => {
         publisherAddress: PUB_FULL,
       }),
     });
-    expect(res.status).toBe(201);
-    const task = (await res.json()) as { publisherId: string };
-    expect(task.publisherId).toBe(PUB_UUID);
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as { error: string };
+    expect(body.error).toMatch(/publisherEmail.*your-registered-email/i);
   });
 
   test('createTask 缺 publisherEmail/publisherAddress → 400', async () => {
@@ -128,7 +128,7 @@ describe('BountyRoutes — email-first API (v0.13)', () => {
     expect(body.error.toLowerCase()).toContain('email');
   });
 
-  test('createTask publisherEmail 不存在 → 400 Agent not found', async () => {
+  test('v0.14: createTask publisherEmail 不存在 → 404 No registered agent', async () => {
     const res = await fetch(`${baseUrl}/api/tasks`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -139,9 +139,10 @@ describe('BountyRoutes — email-first API (v0.13)', () => {
         publisherEmail: 'noone@example.com',
       }),
     });
-    expect(res.status).toBe(400);
+    // v0.14 Q3: 404 Not Found for valid-format but unregistered email.
+    expect(res.status).toBe(404);
     const body = (await res.json()) as { error: string };
-    expect(body.error).toContain('Agent not found');
+    expect(body.error).toMatch(/No registered agent for email/i);
   });
 
   // ===== grabTask =====
@@ -168,7 +169,7 @@ describe('BountyRoutes — email-first API (v0.13)', () => {
     expect(updated.status).toBe('grabbed');
   });
 
-  test('grabTask agentAddress 仍可用（legacy 兼容）', async () => {
+  test('v0.14: grabTask REJECTS legacy body.agentAddress — 400', async () => {
     const pub = await fetch(`${baseUrl}/api/tasks`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -184,9 +185,7 @@ describe('BountyRoutes — email-first API (v0.13)', () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ agentAddress: AGENT_FULL }),
     });
-    expect(grab.status).toBe(200);
-    const updated = (await grab.json()) as { assigneeId: string };
-    expect(updated.assigneeId).toBe(AGENT_UUID);
+    expect(grab.status).toBe(400);
   });
 
   test('grabTask 缺 agentEmail/agentAddress → 400', async () => {
@@ -245,9 +244,10 @@ describe('BountyRoutes — email-first API (v0.13)', () => {
 
   // ===== priority test =====
 
-  test('email 优先于 address：当两个字段都提供时用 email', async () => {
-    // Bob 的 email 是 agent-bob@example.com；用一个不同的 address 也不应被采纳
-    // 这里我们传一个不存在的 address + 正确的 email，应当走 email 路径
+  test('v0.14: legacy body.agentAddress REJECTED with 400 (no email-priority fallback)', async () => {
+    // v0.13 had email-first priority (email wins over address).
+    // v0.14 BREAKING: legacy *Address body field is REJECTED outright with 400.
+    // Even when the email is supplied alongside it, the legacy field trips 400.
     const pub = await fetch(`${baseUrl}/api/tasks`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -266,9 +266,6 @@ describe('BountyRoutes — email-first API (v0.13)', () => {
         agentAddress: '00000000-0000-4000-8000-000000000000@bounty.local',
       }),
     });
-    expect(grab.status).toBe(200);
-    const updated = (await grab.json()) as { assigneeId: string };
-    // The legitimate agent wins via email path
-    expect(updated.assigneeId).toBe(AGENT_UUID);
+    expect(grab.status).toBe(400);
   });
 });

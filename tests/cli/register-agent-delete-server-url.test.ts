@@ -1,5 +1,5 @@
 /**
- * Tests for `bounty register-agent delete` CLI command — --server-url option.
+ * Tests for `bounty register-agent delete` CLI command — --server-url option (v0.14).
  */
 
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
@@ -9,7 +9,7 @@ import { resolve } from 'path';
 const SRC = resolve(import.meta.dir, '../../src/cli/commands/register-agent/delete.ts');
 const HELPER_SRC = resolve(import.meta.dir, '../../src/cli/lib/server-url-option.ts');
 
-describe('bounty register-agent delete - --server-url option', () => {
+describe('bounty register-agent delete - --server-url option (v0.14 email-only)', () => {
   let origApiUrl: string | undefined;
 
   beforeEach(() => {
@@ -34,13 +34,14 @@ describe('bounty register-agent delete - --server-url option', () => {
 
   test('T2: delete.ts uses resolveServerUrl with API_BASE fallback', () => {
     const src = readFileSync(SRC, 'utf-8');
-    expect(src).toMatch(/resolveServerUrl\(.*API_BASE\s*\)/);
+    expect(src).toMatch(/resolveServerUrl\([\s\S]*?API_BASE/);
   });
 
-  test('T3: fetch URL uses parsed /api/agents/${agentUuid}', () => {
+  test('T3: fetch URL uses /api/agents/by-email?email=<email> (v0.14: no legacy uuid path)', () => {
     const src = readFileSync(SRC, 'utf-8');
-    // v0.10: --agent-address resolves to uuid; URL uses uuid, not options.id
-    expect(src).toMatch(/baseUrl.*\/api\/agents\/\$\{agentUuid\}/);
+    // v0.14: lookup exclusively via by-email; legacy /api/agents/${uuid} REMOVED.
+    expect(src).toMatch(/api\/agents\/by-email\?email/);
+    expect(src).not.toMatch(/api\/agents\/\$\{agentUuid\}/);
   });
 
   test('T4: scheme validation is delegated to helper', () => {

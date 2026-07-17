@@ -62,7 +62,6 @@ const DEFAULTS = {
   WS_URL: 'ws://localhost:4000/ws',
   DOMAIN: 'bounty.local',
   DB_PATH: './data/bounty.db',
-  IM_ADDRESS: '',
   // SMTP
   SMTP_HOST: '',
   SMTP_PORT: '587',
@@ -126,13 +125,7 @@ class BountyConfig {
     loadEnv();
     return process.env.BOUNTY_DOMAIN || DEFAULTS.DOMAIN;
   }
-  
-  /** 当前 Agent 的 IM 地址 */
-  get imAddress(): string {
-    loadEnv();
-    return process.env.BOUNTY_IM_ADDRESS || DEFAULTS.IM_ADDRESS;
-  }
-  
+
   // ============ 数据库配置 ============
   
   /** 数据库文件路径 */
@@ -226,7 +219,8 @@ class BountyConfig {
       { name: 'BOUNTY_WS_URL', envKey: 'BOUNTY_WS_URL', default: DEFAULTS.WS_URL, desc: 'WebSocket URL' },
       { name: 'BOUNTY_API_URL', envKey: 'BOUNTY_API_URL', default: DEFAULTS.URL, desc: 'API base URL' },
       { name: 'BOUNTY_DOMAIN', envKey: 'BOUNTY_DOMAIN', default: DEFAULTS.DOMAIN, desc: 'Domain for agent addresses' },
-      { name: 'BOUNTY_IM_ADDRESS', envKey: 'BOUNTY_IM_ADDRESS', default: DEFAULTS.IM_ADDRESS, desc: 'Your IM address' },
+      // v0.14 BREAKING: BOUNTY_IM_ADDRESS REMOVED (Q5 ✅ DELETE). See
+      // CHANGELOG.md and the Decision Record for migration instructions.
       { name: 'BOUNTY_DB_PATH', envKey: 'BOUNTY_DB_PATH', default: DEFAULTS.DB_PATH, desc: 'Database file path' },
       { name: 'SMTP_HOST', envKey: 'SMTP_HOST', default: DEFAULTS.SMTP_HOST, desc: 'SMTP server host' },
       { name: 'SMTP_PORT', envKey: 'SMTP_PORT', default: DEFAULTS.SMTP_PORT, desc: 'SMTP server port' },

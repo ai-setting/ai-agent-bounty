@@ -69,8 +69,14 @@ import { serverCommands } from './commands/server/index.js';
 import { registerBountyPromptHook } from './hooks/bounty-prompt-hook.js';
 // NOTE: registerBountyPromptHook() is called inside runBountyCli() after setQuietMode(true)
 
-// 环境变量
-const BOUNTY_IM_AUTO_ES_NAME = 'bounty-im-auto';
+// v0.14 BREAKING: BOUNTY_IM_ADDRESS env var + auto-registration of
+// `bounty-im` EventSource REMOVED. See CHANGELOG.md and the Decision
+// Record (Q5 ✅ DELETE).
+//
+// Migration:
+//   1. `bounty profile use <name>` — sets active identity (ProfileContext)
+//   2. Manually register the `bounty-im` EventSource with explicit address
+//      in your config file. `bounty-im auto` no longer runs at session start.
 
 /**
  * Get package.json version
@@ -140,10 +146,15 @@ export async function disposeEnvService(): Promise<void> {
  * 初始化 Bounty CLI 环境
  *
  * 1. 创建/获取全局 envService
- * 2. 自动注册 bounty-im EventSource（如果设置了 BOUNTY_IM_ADDRESS）
+ *
+ * v0.14 BREAKING: auto-registration of `bounty-im` EventSource via
+ * `BOUNTY_IM_ADDRESS` env var is REMOVED (Q5 ✅ DELETE). Users who want
+ * push-style routing must opt in explicitly via:
+ *   1. `bounty profile use <name>` — sets active identity (ProfileContext)
+ *   2. Manually register the `bounty-im` EventSource with explicit address.
+ * Migration: see CHANGELOG entry for v0.14.0.
  */
 async function initializeBountyEnv(): Promise<void> {
-  const address = process.env.BOUNTY_IM_ADDRESS;
   const envService = getOrCreateEnvService();
 
   // 创建环境（即使没有配置也会初始化组件）
@@ -154,52 +165,6 @@ async function initializeBountyEnv(): Promise<void> {
   if (env) {
     setGlobalEnv(env);
   }
-
-  // 如果没有设置 BOUNTY_IM_ADDRESS，不需要注册 EventSource
-  if (!address) {
-    return;
-  }
-
-  // 设置了 BOUNTY_IM_ADDRESS，需要注册 EventSource
-  if (!env) {
-    return;
-  }
-
-  const eventSourceComponent = env.getComponent('event-source') as any;
-  if (!eventSourceComponent || typeof eventSourceComponent.register !== 'function') {
-    return;
-  }
-
-  // 使用 bountyConfig 统一获取 IM Server URL
-  const imServerUrl = bountyConfig.getImServerUrl();
-  const config = {
-    id: BOUNTY_IM_AUTO_ES_NAME,
-    name: 'Bounty IM (Auto)',
-    type: 'bounty-im',
-    options: {
-      address,
-      imServerUrl,
-    },
-  };
-
-  // 检查是否已存在同名实例，如果存在则先移除再重新注册（确保使用最新配置）
-  const existing = eventSourceComponent.get(BOUNTY_IM_AUTO_ES_NAME);
-  if (existing) {
-    // 检查配置是否变化（address 或 imServerUrl 任一变化都需要更新）
-    const existingAddress = existing.options?.address;
-    const existingUrl = existing.options?.imServerUrl;
-    if (existingAddress !== address || existingUrl !== imServerUrl) {
-      eventSourceComponent.unregister(BOUNTY_IM_AUTO_ES_NAME);
-      eventSourceComponent.register(config);
-      console.log(`✅ 已更新 bounty-im EventSource: ${BOUNTY_IM_AUTO_ES_NAME} (${address})`);
-      return;
-    }
-    // 配置未变，无需重新注册
-    return;
-  }
-
-  eventSourceComponent.register(config);
-  console.log(`✅ 已自动添加 bounty-im EventSource: ${BOUNTY_IM_AUTO_ES_NAME} (${address})`);
 }
 
 /**

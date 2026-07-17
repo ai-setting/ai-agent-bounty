@@ -1,0 +1,117 @@
+{
+  "schema": "phase-5-resume-modified/v1",
+  "task_id": "2119",
+  "branch": "refactor/bounty-email-only",
+  "worktree": "/home/dzk/work/codework/personal/roy_world/ai-agent-bounty-worktrees/refactor-bounty-email-only",
+  "head_commit": "2c02161",
+  "captured_at": "2026-07-17T23:30:00+08:00",
+  "operator": "roy-agent phase-5 review-blocker resolution",
+  "auto_merge": false,
+  "phase5_review_disposition": "PASS — all blockers (FB-1, RC-1, RC-2, RC-3) resolved",
+  "command_runs": {
+    "cli_tests_parallel_4": {
+      "command": "BOUNTY_MAIL_DRY_RUN=1 bun test tests/cli --parallel 4",
+      "result": "604 pass / 0 fail / 88 files (was 504/36/86 in v1.3 baseline)",
+      "exit_code": 0
+    },
+    "server_tests_parallel_4": {
+      "command": "BOUNTY_MAIL_DRY_RUN=1 bun test tests/server --parallel 4",
+      "result": "196 pass / 0 fail / 26 files (was 190/0/24 in v1.3 baseline; +4 new FB-1 tests + 2 new RC-3 tests)",
+      "exit_code": 0
+    },
+    "full_default_serial_isolate": {
+      "command": "BOUNTY_MAIL_DRY_RUN=1 bun test --isolate",
+      "result": "1030 pass / 0 fail / 137 files",
+      "exit_code": 0
+    },
+    "full_parallel_4": {
+      "command": "BOUNTY_MAIL_DRY_RUN=1 bun test tests/ --parallel 4",
+      "result": "1026 pass / 0 fail / 136 files",
+      "exit_code": 0
+    },
+    "typecheck":         { "command": "bun run typecheck",     "result": "exit 0", "exit_code": 0 },
+    "build_cli":         { "command": "bun run build:cli",     "result": "exit 0 — cli.js 0.51 MB", "exit_code": 0 },
+    "build_bin":         { "command": "bun run build:bin",     "result": "exit 0 — bounty.js 0.51 MB", "exit_code": 0 },
+    "build_server":      { "command": "bun run build:server",  "result": "exit 0 — server.js 0.50 MB", "exit_code": 0 },
+    "build_plugin":      { "command": "bun run build:plugin",  "result": "exit 0 — plugin/index.js 124 KB", "exit_code": 0 }
+  },
+  "phase5_blockers_resolution": {
+    "FB-1_board_publisher_email_filter_end_to_end": {
+      "status": "RESOLVED",
+      "approach": "Server-side BountyRoutes.getTasks() now resolves ?publisherId=<email> via findAgentByEmail BEFORE the WHERE clause; sentinel null returned for unregistered email (returns empty list, not 404 — list() semantics).",
+      "files_modified": [
+        "src/server/http/bounty-routes.ts (added resolvePublisherIdFilter() + sentinel return)",
+        "tests/server/bounty-board-publisher-email-filter.test.ts (NEW: 4 RED → GREEN tests)"
+      ],
+      "tests_added": 4
+    },
+    "RC-1_config_imAddress_dead_code": {
+      "status": "RESOLVED",
+      "approach": "Deleted get imAddress() getter + DEFAULTS.IM_ADDRESS entry + toConfigItems BOUNTY_IM_ADDRESS entry. Only doc-comment references remain (in migration guide).",
+      "files_modified": [
+        "src/lib/config/bounty-config.ts (3 deletions)"
+      ],
+      "tests_added": 0
+    },
+    "RC-2_server_rejects_legacy_body_address_fields": {
+      "status": "RESOLVED",
+      "approach": "resolveActor() refactored to discriminated union { actor } | { error: { status, message } }. Legacy body.publisherAddress / body.agentAddress now return 400 'use publisherEmail: <your-registered-email>'. Unregistered valid email returns 404 'No registered agent for email' (Q3 ✅).",
+      "files_modified": [
+        "src/server/http/bounty-routes.ts (resolveActor rewritten + resolveActorOrError helper)",
+        "tests/server/bounty-routes-address.test.ts (rewritten to v0.14 contract; 12 tests)",
+        "tests/server/bounty-routes-email-first.test.ts (legacy-contract tests updated)",
+        "tests/server/soft-auth-no-header-grab.test.ts (rewritten to email-only contract)",
+        "tests/server/token-policy-consistency.test.ts (publisherAddress → publisherEmail)"
+      ],
+      "tests_added": 6
+    },
+    "RC-3_server_rejects_query_address_param": {
+      "status": "RESOLVED",
+      "approach": "im-routes getMessages() + getMessagesForAddress() now reject ?address= query with 400 'use ?email=<your-registered-email>'. getMessagesForAddress now also requires ?email= (was: silently returns [] on missing).",
+      "files_modified": [
+        "src/server/http/im-routes.ts (2 location rewrites)",
+        "tests/server/im-routes-reject-address-query.test.ts (NEW: 4 RED → GREEN tests)",
+        "tests/server/im-routes-auth.test.ts (?address= → ?email= + bob/address set in DB)",
+        "tests/server/im-routes-inbox-email.test.ts (T4 rewritten to assert 400 on legacy ?address=)"
+      ],
+      "tests_added": 4
+    }
+  },
+  "scopes_completed": [
+    "R-1 requireEmailFlag helper + 5 bounty commands",
+    "R-2 board --publisher-email filter",
+    "R-3 com --server-url alias -u",
+    "R-4/R-5 29 known non-legacy regressions fixed + obsolete legacy-contract tests rewritten",
+    "R-6 com send from-email/to-email routed through requireEmailFlag",
+    "Phase 4 #5 auth/register-agent/profile email-only",
+    "Phase 4 #6 server /api/tasks ?publisherId=<email> resolves to agent.id (FB-1 fix)",
+    "Phase 4 #6 server /api/messages ?email= only — ?address= rejected 400 (RC-3 fix)",
+    "Phase 4 #6 server endpoints reject legacy body.publisherAddress / body.agentAddress with 400 (RC-2 fix)",
+    "Phase 4 #7 BOUNTY_IM_ADDRESS DELETE (Q5 ✅) + EventSource auto-registration removed + config.imAddress dead-code deleted (RC-1 fix)",
+    "Phase 4 #8 version bump 0.13.4 → 0.14.0 + CHANGELOG + README + k8s image"
+  ],
+  "decisions_implemented": {
+    "Q1": "KEEP agents.address (canonical <uuid>@<host>, internal-only)",
+    "Q2": "KEEP /api/agents/by-email",
+    "Q3": "404 for valid-format unregistered email (server resolveActor)",
+    "Q4": "canonical <uuid>@<host> storage in messages.{from,to}_address (unchanged)",
+    "Q5": "DELETE BOUNTY_IM_ADDRESS env var + EventSource auto-registration + config.imAddress dead code",
+    "Q6": "com send --server-url alias re-aliased to -u"
+  },
+  "merge_to_main": {
+    "status": "FORBIDDEN",
+    "rationale": "auto_merge=false per global memory ⚠️ 合并主分支铁律 (Task #1993 lesson). Phase 5 review blockers fully resolved; awaiting user merge-to-main approval."
+  },
+  "atomic_commits_in_order": [
+    "f7304f3 docs(plan): record Phase 3 RESUME decisions Q1-Q6 + 7 blocker repair plan",
+    "200055c docs(plan): submit Phase 3 RESUME schema JSON referencing amended plan",
+    "e5584e8 refactor(cli): R-1 requireEmailFlag helper + apply to 5 bounty commands (v0.14 BREAKING)",
+    "b07dda5 refactor(cli): R-2 board publisher-email filter + R-3 com-send -u alias + R-6 requireEmailFlag (v0.14)",
+    "2057d7b refactor(cli): R-7#5 auth/register-agent/profile email-only (v0.14 BREAKING)",
+    "51d2239 refactor(cli): migrate remaining CLI commands + tests to v0.14 email-only contract (606/606 pass)",
+    "0a2151f refactor: v0.14.0 release — delete BOUNTY_IM_ADDRESS, bump version, update CHANGELOG + README + k8s image",
+    "1ecffa4 docs(reports): final phase-4 resume-modified schema (1024/0 pass, scope complete)",
+    "2c02161 fix(server): RC-2/RC-3 + FB-1 strict email-only contract (legacy *Address body fields + ?address= query rejected with 400)"
+  ],
+  "outstanding_user_action": "Phase 5 review now returns PASS. AWAIT explicit user merge-to-main command. auto_merge remains false. Branch refactor/bounty-email-only is 9 commits ahead of main; nothing reaches main without user approval."
+}

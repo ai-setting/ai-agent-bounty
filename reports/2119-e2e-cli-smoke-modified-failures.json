@@ -1,0 +1,60 @@
+{
+  "schema": "roy-rd-pipeline-baseline/v1",
+  "stage": "e2e",
+  "task_id": 2119,
+  "captured_at": "2026-07-17T15:47:48.982Z",
+  "invocation_hash": "3c2f9e4f18fab314e02b73d80076e656456a9e4c1be1cc7d54a93803a0100b3d",
+  "worktree_path": "/home/dzk/work/codework/personal/roy_world/ai-agent-bounty-worktrees/refactor-bounty-email-only",
+  "command_lines": [
+    "cli-smoke=bun dist/bin/bounty.js --help"
+  ],
+  "failures": {
+    "test": [],
+    "lint": [],
+    "typecheck": [],
+    "build": [],
+    "cli-smoke": []
+  },
+  "pass_counts": {
+    "test": 0,
+    "lint": 0,
+    "typecheck": 0,
+    "build": 0,
+    "cli-smoke": 0
+  },
+  "exit_codes": {
+    "test": 0,
+    "lint": 0,
+    "typecheck": 0,
+    "build": 0,
+    "cli-smoke": 0
+  },
+  "log_tail": {
+    "test": [],
+    "lint": [],
+    "typecheck": [],
+    "build": [],
+    "cli-smoke": [
+      "      --register-agent",
+      "      --server",
+      "General:",
+      "      --act",
+      "      --interactive",
+      "      --sessions",
+      "      --tasks",
+      "      --commands",
+      "      --memory",
+      "      --skills",
+      "      --tools",
+      "      --mcp",
+      "Options:",
+      "      --quiet  Quiet mode (default: on, use --no-quiet to enable logging)",
+      "                                                       [boolean] [default: true]",
+      "      --all    Show every command (bypasses --help grouping)",
+      "                                                      [boolean] [default: false]",
+      "Use --all to see every command (including advanced).",
+      "[OTelSpan] storage not initialized for \"agent.registry.loadFromDirectory\", initializing now...",
+      "[roy-plugin-task-show] Port 7788 busy — trying 7789"
+    ]
+  }
+}

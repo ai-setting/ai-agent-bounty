@@ -1,9 +1,13 @@
 /**
  * bounty board command
  *
- * Phase feat/bounty-task-optimize: 重构为 HTTP API 调用
- * Phase feat/bounty-task-profile (PR7): 改用 ProfileContext 决定 API base，
- *   与 auth/* 命令族行为一致：`--server-url` > active profile.api_base > API_BASE。
+ * v0.14 strict email-only contract:
+ *   - Open listing — no actor identity in body.
+ *   - Optional `--publisher-email` filter (registered email) translates
+ *     to `?publisherId=<email>` on the wire; legacy publisherAddress
+ *     form is REMOVED.
+ *   - `<uuid>@<host>` and bare UUIDs in --publisher-email are rejected
+ *     client-side via `parseEmail` (via `requireEmailFlag`).
  */
 
 import type { CommandModule } from 'yargs';
@@ -13,12 +17,17 @@ import { ProfileContext } from '../../config/context.js';
 import { resolveProfileApiBase } from '../../lib/profile-api-base.js';
 import { addServerUrlOption, resolveServerUrl } from '../../lib/server-url-option.js';
 import { bountyHttp } from '../../lib/bounty-http.js';
+import {
+  requireEmailFlag,
+  exitWithEmailFlagError,
+} from '../../lib/email-flag.js';
 import { handleBountyError } from './publish.js';
 
 interface BoardOptions {
   type?: string;
   'min-reward'?: number;
   'max-reward'?: number;
+  'publisher-email'?: string;
   'server-url'?: string;
 }
 
@@ -31,7 +40,6 @@ interface BountyTask {
   status: string;
   publisherEmail?: string;
   publisherId?: string;
-  publisherAddress?: string;
   tags?: string[];
 }
 
@@ -54,6 +62,13 @@ export const boardCommand: CommandModule<object, BoardOptions> = {
         .option('max-reward', {
           type: 'number',
           description: 'Maximum reward',
+        })
+        .option('publisher-email', {
+          alias: 'e',
+          type: 'string',
+          description:
+            'Optional filter: only show tasks published by this registered ' +
+            'email. v0.14 STRICT — <uuid>@<host> / bare UUID REJECTED.',
         })
     ),
 
@@ -84,6 +99,20 @@ export const boardCommand: CommandModule<object, BoardOptions> = {
       }
       params.set('maxReward', String(argv['max-reward']));
     }
+
+    // Optional --publisher-email filter — strict email shape, translates
+    // to publisherId=<email> on the wire. v0.14 never sends legacy shape.
+    if (argv['publisher-email'] && argv['publisher-email'].trim()) {
+      const parsed = requireEmailFlag(
+        'publisher-email',
+        argv as Record<string, unknown>,
+      );
+      if (!parsed.ok) {
+        exitWithEmailFlagError(parsed);
+      }
+      params.set('publisherId', parsed.value);
+    }
+
     const query = params.toString();
     const path = `/api/tasks${query ? `?${query}` : ''}`;
 
@@ -105,7 +134,7 @@ export const boardCommand: CommandModule<object, BoardOptions> = {
         console.log(chalk.cyan(`[${i + 1}] ${task.title}`));
         console.log(chalk.gray(`    ID: ${task.id}`));
         console.log(chalk.gray(`    Type: ${task.type} | Reward: ${task.reward} credits`));
-        console.log(chalk.gray(`    Publisher: ${task.publisherAddress ?? task.publisherEmail ?? task.publisherId ?? 'unknown'}`));
+        console.log(chalk.gray(`    Publisher: ${task.publisherEmail ?? task.publisherId ?? 'unknown'}`));
         if (task.tags && task.tags.length > 0) {
           console.log(chalk.gray(`    Tags: ${task.tags.join(', ')}`));
         }

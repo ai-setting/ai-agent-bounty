@@ -38,6 +38,7 @@ import { BountyService, type Task, type TaskFilter, TaskStatus } from '../../lib
 import { AgentService } from '../../lib/agent/index.js';
 import {
   findAgentByAddress,
+  findAgentByEmail,
   findAgentByEmailOrAddress,
 } from '../lib/address-resolver.js';
 
@@ -72,54 +73,89 @@ function internalError(message = 'Internal server error'): Response {
 }
 
 /**
+ * v0.14 helper: invoke `resolveActor` and convert `{ error }` into a
+ * ready-to-return Response. Used by all command handlers in this file.
+ */
+function resolveActorOrError(
+  db: Database,
+  body: Record<string, unknown>,
+  fieldName: 'publisher' | 'agent',
+  authId: string | undefined
+): { actor: { id: string; email: string } } | Response {
+  const r = resolveActor(db, body, fieldName, authId);
+  if ('error' in r) {
+    return Response.json({ error: r.error.message }, { status: r.error.status });
+  }
+  return r;
+}
+
+/**
  * Resolve the acting agent from request body + auth fallback.
  *
- * Priority (v0.13):
- *   1. body[`${fieldName}Email`] (preferred — agents.email UNIQUE column)
- *   2. body[`${fieldName}Address`] (STRICT uuid@host — bare UUIDs rejected; legacy v0.10+)
- *   3. authId (from JWT — only present when BOUNTY_TOKEN_CHECK_ENABLED=true)
+ * v0.14 STRICT email-only contract:
+ *   - ONLY `body[${fieldName}Email]` is accepted as actor identity input.
+ *   - `body[${fieldName}Address]` (legacy `<uuid>@<host>`) is REJECTED
+ *     with HTTP 400 'use ${fieldName}Email: <registered-email>'. Per
+ *     parent task description: '彻底移除 agent address、short address、
+ *     uuid 以及任何隐式 fallback/兼容分支'.
+ *   - `authId` (from JWT) is still accepted as the implicit caller when
+ *     `BOUNTY_TOKEN_CHECK_ENABLED=true`.
  *
- * v0.13 BREAKING-friendly: email is now the primary lookup key. The address
- * field is preserved as a backward-compatible secondary path for callers that
- * have not yet migrated.
- *
- * Returns `null` if no source provided or lookup fails.
- * Caller should 400 / 404 as appropriate.
+ * Returns:
+ *   - `{ actor: { id, email } }` on success
+ *   - `{ error: { status, message } }` on legacy / missing / not-found
+ *     Caller converts to HTTP response.
  */
 function resolveActor(
   db: Database,
   body: Record<string, unknown>,
   fieldName: 'publisher' | 'agent',
   authId: string | undefined
-): { id: string; email: string } | null {
+): { actor: { id: string; email: string } } | { error: { status: number; message: string } } {
   const emailKey = `${fieldName}Email` as const;
   const addrKey = `${fieldName}Address` as const;
 
-  // 1. email field (preferred in v0.13 — RFC-ish email syntax)
-  const email = body[emailKey];
-  if (typeof email === 'string' && email.trim()) {
-    const r = findAgentByEmailOrAddress(db, email);
-    if (!r) return null;
-    return { id: r.id, email: r.email };
-  }
-
-  // 2. address field (STRICT — must be uuid@host)
+  // v0.14 BREAKING: reject legacy `*Address` body field with 400. No
+  // silent fallback — this is the entire point of the v0.14 refactor.
   const addr = body[addrKey];
   if (typeof addr === 'string' && addr.trim()) {
-    const r = findAgentByAddress(db, addr);
-    if (!r) return null;
-    return r;
+    return {
+      error: {
+        status: 400,
+        message: `use ${emailKey}: <your-registered-email> (v0.14 BREAKING: legacy ${addrKey} removed)`,
+      },
+    };
   }
 
-  // 3. authId (JWT-based)
+  // 1. email field (PRIMARY in v0.13+; ONLY in v0.14)
+  const email = body[emailKey];
+  if (typeof email === 'string' && email.trim()) {
+    const r = findAgentByEmail(db, email);
+    if (!r) {
+      return {
+        error: {
+          status: 404,
+          message: `No registered agent for email '${email}'`,
+        },
+      };
+    }
+    return { actor: { id: r.id, email: r.email } };
+  }
+
+  // 2. authId (JWT-based)
   if (authId) {
     const row = db
       .prepare('SELECT id, email FROM agents WHERE id = ?')
       .get(authId) as { id: string; email: string } | undefined;
-    if (row) return row;
+    if (row) return { actor: row };
   }
 
-  return null;
+  return {
+    error: {
+      status: 400,
+      message: `use ${emailKey}: <your-registered-email> (or supply a valid JWT)`,
+    },
+  };
 }
 
 export class BountyRoutes {
@@ -133,19 +169,68 @@ export class BountyRoutes {
 
   // ===== Queries =====
 
+  /**
+   * v0.14 FB-1 fix: `?publisherId=<email>` (the CLI's v0.14 wire shape for
+   * `bounty bounty-task board --publisher-email <email>`) is translated to
+   * agent.id BEFORE the BountyService.list() WHERE clause. Without this,
+   * the server compares the email string to the UUID column and returns
+   * an empty list (silent mis-route). UUID-shaped input continues to work
+   * as before for backward-compat with internal / k8s callers.
+   *
+   * v0.14 also rejects malformed email input (returns empty list, not 400,
+   * to preserve `list()` semantics — a filter that matches no rows is
+   * semantically equivalent to "no such agent").
+   */
   getTasks(url: URL): Response {
     const filter: TaskFilter = {};
     const status = url.searchParams.get('status');
     if (status) filter.status = status as TaskStatus;
     const type = url.searchParams.get('type');
     if (type) filter.type = type;
-    const publisherId = url.searchParams.get('publisherId');
-    if (publisherId) filter.publisherId = publisherId;
+    const publisherIdRaw = url.searchParams.get('publisherId');
+    if (publisherIdRaw && publisherIdRaw.trim()) {
+      const resolved = this.resolvePublisherIdFilter(publisherIdRaw.trim());
+      if (resolved === null) {
+        // Unregistered valid-format email → empty list (not 404 — list()
+        // semantics: a filter that matches no agent returns no rows).
+        return Response.json([]);
+      }
+      filter.publisherId = resolved;
+    }
     const assigneeId = url.searchParams.get('assigneeId');
     if (assigneeId) filter.assigneeId = assigneeId;
 
     const tasks = this.bountyService.list(filter);
     return Response.json(tasks);
+  }
+
+  /**
+   * v0.14 FB-1: Resolve a `?publisherId=` query value to a canonical
+   * `agent.id` (UUID). Accepts BOTH:
+   *   - registered email shape (e.g. `alice@example.com`) — resolved via
+   *     findAgentByEmail
+   *   - UUID shape (already an internal agent.id) — returned as-is
+   *
+   * Returns:
+   *   - `agent.id` (UUID) on hit
+   *   - `null` (sentinel for "filter matched no agent — return empty")
+   *   - `string` (raw UUID) for UUID-shape input
+   *
+   * Caller (getTasks) distinguishes `null` from `string` and short-circuits
+   * to an empty array, preserving list() semantics that a no-match filter
+   * returns an empty list (not 404). This avoids leaking an "unregistered"
+   * distinction for a query that is semantically a filter, not a fetch.
+   */
+  private resolvePublisherIdFilter(value: string): string | null {
+    // Email-shape input: resolve to agent.id via findAgentByEmail.
+    if (value.includes('@')) {
+      const agent = findAgentByEmail(this.db, value);
+      if (!agent) return null; // sentinel: no such agent → empty list
+      return agent.id;
+    }
+    // UUID-shape input: assume it's already an internal agent.id.
+    // (No further validation — list() will simply return 0 rows on miss.)
+    return value;
   }
 
   getTaskById(taskId: string): Response {
@@ -190,17 +275,9 @@ export class BountyRoutes {
     const taskType = typeof type === 'string' && type.trim() ? type : 'bounty';
 
     // 解析 publisher (email 优先 → address → auth)
-    const publisher = resolveActor(this.db, body, 'publisher', authId);
-    if (!publisher) {
-      return badRequest(
-        typeof body.publisherAddress === 'string' && body.publisherAddress
-          ? `Agent not found: ${body.publisherAddress}`
-          : typeof body.publisherEmail === 'string' && body.publisherEmail
-            ? `Agent not found: ${body.publisherEmail}`
-            : 'publisherEmail or publisherAddress required (v0.13 email-first)'
-      );
-    }
-
+    const publisherResult = resolveActorOrError(this.db, body, 'publisher', authId);
+    if (publisherResult instanceof Response) return publisherResult;
+    const publisher = publisherResult.actor;
     try {
       const task = this.bountyService.publish({
         title: title.trim(),
@@ -228,15 +305,9 @@ export class BountyRoutes {
       }
     }
 
-    const agent = resolveActor(this.db, body, 'agent', authId);
-    if (!agent) {
-      return badRequest(
-        typeof body.agentAddress === 'string' && body.agentAddress
-          ? `Agent not found: ${body.agentAddress}`
-          : 'agentEmail or agentAddress required (v0.13 email-first)'
-      );
-    }
-
+    const agentResult = resolveActorOrError(this.db, body, 'agent', authId);
+    if (agentResult instanceof Response) return agentResult;
+    const agent = agentResult.actor;
     const result = this.bountyService.grab(taskId, agent.id, agent.email);
     if (!result.success) {
       // D.1: distinguish "already grabbed" (409 Conflict) from generic 400.
@@ -286,15 +357,9 @@ export class BountyRoutes {
     const resultText = typeof body.result === 'string' ? body.result.trim() : '';
     if (!resultText) return badRequest('Missing required field: result');
 
-    const agent = resolveActor(this.db, body, 'agent', authId);
-    if (!agent) {
-      return badRequest(
-        typeof body.agentAddress === 'string' && body.agentAddress
-          ? `Agent not found: ${body.agentAddress}`
-          : 'agentEmail or agentAddress required (v0.13 email-first)'
-      );
-    }
-
+    const agentResult = resolveActorOrError(this.db, body, 'agent', authId);
+    if (agentResult instanceof Response) return agentResult;
+    const agent = agentResult.actor;
     const result = this.bountyService.submit(taskId, agent.id, resultText);
     if (!result.success) {
       const status = result.reason === 'Task not found' ? 404 : 400;
@@ -315,15 +380,9 @@ export class BountyRoutes {
       }
     }
 
-    const publisher = resolveActor(this.db, body, 'publisher', authId);
-    if (!publisher) {
-      return badRequest(
-        typeof body.publisherAddress === 'string' && body.publisherAddress
-          ? `Agent not found: ${body.publisherAddress}`
-          : 'publisherEmail or publisherAddress required (v0.13 email-first)'
-      );
-    }
-
+    const publisherResult = resolveActorOrError(this.db, body, 'publisher', authId);
+    if (publisherResult instanceof Response) return publisherResult;
+    const publisher = publisherResult.actor;
     const task = this.bountyService.getById(taskId);
     if (!task) return notFound('Task not found');
     if (task.publisherId !== publisher.id) {
@@ -346,15 +405,9 @@ export class BountyRoutes {
       }
     }
 
-    const publisher = resolveActor(this.db, body, 'publisher', authId);
-    if (!publisher) {
-      return badRequest(
-        typeof body.publisherAddress === 'string' && body.publisherAddress
-          ? `Agent not found: ${body.publisherAddress}`
-          : 'publisherEmail or publisherAddress required (v0.13 email-first)'
-      );
-    }
-
+    const publisherResult = resolveActorOrError(this.db, body, 'publisher', authId);
+    if (publisherResult instanceof Response) return publisherResult;
+    const publisher = publisherResult.actor;
     const task = this.bountyService.getById(taskId);
     if (!task) return notFound('Task not found');
     if (task.publisherId !== publisher.id) {
@@ -375,15 +428,9 @@ export class BountyRoutes {
     const reason = typeof body.reason === 'string' ? body.reason.trim() : '';
     if (!reason) return badRequest('Missing required field: reason');
 
-    const publisher = resolveActor(this.db, body, 'publisher', authId);
-    if (!publisher) {
-      return badRequest(
-        typeof body.publisherAddress === 'string' && body.publisherAddress
-          ? `Agent not found: ${body.publisherAddress}`
-          : 'publisherEmail or publisherAddress required (v0.13 email-first)'
-      );
-    }
-
+    const publisherResult = resolveActorOrError(this.db, body, 'publisher', authId);
+    if (publisherResult instanceof Response) return publisherResult;
+    const publisher = publisherResult.actor;
     const task = this.bountyService.getById(taskId);
     if (!task) return notFound('Task not found');
     if (task.publisherId !== publisher.id) {

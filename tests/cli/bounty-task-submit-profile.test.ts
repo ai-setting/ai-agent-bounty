@@ -92,7 +92,7 @@ describe('bounty bounty-task submit - PR7 ProfileContext integration', () => {
     try {
       await submitCommand.handler!({
         'task-id': VALID_TASK_ID,
-        'agent-address': '00000000-0000-4000-8000-000000000001@local',
+        'email': 'bob@example.com',
         result: 'submitted-result',
       } as any);
     } finally {
@@ -137,7 +137,7 @@ describe('bounty bounty-task submit - PR7 ProfileContext integration', () => {
     try {
       await submitCommand.handler!({
         'task-id': VALID_TASK_ID,
-        'agent-address': '00000000-0000-4000-8000-000000000001@local',
+        'email': 'bob@example.com',
         result: 'submitted-result',
         'server-url': 'http://127.0.0.1:45555',
       } as any);
@@ -178,7 +178,7 @@ describe('bounty bounty-task submit - PR7 ProfileContext integration', () => {
     try {
       await submitCommand.handler!({
         'task-id': VALID_TASK_ID,
-        'agent-address': '00000000-0000-4000-8000-000000000001@local',
+        'email': 'bob@example.com',
         result: 'submitted-result',
       } as any);
     } finally {
@@ -228,7 +228,7 @@ describe('bounty bounty-task submit - PR7 ProfileContext integration', () => {
     try {
       await submitCommand.handler!({
         'task-id': VALID_TASK_ID,
-        'agent-address': '00000000-0000-4000-8000-000000000001@local',
+        'email': 'bob@example.com',
         result: 'submitted-result',
       } as any);
     } finally {

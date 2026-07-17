@@ -1,0 +1,44 @@
+{
+  "schema": "roy-rd-pipeline-baseline/v1",
+  "stage": "e2e",
+  "task_id": 2119,
+  "captured_at": "2026-07-17T15:43:34.978Z",
+  "invocation_hash": "d474c67607d6aee26af7a7be6da0d6387fc2c4756efc7783845bb1a543e49263",
+  "worktree_path": "/home/dzk/work/codework/personal/roy_world/ai-agent-bounty-worktrees/refactor-bounty-email-only",
+  "command_lines": [
+    "build=bun run typecheck && bun run build:cli"
+  ],
+  "failures": {
+    "test": [],
+    "lint": [],
+    "typecheck": [],
+    "build": [],
+    "cli-smoke": []
+  },
+  "pass_counts": {
+    "test": 0,
+    "lint": 0,
+    "typecheck": 0,
+    "build": 0,
+    "cli-smoke": 0
+  },
+  "exit_codes": {
+    "test": 0,
+    "lint": 0,
+    "typecheck": 0,
+    "build": 0,
+    "cli-smoke": 0
+  },
+  "log_tail": {
+    "test": [],
+    "lint": [],
+    "typecheck": [],
+    "build": [
+      "Bundled 143 modules in 12ms",
+      "  cli.js  0.51 MB  (entry point)",
+      "$ tsc --noEmit",
+      "$ bun build ./src/cli/cli.ts --outdir=./dist --target=bun --external @ai-setting/roy-agent-cli --external @ai-setting/roy-agent-core"
+    ],
+    "cli-smoke": []
+  }
+}

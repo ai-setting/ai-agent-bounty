@@ -52,20 +52,39 @@ describe('bounty profile add', () => {
     expect(data.updated_at).toBe(data.created_at);
   });
 
-  test('writes token, agent_id, and email when provided', async () => {
+  test('writes token and email when provided (v0.14: --agent-id REMOVED)', async () => {
     await callAdd({
       name: 'bob',
       'api-base': 'http://localhost:4000',
       token: 'jwt-bob',
-      'agent-id': '11111111-2222-3333-4444-555555555555',
       email: 'bob@example.com',
       __storeOptions: { profilesDir, configFile },
     });
 
     const data = JSON.parse(readFileSync(join(profilesDir, 'bob.json'), 'utf8'));
     expect(data.auth.access_token).toBe('jwt-bob');
-    expect(data.agent_id).toBe('11111111-2222-3333-4444-555555555555');
+    // v0.14: --agent-id REMOVED; only email is the actor identity key.
     expect(data.email).toBe('bob@example.com');
+    expect(data.agent_id).toBeUndefined();
+  });
+
+  test('writes agent_id when provided (compatible legacy key still supported in profile JSON)', async () => {
+    // Server-side registry still records agents.agent_id; profile JSON
+    // may carry agent_id as metadata, but v0.14 CLI no longer requires
+    // (or accepts) --agent-id on `profile add`. This test asserts the
+    // reverse: when the registry returns agent_id we may write it back,
+    // and when --agent-id is NOT supplied the field is absent.
+    await callAdd({
+      name: 'carol',
+      'api-base': 'http://localhost:4000',
+      token: 'jwt-carol',
+      email: 'carol@example.com',
+      __storeOptions: { profilesDir, configFile },
+    });
+
+    const data = JSON.parse(readFileSync(join(profilesDir, 'carol.json'), 'utf8'));
+    expect(data.email).toBe('carol@example.com');
+    expect(data.agent_id).toBeUndefined();
   });
 
   test('rejects invalid profile names with exit 1', async () => {

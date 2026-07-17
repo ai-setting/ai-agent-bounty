@@ -1,0 +1,82 @@
+{
+  "schema": "phase-4-resume-baseline/v1",
+  "task_id": "2119",
+  "branch": "refactor/bounty-email-only",
+  "worktree": "/home/dzk/work/codework/personal/roy_world/ai-agent-bounty-worktrees/refactor-bounty-email-only",
+  "head_commit": "200055c",
+  "captured_at": "2026-07-17T22:18:00+08:00",
+  "operator": "roy-agent phase-4 resume",
+  "auto_merge": false,
+  "command_metadata": {
+    "cli_tests": {
+      "command": "BOUNTY_MAIL_DRY_RUN=1 bun test tests/cli --parallel 4",
+      "runner": "bun test 1.3.14",
+      "parallel_workers": 4,
+      "timeout_seconds": 300,
+      "log_file": "/tmp/baseline-cli.log"
+    },
+    "server_tests": {
+      "command": "BOUNTY_MAIL_DRY_RUN=1 bun test tests/server --parallel 4",
+      "runner": "bun test 1.3.14",
+      "parallel_workers": 4,
+      "timeout_seconds": 300,
+      "log_file": "/tmp/baseline-server.log"
+    },
+    "typecheck": {
+      "command": "bun run typecheck",
+      "runner": "tsc --noEmit 5.3+",
+      "log_file": "/tmp/baseline-typecheck.log"
+    },
+    "build_cli": {
+      "command": "bun run build:cli",
+      "runner": "bun build --target=bun",
+      "log_file": "/tmp/baseline-buildcli.log"
+    }
+  },
+  "summary": {
+    "cli": { "pass": 504, "fail": 36, "total": 540, "files": 86, "expects": 1229, "duration_ms": 940, "exit_signal": "process_complete" },
+    "server": { "pass": 190, "fail": 0, "total": 190, "files": 24, "expects": 565, "duration_ms": 464, "exit_signal": "process_complete" },
+    "typecheck": { "exit_code": 0 },
+    "build_cli": { "exit_code": 0, "artifact": "dist/cli.js (513820 bytes, 0.51 MB)" }
+  },
+  "stable_failure_ids": [
+    "(fail) bounty bounty-task cancel - HTTP API migration > body uses publisherAddress (v0.10 strict resolveActor contract)",
+    "(fail) bounty bounty-task complete - HTTP API migration > body uses publisherAddress (v0.10 strict resolveActor contract)",
+    "(fail) bounty bounty-task complete - HTTP API migration > source uses resolveCurrentAgent as default for --publisher-id",
+    "(fail) bounty bounty-task - default agent inference (v0.10) > cancel.ts: --publisher-address fallback to resolveCurrentAgent()",
+    "(fail) bounty bounty-task - default agent inference (v0.10) > complete.ts: --publisher-address fallback to resolveCurrentAgent()",
+    "(fail) bounty bounty-task - default agent inference (v0.10) > grab.ts: --agent-address fallback to resolveCurrentAgent()",
+    "(fail) bounty bounty-task - default agent inference (v0.10) > publish.ts: --publisher-address fallback to resolveCurrentAgent()",
+    "(fail) bounty bounty-task - default agent inference (v0.10) > submit.ts: --agent-address fallback to resolveCurrentAgent()",
+    "(fail) bounty bounty-task - error classification (exit code mapping) > grab: network error → exit 4",
+    "(fail) bounty bounty-task - error classification (exit code mapping) > publish: auth error (401) → exit 3",
+    "(fail) bounty bounty-task - error classification (exit code mapping) > publish: business error (400 reward=0) → exit 2",
+    "(fail) bounty bounty-task - error classification (exit code mapping) > publish: missing --publisher-address and no BOUNTY_IM_ADDRESS → exit 2",
+    "(fail) bounty bounty-task - error classification (exit code mapping) > publish: network error → exit 4 + friendly message",
+    "(fail) bounty bounty-task - error classification (exit code mapping) > publish: server error (500) → exit 4",
+    "(fail) bounty bounty-task grab — 409 friendly message (D.1 client) > grab 409 → CLI should include friendly \"task already grabbed\" hint and exit 2",
+    "(fail) bounty bounty-task grab - HTTP API migration > source uses resolveCurrentAgent as default for --agent-id",
+    "(fail) bounty bounty-task publish - HTTP API migration > source uses resolveCurrentAgent as default for --publisher-id",
+    "(fail) bounty bounty-task publish — large-payload handling (D.3) > --description-file: missing file → friendly error + exit 2",
+    "(fail) bounty bounty-task publish — large-payload handling (D.3) > --description-file: reads file content as description",
+    "(fail) bounty bounty-task publish — large-payload handling (D.3) > --description wins when both --description and --description-file are given",
+    "(fail) bounty bounty-task publish — large-payload handling (D.3) > large description (~80KB) still allowed, content forwarded as-is",
+    "(fail) bounty bounty-task publish — large-payload handling (D.3) > short description (< 50KB) goes through to server",
+    "(fail) bounty bounty-task submit - HTTP API migration > source uses resolveCurrentAgent as default for --agent-id",
+    "(fail) bounty bounty-task — Tier B --json / --quiet flags > publish --json → outputs valid JSON on stdout (no decorative text)",
+    "(fail) bounty bounty-task — Tier B --json / --quiet flags > publish --json --quiet → JSON only (no decoration)",
+    "(fail) bounty bounty-task — Tier B --json / --quiet flags > publish (no flag) → decorative text on stdout (default behavior)",
+    "(fail) bounty bounty-task — Tier B --json / --quiet flags > publish --quiet → minimal output on stdout (no decoration)",
+    "(fail) bounty-task address-based flags (v0.10 strict) > source exposes ONLY preferred address flags (v0.10 BREAKING: --*-id REMOVED)",
+    "(fail) com/send - v0.13 --from-email / --to-email flags > --from and --to are no longer demandOption (replaced by .check)",
+    "(fail) ProfileContext > getApiBase throws without active profile"
+  ],
+  "failure_classification": {
+    "legacy_contract_tests": "These test the v0.10 contract that used --agent-address / --publisher-address / resolveCurrentAgent (BOUNTY_IM_ADDRESS). Phase 4 will UPDATE these tests to the v0.14 contract per user instruction (4).",
+    "v0_14_email_only_unaffected": "tests/cli/bounty-task-{grab,submit,publish,complete,cancel,board}-email-only.test.ts all PASS (already migrated to v0.14).",
+    "server_suite_green": "tests/server/* is fully green (190/190 PASS).",
+    "non_legacy_regression_known_29": "Per user instruction: 'proactively fix the 29 known non-legacy regressions even though they appear in the resume baseline'. These are functional tests (publish.json/quiet, publish-large-payload, error-classification, ProfileContext, com-send demandOption) that test real CLI behavior beyond identity parsing. They will be addressed in Phase 4 as part of refactor-coverage."
+  },
+  "phase_4_intent": "R-1 requireEmailFlag+resolveActiveProfileEmail, R-2 board publisher-email filter, R-3 com-send --server-url alias -u, R-4 shrink CLI regression toward v0.14 contract, R-5 runtime GREEN HTTP-body assertions, R-6 com-send identity requireEmailFlag, R-7 resume Tasks 9-18/20-27 + version bump + CHANGELOG + docs",
+  "next_action": "Phase 4 R-1 RED → GREEN → REFACTOR on requireEmailFlag helper (tests/cli/lib/email-flag.test.ts + src/cli/lib/email-flag.ts)"
+}

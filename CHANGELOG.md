@@ -1,3 +1,75 @@
+## [v0.14.0] - 2026-07-17 - Strict Email-Only Refactor (BREAKING MINOR)
+
+> **🚨 BREAKING**: This release deletes every CLI flag and HTTP body field that
+> accepted `<uuid>@<host>` or bare UUID actor identity. The ONLY actor identity
+> input is now the **registered email** (e.g. `alice@example.com`).
+>
+> Migration: see "[Migration from v0.13.x](#migration-from-v013x)" below.
+
+### Changed (BREAKING)
+
+- **Every CLI flag that named an actor now accepts ONLY email**:
+  - `bounty bounty-task { grab, submit, complete, cancel }`: `--email` ONLY.
+    `--agent-address / -a`, `--agent-id` REMOVED.
+  - `bounty bounty-task { publish }`: `--publisher-email / -e` ONLY.
+    `--publisher-address / -p`, `--publisher-id` REMOVED.
+  - `bounty bounty-task board`: optional `--publisher-email / -e`
+    filter (translates to `?publisherId=<email>` on the wire).
+  - `bounty com { send }`: `--from-email / -F` and `--to-email / -T` ONLY.
+    `--from`, `--to`, `--from / -f`, `--to / -t` REMOVED entirely
+    (not even as opt-in flags). `--server-url` alias renamed from
+    `e` to `u` (Decision Q6).
+  - `bounty com { inbox, connect, disconnect }`: `--email / -E` ONLY.
+    `--address`, `--agent-id` REMOVED.
+  - `bounty auth login`: `--email / -e` ONLY. `--agent-address`, `--agent-id` REMOVED.
+  - `bounty register-agent { login, get, delete, info, credits }`:
+    `--email / -e` ONLY. `--agent-address`, `--agent-id`, `--id / -i` REMOVED.
+  - `bounty profile add`: `--email / -e` ONLY. `--agent-id` REMOVED.
+
+### Removed (BREAKING)
+
+- `BOUNTY_IM_ADDRESS` environment variable — implicit fallback that
+  introduced silent-misrouting is GONE. Use `bounty profile use <name>`
+  to set active identity, then explicitly register the `bounty-im`
+  EventSource if needed.
+- Auto-registration of `bounty-im` EventSource in `src/cli/cli.ts` at
+  session start (Q5 ✅ DELETE).
+- `--server-url / -e` alias on `com send` (Q6) — `--server-url / -u`
+  is the new alias. Long form `--server-url` unchanged.
+
+### Internal contract
+
+- Decision Q1 ✅: `agents.address` column KEEPS its `<uuid>@<host>`
+  internal canonical form (for IM routing / FK joins). It is no longer
+  accepted as input shape.
+- Decision Q2 ✅: lookup API `GET /api/agents/by-email?email=<email>`
+  unchanged.
+- Decision Q3 ✅: server returns **404 Not Found** on valid-format
+  but unregistered email; **400 Bad Request** on malformed input.
+- Decision Q4 ✅: `messages.from_address` / `messages.to_address`
+  store canonical `<uuid>@<host>` server-side; clients see only email.
+
+### Migration from v0.13.x
+
+1. Find every shell script / cron job / agent that passes
+   `--agent-address` / `--publisher-address` / `--from` / `--to` /
+   `<uuid>@<host>` literals and replace with the corresponding
+   `--email` or `--from-email` / `--to-email`.
+2. Find every shell that exports `BOUNTY_IM_ADDRESS` (any agent
+   auto-registration pattern). Replace with `bounty profile add <name>
+   --email <email> --api-base <url> --token <jwt>` then `bounty
+   profile use <name>`. The token-less agent profile is fine for
+   `--email`-only commands.
+3. If you previously relied on `-e` as the alias for `com send
+   --server-url`, switch to `-u` (long form `--server-url` unchanged).
+4. Re-run any `bounty task grab` / `submit` / etc with `--email <email>`.
+
+### Upgrade reliability
+
+The strict-email boundary is now centralised in
+`src/cli/lib/email-flag.ts` (`requireEmailFlag` helper). All migration
+risk lives in *one* module — no scattered updates across 14 commands.
+
 ## [v0.13.4] - 2026-07-17 - IM Send Canonical Address (PATCH)
 
 ### Fixed
