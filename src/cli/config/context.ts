@@ -26,8 +26,19 @@ export const ProfileContext = {
     return activeProfile?.auth.access_token || undefined;
   },
 
-  getApiBase(): string {
-    return this.requireActiveProfile().api_base;
+  /**
+   * Return the active profile's `api_base`, or `undefined` if no profile is active.
+   *
+   * Unlike `requireActiveProfile()`, this does NOT throw when no profile exists,
+   * so callers (e.g. `com/*` commands) can use it as a soft fallback before
+   * resorting to `--host/--port` or `--server-url`.
+   *
+   * v0.13.1: Changed return type from `string` (throwing) to `string | undefined`
+   * so `com/*` commands can read `profile.api_base` without forcing the user to
+   * have an active profile (preserving `--host/--port` fallback for legacy flows).
+   */
+  getApiBase(): string | undefined {
+    return activeProfile?.api_base || undefined;
   },
 };
 

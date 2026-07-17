@@ -18,6 +18,7 @@ import chalk from 'chalk';
 import { bountyConfig } from '../../../lib/config/bounty-config.js';
 // v0.5.0: TLS skip default — use bountyFetch wrapper
 import { bountyFetch } from '../../lib/fetch-helper.js';
+import { ProfileContext } from '../../config/context.js';
 
 import {
   addServerUrlOption,
@@ -84,10 +85,17 @@ export const inboxCommand: CommandModule<object, InboxOptions> = {
       ? email.trim()
       : (address ?? '');
 
-    // baseUrl: --server-url > 默认 (http://localhost:port)
+    // baseUrl: --server-url > active profile.api_base > 默认 (http://host:port)
+    // v0.13.1: 新增 profile.api_base 兜底（与 auth/*, bounty-task/* 行为一致）
     // 注意：inbox 的 fallback base 是动态拼出来的（包含 port），不是 API_BASE 那种静态值
+    const profileApiBase = ProfileContext.getApiBase();
     const fallbackBase = `http://${host}:${port}`;
-    const baseUrl = resolveServerUrl(args['server-url'], fallbackBase);
+    let baseUrl: string;
+    if (!args['server-url'] && profileApiBase) {
+      baseUrl = profileApiBase.replace(/\/+$/, '');
+    } else {
+      baseUrl = resolveServerUrl(args['server-url'], fallbackBase);
+    }
     // v0.13: prefer `?email=`; legacy callers may still send `?address=`.
     // The server resolves either form via findAgentByEmailOrAddress.
     const url = `${baseUrl}/messages?email=${encodeURIComponent(identifier)}`;

@@ -9,10 +9,15 @@
  *
  * Phase feat/v0.13-email-instead-of-uuid:
  * - 新增 --email 选项（v0.13 primary）；--address 仍可用（legacy）
+ *
+ * Phase fix/v0.13.1-com-read-profile-api-base:
+ * - 此命令不做网络请求，但为了与其它 com/* 一致，导入 ProfileContext
+ *   使后续如果添加网络/Profile 持久化逻辑时无需再次接线。
  */
 
 import type { CommandModule } from 'yargs';
 import { printStubNotice } from './stub.js';
+import { ProfileContext } from '../../config/context.js';
 
 interface DisconnectOptions {
   email?: string;
@@ -49,6 +54,9 @@ export const disconnectCommand: CommandModule<object, DisconnectOptions> = {
       ? email.trim()
       : address;
 
+    // v0.13.1: 在 profile 活跃时，把 profile 名字也展示出来便于用户排错
+    const profile = ProfileContext.getActive();
+
     if (!all && !identifier) {
       printStubNotice('disconnect', {});
       console.log('  Use one of:');
@@ -59,6 +67,6 @@ export const disconnectCommand: CommandModule<object, DisconnectOptions> = {
       return;
     }
 
-    printStubNotice('disconnect', { identifier, all });
+    printStubNotice('disconnect', { identifier, all, profileName: profile?.name });
   },
 };
