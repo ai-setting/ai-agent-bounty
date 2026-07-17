@@ -35,7 +35,7 @@ The v0.14 contract is simple:
 | 资产 | 说明 |
 |---|---|
 | `agents.email` column + `agents.email UNIQUE` index | PRIMARY identity column for the v0.14 contract |
-| `agents.address` column (`<uuid>@<host>`) | **Internal canonical id** for IM routing, WS push, `messages.to_address` storage, foreign-key joins. **Input shape is no longer agent-address**, but the column survives because it IS the canonical primary key in the IM model. *(See Decision Q1 below — column name / existence is OPEN.)* |
+| `agents.address` column (`<uuid>@<host>`) | **Internal canonical id** for IM routing, WS push, `messages.to_address` storage, foreign-key joins. **Input shape is no longer agent-address**, but the column survives because it IS the canonical primary key in the IM model. *(Decision Q1 ✅ KEEP — see Decision Record.)* |
 | DB schema: `agents.address` → `tasks.publisher_id` / `tasks.assignee_id` joins | Stable; FK to `agents.id` is the underlying primary key |
 | Server endpoint paths (`POST /api/tasks`, `PUT /api/tasks/:id/grab`, `POST /api/messages`, …) | URLs stable; only request body / query fields change |
 | `findAgentByEmail` resolver in `src/server/lib/address-resolver.ts` | Sole resolver; other helpers deleted (see 删除什么) |
@@ -112,7 +112,7 @@ The v0.14 contract is simple:
 
 (All alias conflicts with existing `-e`, `-E`, `-H`, `-p`, `-u`, `-k` are unchanged — `-e` continues to mean `--email`. The historical `--server-url / -e` flag in `com/send.ts` is preserved but **re-aliased to `-u`** in v0.14 to make room for the new `--from-email / -F` and `--to-email / -T` defaults.)
 
-> **🟡 Decision point Q3 (Open):** confirm `--server-url` can be re-aliased to `-u` from `-e` (it currently lives in `com/send.ts`, `com/inbox.ts`, `com/connect.ts`; `auth/*`, `register-agent/*`, `bounty-task/*` use the same flag but their aliases vary). This is treated as a minor breaking flag rename acknowledged in CHANGELOG.
+> **✅ Decision point Q6 (resolved 2026-07-17):** `--server-url` is **re-aliased to `-u`** (away from `-e`) across **all** consumer commands, including `com/send.ts`. Rationale: `-e` is reserved for `--email` / `--from-email` etc. across `auth/*`, `register-agent/*`, `bounty-task/*`; yargs alias collisions would merge values into arrays and silently break the strict-email contract. `addServerUrlOption` helper in `src/cli/lib/server-url-option.ts` already standardizes `-u` for `com/{inbox,connect,disconnect}.ts`; the only outlier is `com/send.ts` (still has `alias: 'e'` for `--server-url`). TDD repair plan R-3 below brings `send.ts` into line and is part of Phase 4 Task 8. CHANGELOG will list this as a v0.14 BREAKING flag-alias rename.
 
 ---
 
@@ -160,7 +160,7 @@ The v0.14 contract is simple:
 9. **CHANGELOG:** `## [v0.14.0]` section exists, with `### Removed`, `### Changed`, `### Migration` subsections; explicitly lists `--agent-address`, `--publisher-address`, `--from`/`--to`, `--agent-id`, `--id`, `BOUNTY_IM_ADDRESS`, `body.*Address`, `body.agent_id`.
 10. **README + docs:** README pinned `v0.14.0` upgrade callout, link to migration section. `docs/superpowers/plans/2026-07-17-bounty-email-only-refactor.md` linked from CHANGELOG.
 
-> **🟡 Decision points Q1 / Q2 / Q3 / Q4 — see Open Questions section below. Implementation of those sections is blocked on user answers.**
+> **✅ Decision points Q1 / Q2 / Q3 / Q4 / Q5 / Q6 — ALL RESOLVED 2026-07-17 (user-confirmed).** See the **Decision Record** section at the end of this plan for the final answers. Implementation of those sections is unblocked; Phase 4 begins immediately.
 
 ## 涉及文件清单 (Files Involved)
 
@@ -468,7 +468,7 @@ Per parent task #2103 rule 8: do not edit `package.json` dependencies. This refa
 
 ### F. `BOUNTY_IM_ADDRESS` removal breaks EventSource auto-registration
 
-`src/cli/cli.ts` lines 143–163 register `bounty-im` EventSource using `process.env.BOUNTY_IM_ADDRESS`. With this env removed, auto-registration is silenced; users must `bounty profile use <name>` instead. **Decision Q5 (OPEN)** — confirm we want to drop the EventSource auto-registration entirely, or migrate it to read from active profile email.
+`src/cli/cli.ts` lines 143–163 register `bounty-im` EventSource using `process.env.BOUNTY_IM_ADDRESS`. With this env **deleted** (Decision Q5 ✅), auto-registration is silenced; users must `bounty profile use <name>` (whose `.email` field provides the canonical identity) before manually attaching the `bounty-im` EventSource if they want push-style routing. Documented in CHANGELOG `### Removed` + `### Migration`.
 
 ## 完成定义 (Definition of Done — DoD)
 
@@ -477,47 +477,168 @@ Per parent task #2103 rule 8: do not edit `package.json` dependencies. This refa
 3. **Docs:** CHANGELOG entry + README upgrade callout + this plan doc linked from CHANGELOG.
 4. **Branch hygiene:** `refactor/bounty-email-only` is committed and pushed to a working tree at `/home/dzk/work/codework/personal/roy_world/ai-agent-bounty-worktrees/refactor-bounty-email-only`. **`main` is untouched.**
 5. **Auto-merge:** disabled. Final task operation `action_type='completed'` reports "ready for review, awaiting merge approval".
-6. **Risk acknowledgement:** the four OPEN decision points Q1–Q5 are answered by the user (or left with defaults that the user confirms during the approval step).
+6. **Risk acknowledgement:** all six decision points (Q1, Q2, Q3, Q4, Q5, Q6) are RESOLVED with user-confirmed choices (see Decision Record). Phase 4 executes against the final choices; no further user prompts required for the refactor itself (other than the eventual merge-to-main approval).
 
 ---
 
-## Open Questions (决策点待用户确认)
+## Decision Record (决策记录 — ✅ 全部确认于 2026-07-17)
 
-> 🔴 The task description (`若涉及旧 DB 列删除、lookup API 路径、未注册邮箱错误码或 WS payload 语义存在歧义，必须暂停询问用户，不得擅自决定`) requires the plan agent to halt and ask the user before proceeding to Phase 4 (Execute). The questions below are the ones with real ambiguity; the rest of the plan is concrete and proceeds without further input.
+> 🔵 The user's 2026-07-17 Phase 3 RESUME message confirmed all six decision points in one batch. The task description's "暂停询问用户，不得擅自决定" rule is now fully satisfied — Phase 4 Execute begins against these FINAL choices without further user prompts (until the final merge-to-main approval).
 
-### 🟡 Q1. `agents.address` DB column — KEEP or DELETE?
+### ✅ Q1. `agents.address` DB column — **KEEP**
 
-- **Default (current behaviour):** KEEP. The column is the canonical `<uuid>@<host>` storage used by `messages.to_address` / `messages.from_address` foreign-key writes. Dropping it would require a non-trivial migration to either rename or replicate into a new `canonical_id` column.
-- **Option A (recommended):** KEEP `agents.address` for internal canonical id only; remove all CLI/API input paths to it.
-- **Option B:** DROP `agents.address` and replace with `agents.canonical_id` (rename) — breaks IM routing on existing installs.
-- **Option C:** DROP `agents.address` and store canonical id in `agents.id` directly (would require `agents.id` to be `<uuid>@<host>` instead of bare UUID — breaking schema).
+- **Final choice:** KEEP `agents.address` as the IM-canonical `<uuid>@<host>` storage column. Do NOT drop; do NOT rename.
+- **Rationale (user-confirmed):** the column is the canonical primary key in the IM model; FK joins from `messages.{from,to}_address`, WS push routing, and `tasks.{publisher,assignee}_id` joins all depend on it. Migration cost of any rename / drop is non-trivial and out of scope for v0.14.
+- **Surface implication:** `agents.address` survives in the schema and in internal routing. CLI surface and HTTP body **never** accept it as input. The CLI flag surface (`--agent-address`, `--publisher-address`, `--address`, `--agent-id`) is deleted across all 14 commands.
+- **Code touch:** none to schema; only input-boundary deletion.
 
-### 🟡 Q2. Lookup API path for GET /api/agents/* via email
+### ✅ Q2. Lookup API path — **KEEP `/api/agents/by-email`**
 
-- **Current (v0.13):** `GET /api/agents/by-email?email=<email>` (added in v0.13).
-- **Option A (recommended):** KEEP `/api/agents/by-email?email=` as the path for email lookup; symmetry with `by-id`.
-- **Option B:** RENAME to `/api/agents/by-id/email?email=` for hierarchy consistency.
-- **Option C:** Use `GET /api/agents?email=<email>` (single endpoint with optional query) — supersedes the by-id-via-UUID endpoint.
+- **Final choice:** KEEP the v0.13 path `GET /api/agents/by-email?email=<email>` unchanged.
+- **Rationale (user-confirmed):** symmetry with `by-id`; the path is already documented and used by k8s prod callers; renaming mid-cycle is gratuitous churn.
+- **Surface implication:** `GET /api/agents/by-email?email=alice%40example.com` returns 200 with the agent record (registered) or 404 (unknown — see Q3). No `by-id/email` or `?email=` on the collection root is introduced.
 
-### 🟡 Q3. Unregistered email error code
+### ✅ Q3. Unregistered valid-format email error code — **404 Not Found**
 
-- **Current (v0.13):** 400 Bad Request with `Agent not found: <email>`.
-- **Option A (recommended):** 404 Not Found for "valid-shape, not registered"; keep 400 for malformed input. Cleanly distinguishes bad data from missing resource.
-- **Option B:** Keep 400 for both (consistent with v0.13 behaviour; simpler changelog).
-- **Option C:** 403 Forbidden (semantically wrong — the agent exists, just not known to the caller; not recommended).
+- **Final choice:** Server returns **404 Not Found** when the email has a syntactically-valid format but the agent is not in the `agents` table. Returns **400 Bad Request** for malformed input (`missing @`, whitespace, empty).
+- **Rationale (user-confirmed):** clean separation — bad data 400 vs missing resource 404. Aligns with REST semantics used elsewhere in the API surface.
+- **Surface implication:** every endpoint that resolves an actor (`resolveActor` in `bounty-routes.ts`, `findAgentByEmail` in `email-resolver.ts`, `sendMessage` in `im-routes.ts`) returns the new shape. `error.code = 'agent_not_found'`, `error.message = "No registered agent for email '<email>'"`. Tests in Tasks 19, 20, 21 add this case explicitly.
 
-### 🟡 Q4. WS payload `messages.from/to_address` storage format
+### ✅ Q4. WS payload storage format — **canonical `<uuid>@<host>`**
 
-- **Current (v0.13.4):** canonical `<uuid>@<host>` (after the v0.13.4 fix). Server resolves email to canonical id internally.
-- **Option A (recommended):** KEEP canonical storage. Server's email → canonical mapping is internal-only.
-- **Option B:** Store raw email in `messages.from/to_address` (loses canonical form; downstream WS push and inbox queries break).
-- **Option C:** Store both (`messages.from_address` + `messages.from_email`) for debugging — schema change required.
+- **Final choice:** Server stores canonical `<uuid>@<host>` in `messages.from_address` / `messages.to_address`. Clients see **only** the email on input; the canonical form is internal-only.
+- **Rationale (user-confirmed):** the v0.13.4 fix (`fix(server): im sendMessage stores canonical <uuid>@<host> for to_address`) is preserved; further normalization would break WS push routing that consumers have already integrated against.
+- **Surface implication:** the email → canonical mapping happens **server-side** in `findAgentByEmail` resolver (Task 19). No new column is added; `messages.from_email` is **not** introduced.
 
-### 🟡 Q5. `BOUNTY_IM_ADDRESS` env var removal — break EventSource auto-registration?
+### ✅ Q5. `BOUNTY_IM_ADDRESS` env var — **DELETE entirely**
 
-- **Current:** `src/cli/cli.ts:143-163` reads `BOUNTY_IM_ADDRESS` to auto-register `bounty-im` EventSource.
-- **Option A (recommended):** DELETE env var entirely + drop auto-registration; users explicitly opt in via `bounty profile use <name>` + EventSource config file. Aligns with task "no implicit fallback" mandate.
-- **Option B:** KEEP the env var BUT only as a fallback for tooling that doesn't have profile access (e.g. cron jobs); document the v0.14 sunset plan in CHANGELOG.
-- **Option C:** Keep `BOUNTY_IM_ADDRESS` env var AND use it as the v0.14 fallback when no profile is active — contradict the task description's "no implicit fallback" rule. **Not recommended.**
+- **Final choice:** DELETE the `BOUNTY_IM_ADDRESS` env var AND the auto-registration of `bounty-im` EventSource at `src/cli/cli.ts:143-163`.
+- **Rationale (user-confirmed):** task mandate "no implicit fallback" — leaving the env var as a fallback for cron jobs reintroduces the same silent-misrouting class of bug this refactor is fixing. Users who want `bounty-im` push-style routing must opt in explicitly via `bounty profile use <name>` + the EventSource config file.
+- **Surface implication:** `src/cli/cli.ts` drops the `if (process.env.BOUNTY_IM_ADDRESS) { ... }` block. `src/cli/lib/current-agent.ts` `resolveCurrentAgentAddress` and `BOUNTY_IM_ADDRESS` references are deleted. CHANGELOG `### Removed` subsection lists the env var. Migration note: "Use `bounty profile use <name>` to set active identity before enabling `bounty-im` EventSource."
 
-> **Decision-blocking:** if the user explicitly answers Q1–Q5, Phase 4 will execute against those answers. If unanswered, Phase 4 will fall back to the **recommended (Option A)** choices for all five — clearly documented in the closing report.
+### ✅ Q6. `com send --server-url` alias — **`-u` (re-aliased away from `-e`)**
+
+- **Final choice:** `--server-url` is **re-aliased to `-u`** across **all** consumer commands, including `com/send.ts` which currently declares `alias: 'e'`.
+- **Rationale (user-confirmed):** yargs alias collision would silently merge `--server-url -e <url>` and `--from-email -e <email>` into arrays, breaking the strict-email contract at the yargs layer. Standardising on `-u` aligns with `addServerUrlOption` helper which already exports `-u` for `com/{inbox,connect,disconnect}.ts`.
+- **Surface implication:** in Task 8 (`com/send.ts` RED → GREEN → REFACTOR), the option definition is changed from `alias: 'e'` to `alias: 'u'`. CHANGELOG marks this as a v0.14 BREAKING minor flag-alias rename. Any wrapper that passes `-e` expecting `--server-url` will need to switch to `-u` or use the long form.
+
+> **Decision-blocking DISMISSED:** all six decision points are FINAL as recorded above. Phase 4 Execute will proceed against these choices without further user prompts (only the eventual merge-to-main approval remains). If at any future point the user reverses a choice (e.g. "actually delete agents.address"), this Decision Record becomes the diff to apply.
+
+---
+
+## Phase 3 RESUME Plan — Repairing Code-Review Blocker #7 (2026-07-17 14:12 UTC)
+
+> 🔵 **Context:** Code-review re-run 7 (operation 15735, 2026-07-17 13:13 UTC) returned `NEEDS_FIX` against `refactor/bounty-email-only` HEAD. CLI regression grew from main baseline `525 pass / 8 fail` to HEAD `504 pass / 36 fail` (29 new unique failures). The 7 blockers below MUST be repaired before resuming Phase 4 (Tasks 9–18, 20–27). TDD discipline preserved: every repair starts with a RED test, turns GREEN, then REFACTOR. `auto_merge=false` throughout — final stop is `refactor/bounty-email-only`, awaiting user merge-to-main approval.
+
+### The 7 Blockers
+
+| # | Blocker | Source |
+|---|---|---|
+| **B-1** | `requireEmailFlag` / `requireActiveProfileEmail` helper is **absent**. The five bounty commands (`grab`, `submit`, `publish`, `complete`, `cancel`) parse only explicit `argv.email` / `argv.publisherEmail`, ignoring active profile when no flag is provided. | Review 15735: "[Previous blockers propagated] requireEmailFlag is still absent…" |
+| **B-2** | `bounty-task/board.ts` was treated as a no-op during Task 7 — no `--publisher-email` filter, no legacy input rejection, no test asserting the filter contract. | Review 15735: "board was incorrectly treated as no-op without publisher-email filter" |
+| **B-3** | `com/send.ts` declares `--server-url` with `alias: 'e'`, which collides with `--email` / `--from-email` / `--to-email` choices in `auth/*`, `register-agent/*`, `bounty-task/*`. This was chosen autonomously while Q3 (now Decision Q6) was unresolved. | Review 15735: "com send --server-url alias decision was chosen while unresolved" |
+| **B-4** | CLI regression expanded from main 525/8 to HEAD 504/36 (29 new unique failures). Includes non-legacy complete/cancel behavior, com send auth/TLS/transport, publish large-payload & JSON/quiet, network/auth/business/409 handling, and multiple profile suites. | Review 15735: "Fresh baseline-first CLI comparison: main 525 pass / 8 fail; HEAD 504 pass / 36 fail" |
+| **B-5** | Email-only tests pass narrowly (39/39) but **lack runtime GREEN behavior coverage** and active-profile fallback coverage. RED asserts parse-time rejection only; nothing asserts that a valid registered email reaches the runtime HTTP body with `{agentEmail}` populated and without `agentAddress`. | Review 15735: "Focused regression: bounty-task-grab-profile.test.ts … crash before profile tests can run" |
+| **B-6** | `com/send.ts` `--from-email` / `--to-email` flags still flag-only — no active-profile fallback, no parser centralisation, no runtime GREEN body assertion. Same defect class as B-1 but in the `com/*` namespace. | Operation 15736: "defects spread to complete/cancel/com" |
+| **B-7** | Tasks 9–18 (auth/login, register-agent/{info,get,delete,credits,login}, com/{inbox,connect,disconnect,addresses}, profile/add) + Tasks 20–22 (server endpoints) + Tasks 23–27 (cleanup/version/docs/report) are still PENDING. Version bump `0.13.4 → 0.14.0` not done. CHANGELOG + README not updated. Serial `bun test` sweep not run. Final code review not done. | Plan Task 19 partial-complete; remaining work enumerated in plan rows 277–438 |
+
+### Ordered TDD Repair Plan (R-1 through R-7)
+
+> **Rule:** every repair step starts with a RED failing test, then the smallest GREEN change, then a REFACTOR pass. Helper extractions land in `src/cli/lib/email-flag.ts::requireEmailFlag` (existing plan §Task 1 Step 5) and `src/cli/lib/email-flag.ts::resolveActiveProfileEmail`. Tests use `bun test <file> --parallel 4` for fast iteration, **default serial `bun test <file>`** before commit, and `BOUNTY_MAIL_DRY_RUN=1` for any test that touches the network.
+
+#### R-1. Land `requireEmailFlag` + active-profile helper (addresses B-1, partially B-6)
+
+1. **RED (`tests/cli/email-flag.test.ts`)** — three new failing tests:
+   - `[R1-RED-1]` `requireEmailFlag({email: 'alice@example.com'})` returns parsed email; `requireEmailFlag({})` exits 1 with "use --email <your-registered-email>".
+   - `[R1-RED-2]` when `BOUNTY_PROFILE=alice` env or `ProfileContext.getActive() === 'alice'`, `requireEmailFlag({})` returns `'alice@example.com'` (the active profile's `email` field) without a CLI flag.
+   - `[R1-RED-3]` active-profile read takes precedence over `BOUNTY_IM_ADDRESS` env (which is being deleted in Q5; assert that the env is **ignored**).
+2. **GREEN** — implement `src/cli/lib/email-flag.ts`:
+   ```ts
+   export function resolveActiveProfileEmail(): string | undefined;
+   export function requireEmailFlag(argv: {email?: string; [k: string]: unknown},
+     fieldName = 'email'): {ok: true; value: string} | {ok: false; exit1: true};
+   ```
+   Uses `ProfileContext.getActive()?.email`; never reads `BOUNTY_IM_ADDRESS` (Q5 deletion).
+3. **REFACTOR** — move the seven duplicated email-validation blocks (`src/cli/commands/{bounty-task,com,register-agent,auth,profile}/*.ts`) onto `requireEmailFlag`. Five bounty commands + `com/send.ts` updated in this repair.
+4. Tests: `bun test tests/cli/email-flag.test.ts --parallel 4` → green; `bun test tests/cli` (default serial) → green with the B-4 regression shrunk.
+
+#### R-2. Wire `board.ts` to `requireEmailFlag` + add publisher filter (addresses B-2)
+
+1. **RED (`tests/cli/bounty-task-board-publisher.test.ts`)**:
+   - `[R2-RED-1]` `bounty bounty-task board --publisher-email alice@example.com` calls `bountyHttp.list({publisherEmail: 'alice@example.com'})`; assert request body / query string.
+   - `[R2-RED-2]` `bounty bounty-task board` (no flag) with `BOUNTY_PROFILE=alice` uses active profile email.
+   - `[R2-RED-3]` `bounty bounty-task board --publisher-address <uuid>@<host>` exits 1 with "use --publisher-email".
+2. **GREEN** — rewrite `src/cli/commands/bounty-task/board.ts`:
+   - Add `.option('publisher-email', { alias: 'e', type: 'string' })`.
+   - Call `requireEmailFlag(argv, 'publisher-email')` (treating the field rename as a single field identity — keep alias `e`).
+   - Pass `{publisherEmail: parsed.value}` to `bountyHttp.list`.
+3. **REFACTOR** — extract any query-string assembly shared with inbox / connect.
+4. Commit: `refactor(cli): bounty-task board strict email-only with publisher filter (v0.14)`.
+
+#### R-3. Re-alias `com/send.ts` `--server-url` to `-u` (addresses B-3; executes Decision Q6)
+
+1. **RED (`tests/cli/com-send-server-url-alias.test.ts`)**:
+   - `[R3-RED-1]` `com/send.ts` yargs parser accepts `--server-url -u https://host:443`; rejects `-e` as an alias for `--server-url`.
+   - `[R3-RED-2]` `--from-email -F alice@example.com` and `--server-url -u https://...` parse as independent options (no yargs array collision).
+   - `[R3-RED-3]` using legacy `-e <url>` for `--server-url` exits 1 with "use -u instead".
+2. **GREEN** — change `src/cli/commands/com/send.ts` option definition from `alias: 'e'` to `alias: 'u'`; route the warning + error string through `requireEmailFlag`'s shared-error helper.
+3. **REFACTOR** — switch `com/send.ts` to call `addServerUrlOption(y)` from `src/cli/lib/server-url-option.ts` (already used by inbox/connect/disconnect). This is the natural canonical single-source-of-truth.
+4. Commit: `refactor(cli): com send --server-url alias -u (v0.14 BREAKING flag rename)`.
+
+#### R-4. Shrink the CLI regression (addresses B-4)
+
+1. **Baseline** — `BOUNTY_MAIL_DRY_RUN=1 bun test tests/cli --parallel 4 > /tmp/baseline-cli.log` against `main`; record fail count.
+2. **Per-command** — for each of the 29 NEW unique failures identified in review 15735:
+   - Locate the test (likely a `*-profile.test.ts` or `*-network.test.ts`).
+   - Apply R-1 (use `requireEmailFlag`) and provide a valid email arg in the test setup.
+   - Preserve the original assertion (network status, business logic, 409, large-payload, JSON, quiet).
+3. **Coverage gate** — `bun run test:cli:fast` after each command update; full default-serial `bun test tests/cli` before moving on.
+4. **Final** — repeat the baseline comparison; goal: HEAD's fail count ≤ main's fail count (8 fail), with any residual delta explicitly enumerated in the closing report.
+
+#### R-5. Add runtime GREEN assertions to email-only tests (addresses B-5)
+
+1. **RED (`tests/cli/bounty-cli-email-runtime.test.ts`)** — for each of the five bounty commands:
+   - `[R5-RED-1]` Capture the HTTP layer (use a `bountyHttp` mock or a `BountyHttpSpy` harness) and assert the body sent contains `agentEmail: 'alice@example.com'` AND does NOT contain `agentAddress`.
+   - `[R5-RED-2]` With active profile, no flag, assert the body still has `agentEmail`.
+2. **GREEN** — the existing `parseEmail` + `requireEmailFlag` plumbing already sends `{agentEmail}`; the test simply hasn't asserted on it.
+3. **REFACTOR** — extract the `BountyHttpSpy` to `tests/cli/helpers/http-spy.ts` for reuse across 39 existing tests.
+4. Commit: `test(cli): runtime GREEN body assertions for email-only contract (v0.14)`.
+
+#### R-6. `com/send.ts` sender identity through `requireEmailFlag` (addresses B-6)
+
+1. **RED (`tests/cli/com-send-identity.test.ts`)**:
+   - `[R6-RED-1]` `--from-email -F alice@example.com --to-email -T bob@example.com` sends body `{from_email: 'alice@…', to_email: 'bob@…'}`. Capture via BountyHttpSpy from R-5.
+   - `[R6-RED-2]` without `--from-email`, with `BOUNTY_PROFILE=alice`, uses active-profile email as `from_email`.
+   - `[R6-RED-3]` with `--from alice@example.com` (legacy bare `--from`) exits 1 with "use --from-email".
+2. **GREEN** — `src/cli/commands/com/send.ts` already parses `fromEmail` / `toEmail` (per existing Task 8 code); replace its inline `parseEmail(...)` ladder with `requireEmailFlag(argv, 'fromEmail')` + `requireEmailFlag(argv, 'toEmail')`.
+3. **REFACTOR** — share the helper with R-1.
+4. Commit: `refactor(cli): com send identity via requireEmailFlag (v0.14)`.
+
+#### R-7. Resume the rest of Phase 4 (addresses B-7)
+
+1. **Tasks 9–18** — CLI commands for `auth/login`, `register-agent/{info,get,delete,credits,login}`, `com/{inbox,connect,disconnect,addresses}`, `profile/add` — follow the verbatim R-1 → R-2 → R-5 pattern (one commit per command or grouped logically).
+2. **Tasks 19–22** — server endpoints (`email-resolver.ts`, `bounty-routes.ts::resolveActor`, `im-routes.ts`, `auth-routes.ts`). Apply Q3 (404 unknown) + Q4 (canonical storage) decisions; runtime GREEN tests using the `bountyHttp` mock layer.
+3. **Task 23** — delete legacy resolvers (`src/lib/address.ts`, `src/cli/lib/address-parser.ts`, `src/server/lib/address-resolver.ts`) and `normalizeAgentIdentifier`. Grep gate: `grep -rE "parseAddress|parseAgentAddress|findAgentByAddress|findAgentByEmailOrAddress|parseEmail\b" src/ tests/ | grep -v "src/lib/email-resolver.ts"` returns 0 matches.
+4. **Task 24** — `src/cli/lib/current-agent.ts` becomes `resolveActiveProfileEmail`-only; `BOUNTY_IM_ADDRESS` references in `src/cli/cli.ts` deleted (Q5).
+5. **Task 25** — version bump `0.13.4 → 0.14.0`; CHANGELOG `# [v0.14.0]` section with `### Removed`, `### Changed`, `### Migration` listing exactly:
+   - `--agent-address / -a`, `--publisher-address / -p`, `--from / --to`, `--address / -a`, `--agent-id / -a` (com/addresses, profile/add), `--id / -i`, `BOUNTY_IM_ADDRESS` env, `body.*Address`, `body.agent_id`.
+   - Migration: "Use `bounty profile use <name>` before any IM/CLI flow that previously relied on `BOUNTY_IM_ADDRESS`. For HTTP body fields, rename `*Address` → `*Email`."
+6. **Task 26** — final test sweep:
+   - `bun run typecheck` → exit 0.
+   - `bun run test:cli:fast` (parallel 4) → 0 new failures vs main baseline.
+   - `bun test tests/cli` (default serial) → 0 failing.
+   - `bun run build` → exit 0 with `dist/cli/*.js`, `dist/bin/bounty.js`, `dist/server/server.js`, `dist/plugin/index.js` all present.
+7. **Task 27** — Stage report + 飞书 notification to user with the diff summary, fail-count comparison, and the merge-to-main approval request.
+8. **Final state** — worktree `refactor-bounty-email-only` (8 commits ahead of main, growing to N commits); branch **STOPPED**, awaiting user merge-to-main approval; `auto_merge=false` until that explicit approval.
+
+### Repair-Plan Exit Criteria
+
+- All 7 blockers enumerated above show green in `bun run test:cli:fast` and `bun test tests/cli` (default serial).
+- All 18 RED tests in plan §Acceptance Criteria pass.
+- All 7 GREEN tests in plan §Acceptance Criteria pass.
+- `grep -rE "agent-address|publisher-address|BOUNTY_IM_ADDRESS|<uuid>@<host>" src/cli/commands/ src/cli/cli.ts src/cli/lib/` → 0 matches in **active flag descriptions** (comments documenting the removal are fine).
+- Final code review (re-run 8) returns `APPROVED`.
+- Version on `refactor/bounty-email-only` HEAD is `0.14.0`.
+- 飞书 notification sent; merge-to-main prompt issued; no autonomous merge executed.
+
+> **Auto-merge:** `false` end-to-end. The user remains the sole approver of the merge to `main`.
