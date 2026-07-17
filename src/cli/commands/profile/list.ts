@@ -33,7 +33,6 @@ interface ProfileSummary {
   name: string;
   api_base: string;
   agent_id?: string;
-  email?: string;
   scope_count: number;
   last_used_at?: number;
 }
@@ -43,7 +42,6 @@ function summarize(p: BountyProfile): ProfileSummary {
     name: p.name,
     api_base: p.api_base,
     agent_id: p.agent_id,
-    email: p.email,
     scope_count: p.auth.scope?.length ?? 0,
     last_used_at: p.last_used_at,
   };

@@ -192,4 +192,28 @@ describe('bounty profile list', () => {
     const parsed = JSON.parse(captured);
     expect(parsed.active).toBe('beta');
   });
+
+  test('--json does not leak email field', async () => {
+    writeProfile('alice', { email: 'alice@example.com' });
+    writeProfile('bob', { email: 'bob@example.com' });
+    writeFileSync(configFile, JSON.stringify({
+      version: 1,
+      active_profile: 'alice',
+      schema_version: '0.11.0',
+    }));
+    let captured = '';
+    logSpy.mockImplementation((...args: unknown[]) => {
+      captured += args.map((a) => (typeof a === 'string' ? a : JSON.stringify(a))).join(' ');
+    });
+    await callList({
+      json: true,
+      __storeOptions: { profilesDir, configFile },
+    });
+    const parsed = JSON.parse(captured);
+    for (const p of parsed.profiles) {
+      expect(p).not.toHaveProperty('email');
+    }
+    expect(captured).not.toContain('alice@example.com');
+    expect(captured).not.toContain('bob@example.com');
+  });
 });
