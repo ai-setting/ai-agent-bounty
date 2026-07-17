@@ -178,4 +178,74 @@ describe('bounty profile rename', () => {
     expect(existsSync(configFile)).toBe(false);
     expect(existsSync(join(profilesDir, 'alice-renamed.json'))).toBe(true);
   });
+
+  test('surfaces IO failure when old-file deletion fails (no swallow)', async () => {
+    writeProfile('source');
+    writeFileSync(configFile, JSON.stringify({
+      version: 1,
+      active_profile: 'default',
+      schema_version: '0.11.0',
+    }));
+
+    // Patch fs.unlinkSync so the old-file removal fails with EACCES,
+    // mimicking the PR1-store swallow that the verifier flagged. The new
+    // rename.ts uses unlinkSync directly and must propagate non-ENOENT
+    // errors as a user-visible exit(1).
+    const fs = await import('fs');
+    const realUnlink = fs.unlinkSync;
+    const unlinkSpy = spyOn(fs, 'unlinkSync').mockImplementation(((
+      target: Parameters<typeof realUnlink>[0],
+    ) => {
+      if (typeof target === 'string' && target.endsWith('source.json')) {
+        const err: NodeJS.ErrnoException = new Error(`EACCES: permission denied, unlink '${target}'`);
+        err.code = 'EACCES';
+        throw err;
+      }
+      // Otherwise fall through to real unlinkSync (e.g. tmp cleanup).
+      return realUnlink(target);
+    }) as typeof fs.unlinkSync);
+
+    try {
+      await expect(
+        callRename({
+          old: 'source',
+          new: 'target',
+          __storeOptions: { profilesDir, configFile },
+        }),
+      ).rejects.toThrow(/__exit:1/);
+
+      // New file is durable (saveProfile uses atomic tmp+rename); old file
+      // remains because unlinkSync failed and we surfaced the error.
+      expect(existsSync(join(profilesDir, 'target.json'))).toBe(true);
+      expect(existsSync(join(profilesDir, 'source.json'))).toBe(true);
+      const errs = errorSpy.mock.calls.map((c) => c.join(' ')).join('\n');
+      expect(errs.toLowerCase()).toMatch(/eacces|permission/);
+    } finally {
+      unlinkSpy.mockRestore();
+    }
+  });
+
+  test('rejects rename when destination is a corrupted file on disk (defect 4)', async () => {
+    // Alice is a valid profile; bob.json exists but holds non-JSON garbage,
+    // so loadProfile(bob) returns null. The rename must still refuse
+    // because the destination file physically exists on disk.
+    writeProfile('alice');
+    writeFileSync(join(profilesDir, 'bob.json'), 'this is not json {{{');
+
+    await expect(
+      callRename({
+        old: 'alice',
+        new: 'bob',
+        __storeOptions: { profilesDir, configFile },
+      }),
+    ).rejects.toThrow(/__exit:1/);
+
+    const errs = errorSpy.mock.calls.map((c) => c.join(' ')).join('\n');
+    expect(errs).toContain('bob');
+    expect(errs.toLowerCase()).toMatch(/already exists/);
+    // Both files preserved: alice unchanged, bob still corrupted.
+    expect(existsSync(join(profilesDir, 'alice.json'))).toBe(true);
+    expect(existsSync(join(profilesDir, 'bob.json'))).toBe(true);
+    expect(readFileSync(join(profilesDir, 'bob.json'), 'utf8')).toBe('this is not json {{{');
+  });
 });

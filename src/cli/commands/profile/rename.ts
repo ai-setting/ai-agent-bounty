@@ -5,22 +5,37 @@
  * updating the inner `name` field. If the renamed profile is the active one,
  * synchronously update `config.active_profile` (preserving version + schema).
  *
- * Reuses PR1 store (`loadProfile`, `saveProfile`, `deleteProfile`, `readGlobalConfig`,
+ * Reuses PR1 store (`loadProfile`, `saveProfile`, `readGlobalConfig`,
  * `writeGlobalConfig`). Validation is delegated to `profileNameSchema`. The
  * `__storeOptions` seam keeps test isolation tight without exposing it to the
  * CLI surface.
+ *
+ * Conflict detection uses `fs.existsSync` on the destination path: a
+ * corrupted `<new>.json` must still be treated as "already exists" so we
+ * never silently overwrite it via `saveProfile`.
+ *
+ * Old-file deletion bypasses PR1's idempotent `deleteProfile` (which
+ * swallows `rmSync` errors) and goes directly through `unlinkSync`, then
+ * surfaces any non-ENOENT failure as a user-visible error. Since
+ * `saveProfile` writes atomically via tmp+rename, the new file is either
+ * fully present or absent — no rollback is needed.
  */
 
 import type { CommandModule } from 'yargs';
 import chalk from 'chalk';
 import {
+  existsSync,
+  unlinkSync,
+} from 'fs';
+import { join } from 'path';
+import {
   loadProfile,
   saveProfile,
-  deleteProfile,
   readGlobalConfig,
   writeGlobalConfig,
   type StoreOptions,
 } from '../../config/store.js';
+import { BOUNTY_PROFILES_DIR } from '../../config/paths.js';
 import { profileNameSchema } from '../../config/schema.js';
 
 interface RenameOptions {
@@ -32,6 +47,10 @@ function buildStoreOptions(argv: Record<string, unknown>): StoreOptions {
   const raw = argv.__storeOptions;
   if (raw && typeof raw === 'object') return raw as StoreOptions;
   return {};
+}
+
+function profilesDir(opts: StoreOptions): string {
+  return opts.profilesDir ?? BOUNTY_PROFILES_DIR;
 }
 
 function exitWith(code: number, message: string): never {
@@ -82,7 +101,11 @@ export const renameCommand: CommandModule<object, RenameOptions> = {
       );
     }
 
-    if (loadProfile(newName, opts)) {
+    // Physical existence check (Defect 4): a corrupted <new>.json must still
+    // be treated as "already exists" — using loadProfile would parse the file
+    // and return null, leading saveProfile to silently overwrite it.
+    const newPath = join(profilesDir(opts), `${newName}.json`);
+    if (existsSync(newPath)) {
       exitWith(
         1,
         `Profile "${newName}" already exists.\n  Pick a different name or remove it first with \`bounty profile remove ${newName}\`.`,
@@ -98,12 +121,22 @@ export const renameCommand: CommandModule<object, RenameOptions> = {
       exitWith(1, err instanceof Error ? err.message : String(err));
     }
 
-    // Now that the new file is durable, delete the old one. PR1's deleteProfile
-    // is idempotent for missing files, so this is safe even if the disk hiccupped.
+    // Now that the new file is durable, delete the old one. We bypass
+    // PR1's idempotent `deleteProfile` (which swallows `rmSync` errors) and
+    // use unlinkSync directly so non-ENOENT IO failures surface as a clear
+    // user-visible error (Defect 3).
+    const oldPath = join(profilesDir(opts), `${oldName}.json`);
     try {
-      deleteProfile(oldName, opts);
+      unlinkSync(oldPath);
     } catch (err) {
-      exitWith(1, `Profile written to "${newName}" but failed to remove old file "${oldName}": ${err instanceof Error ? err.message : err}`);
+      const e = err as NodeJS.ErrnoException;
+      if (e.code !== 'ENOENT') {
+        exitWith(
+          1,
+          `Profile written to "${newName}" but failed to remove old file "${oldName}": ` +
+            (e instanceof Error ? e.message : String(err)),
+        );
+      }
     }
 
     // Sync active_profile if we just renamed the active profile.

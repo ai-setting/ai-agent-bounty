@@ -9,23 +9,24 @@
  *
  * The PR1 `deleteProfile` is intentionally idempotent (it swallows
  * `ENOENT`); for a user-visible command we want explicit errors, so we
- * pre-check existence and surface any other IO failure.
+ * delete the file via `unlinkSync` directly and surface any non-ENOENT
+ * IO failure as a clear error.
  */
 
 import type { CommandModule } from 'yargs';
 import chalk from 'chalk';
 import {
   existsSync,
-  rmSync,
+  unlinkSync,
 } from 'fs';
 import { join } from 'path';
 import * as readline from 'node:readline/promises';
 import { stdin as input, stdout as output } from 'node:process';
 import {
   loadProfile,
-  deleteProfile,
   type StoreOptions,
 } from '../../config/store.js';
+import { BOUNTY_PROFILES_DIR } from '../../config/paths.js';
 import { profileNameSchema } from '../../config/schema.js';
 import { resolveActiveProfile } from '../../config/resolver.js';
 
@@ -125,33 +126,27 @@ export const removeCommand: CommandModule<object, RemoveOptions> = {
       }
     }
 
-    // Existence check before delete so we never silently lose a profile to a
-    // race (and so we can render a precise error message).
-    const profilesDir = opts.profilesDir ?? '';
-    const file = profilesDir ? join(profilesDir, `${name}.json`) : null;
-    if (file && !existsSync(file)) {
+    // Compute the destination path; bail with a clear message if the user
+    // has no __storeOptions seam AND the file lives under the default
+    // profiles directory (still safe — we know exactly where to look).
+    const dir = opts.profilesDir ?? BOUNTY_PROFILES_DIR;
+    const file = join(dir, `${name}.json`);
+    if (!existsSync(file)) {
       exitWith(1, `Profile "${name}" disappeared during confirmation. Aborted.`);
     }
 
+    // Defect 3 fix: bypass PR1's idempotent `deleteProfile` (which swallows
+    // every rmSync failure). unlinkSync throws on real IO errors so we can
+    // surface them. ENOENT is treated as already-gone (idempotent remove).
     try {
-      deleteProfile(name, opts);
+      unlinkSync(file);
     } catch (err) {
-      exitWith(
-        1,
-        `Failed to remove profile "${name}": ${err instanceof Error ? err.message : String(err)}`,
-      );
-    }
-
-    // PR1's `deleteProfile` swallows every rmSync failure (including EACCES
-    // and ENOENT) so the file may still exist. Verify on disk to surface the
-    // silent failure as a user-visible error.
-    if (file && existsSync(file)) {
-      try { rmSync(file); } catch { /* best effort */ }
-      if (existsSync(file)) {
+      const e = err as NodeJS.ErrnoException;
+      if (e.code !== 'ENOENT') {
         exitWith(
           1,
-          `Profile "${name}" could not be removed (delete was silently dropped). ` +
-            `Check file permissions on ${file}.`,
+          `Failed to remove profile "${name}": ` +
+            (err instanceof Error ? err.message : String(err)),
         );
       }
     }

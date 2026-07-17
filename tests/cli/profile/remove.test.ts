@@ -193,43 +193,47 @@ describe('bounty profile remove', () => {
     expect(existsSync(join(profilesDir, 'beta.json'))).toBe(true);
   });
 
-  test('surfaces IO failure when deleteProfile silently fails to remove the file', async () => {
-    writeProfile('stale');
+  test('surfaces IO failure when file deletion fails (no PR1-store swallow)', async () => {
+    writeProfile('locked');
     writeConfig('default');
 
-    // Patch the underlying fs.rmSync so the deletion silently fails (exactly
-    // the PR1 store swallow behavior the verifier flagged). The store's
-    // deleteProfile catches rmSync errors, so to simulate "no throw, file
-    // still present" we make rmSync succeed for one call but recreate the
-    // file before the handler's post-check.
+    // Defect 3 regression: the PR1 store's `deleteProfile` swallows every
+    // rmSync failure (including EACCES), which previously let remove silently
+    // succeed without unlinking the file. rename.ts/remove.ts now use
+    // unlinkSync directly, so a non-ENOENT error must surface as exit(1).
     const fs = await import('fs');
-    const realUnlinkSync = fs.rmSync;
-    let patchedOnce = false;
-    const rmSpy = spyOn(fs, 'rmSync').mockImplementation(((target: string, opts?: unknown) => {
-      // Pretend the IO succeeded but leave the file on disk.
-      patchedOnce = true;
-      // Real rmSync would throw on the directory we control, but here we
-      // simply no-op so the file stays — replicating PR1's silent swallow
-      // when rmSync raises ENOENT/EACCES.
-      void target; void opts;
-    }) as typeof fs.rmSync);
+    const realUnlink = fs.unlinkSync;
+    const unlinkSpy = spyOn(fs, 'unlinkSync').mockImplementation(((
+      target: Parameters<typeof realUnlink>[0],
+    ) => {
+      if (typeof target === 'string' && target.endsWith('locked.json')) {
+        const err: NodeJS.ErrnoException = new Error(
+          `EACCES: permission denied, unlink '${target}'`,
+        );
+        err.code = 'EACCES';
+        throw err;
+      }
+      return realUnlink(target);
+    }) as typeof fs.unlinkSync);
 
     try {
       await expect(
         callRemove({
-          name: 'stale',
+          name: 'locked',
           force: true,
           __storeOptions: { profilesDir, configFile },
           __confirm: () => Promise.resolve(true),
         }),
       ).rejects.toThrow(/__exit:1/);
-      expect(patchedOnce).toBe(true);
-      // Handler must NOT print the success line.
+
+      // File must remain on disk; no "removed" success line.
+      expect(existsSync(join(profilesDir, 'locked.json'))).toBe(true);
+      const errs = errorSpy.mock.calls.map((c) => c.join(' ')).join('\n');
+      expect(errs.toLowerCase()).toMatch(/eacces|permission/);
       const out = logSpy.mock.calls.map((c) => c.join(' ')).join('\n');
-      expect(out).not.toMatch(/Profile "stale" removed/);
+      expect(out).not.toMatch(/Profile "locked" removed/);
     } finally {
-      rmSpy.mockRestore();
-      void realUnlinkSync;
+      unlinkSpy.mockRestore();
     }
   });
 });

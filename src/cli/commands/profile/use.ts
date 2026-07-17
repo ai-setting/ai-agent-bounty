@@ -66,10 +66,17 @@ export const useCommand: CommandModule<object, UseOptions> = {
     const schema_version = existing?.schema_version ?? '0.11.0';
     void existing?.version; // explicit no-op: version is the schema generation literal.
 
-    writeGlobalConfig(
-      { version: 1, active_profile: name, schema_version },
-      opts,
-    );
+    try {
+      writeGlobalConfig(
+        { version: 1, active_profile: name, schema_version },
+        opts,
+      );
+    } catch (err) {
+      exitWith(
+        1,
+        `Failed to write config: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
 
     console.log(chalk.green(`\n✓ Active profile set to ${name}\n`));
   },

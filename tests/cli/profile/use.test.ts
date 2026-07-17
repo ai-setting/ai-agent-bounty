@@ -136,4 +136,51 @@ describe('bounty profile use', () => {
     cfg = JSON.parse(readFileSync(configFile, 'utf8'));
     expect(cfg.active_profile).toBe('bob');
   });
+
+  test('surfaces IO failure when writeGlobalConfig cannot persist (defect 5)', async () => {
+    writeProfile('alice');
+    writeFileSync(configFile, JSON.stringify({
+      version: 1,
+      active_profile: 'default',
+      schema_version: '0.11.0',
+    }));
+
+    // Patch fs.writeFileSync so the atomic write's first stage fails with
+    // EACCES. This is exactly what happens when the user's HOME is on a
+    // read-only mount; without our try/catch the handler would crash, with
+    // it the user gets a clear exit(1) + friendly message.
+    const fs = await import('fs');
+    const realWriteFile = fs.writeFileSync;
+    const writeSpy = spyOn(fs, 'writeFileSync').mockImplementation(((
+      target: Parameters<typeof realWriteFile>[0],
+      ...rest: Parameters<typeof realWriteFile> extends [unknown, ...infer R]
+        ? R
+        : never
+    ) => {
+      if (typeof target === 'string' && target.includes('.tmp-')) {
+        const err: NodeJS.ErrnoException = new Error(
+          `EACCES: permission denied, open '${target}'`,
+        );
+        err.code = 'EACCES';
+        throw err;
+      }
+      // Profile writes under profilesDir (not configFile) and ordinary file
+      // ops should still succeed.
+      return (realWriteFile as (...a: unknown[]) => void)(target, ...rest);
+    }) as typeof fs.writeFileSync);
+
+    try {
+      await expect(
+        callUse({
+          name: 'alice',
+          __storeOptions: { profilesDir, configFile },
+        }),
+      ).rejects.toThrow(/__exit:1/);
+
+      const errs = errorSpy.mock.calls.map((c) => c.join(' ')).join('\n');
+      expect(errs.toLowerCase()).toMatch(/failed to write config|eacces|permission/);
+    } finally {
+      writeSpy.mockRestore();
+    }
+  });
 });
