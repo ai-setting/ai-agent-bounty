@@ -19,7 +19,7 @@ import { ProfileContext } from '../../config/context.js';
 import { resolveProfileApiBase } from '../../lib/profile-api-base.js';
 import { addServerUrlOption, resolveServerUrl } from '../../lib/server-url-option.js';
 import { bountyHttp } from '../../lib/bounty-http.js';
-import { parseEmail } from '../../../lib/email-resolver.js';
+import { requireEmailFlag, exitWithEmailFlagError } from '../../lib/email-flag.js';
 import { handleBountyError } from './publish.js';
 
 interface GrabOptions {
@@ -90,19 +90,20 @@ export const grabCommand: CommandModule<object, GrabOptions> = {
     }
 
     // v0.14 strict: --email is the ONLY actor identity input.
-    // Validate via parseEmail — rejects <uuid>@<host>, bare UUIDs, malformed.
-    const parsed = parseEmail(argv.email, 'email', 'cli');
+    // requireEmailFlag handles precedence (explicit > ProfileContext.active.email)
+    // and rejects legacy <uuid>@<host> / bare UUIDs / malformed.
+    const parsed = requireEmailFlag('email', argv as Record<string, unknown>);
     if (!parsed.ok) {
-      console.error(chalk.red(`\n${parsed.error}\n`));
-      process.exit(1);
+      exitWithEmailFlagError(parsed);
     }
+    const agentEmail = parsed.value;
 
     try {
       const task = await bountyHttp<BountyTask>({
         baseUrl,
         path: `/api/tasks/${encodeURIComponent(argv['task-id'])}/grab`,
         method: 'PUT',
-        body: { agentEmail: parsed.value },
+        body: { agentEmail },
       });
 
       console.log(chalk.green('\n✓ Task grabbed successfully\n'));

@@ -49,10 +49,12 @@ describe("bounty-task cancel — v0.14 strict email-only", () => {
     expect(src).not.toMatch(/BOUNTY_IM_ADDRESS/);
   });
 
-  test("T4: parseEmail imported + body uses publisherEmail ONLY", () => {
+  test("T4: requireEmailFlag helper from email-flag.js + body uses publisherEmail ONLY", () => {
     const src = readFileSync(CANCEL_SRC, "utf-8");
-    expect(src).toMatch(/from\s+['"][^'"]*email-resolver\.js['"]/);
-    expect(src).toMatch(/parseEmail/);
+    // v0.14.0 (Phase 4 R-1): centralised via the requireEmailFlag helper.
+    expect(src).toMatch(/from\s+['"][^'"]*email-flag\.js['"]/);
+    expect(src).toMatch(/requireEmailFlag/);
+    expect(src).not.toMatch(/parseEmail\s*\(/);
     expect(src).not.toMatch(/publisherAddress\s*[:=]/);
   });
 

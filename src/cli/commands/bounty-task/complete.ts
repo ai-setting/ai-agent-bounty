@@ -16,7 +16,7 @@ import { ProfileContext } from '../../config/context.js';
 import { resolveProfileApiBase } from '../../lib/profile-api-base.js';
 import { addServerUrlOption, resolveServerUrl } from '../../lib/server-url-option.js';
 import { bountyHttp } from '../../lib/bounty-http.js';
-import { parseEmail } from '../../../lib/email-resolver.js';
+import { requireEmailFlag, exitWithEmailFlagError } from '../../lib/email-flag.js';
 import { handleBountyError } from './publish.js';
 import { isValidTaskId } from './grab.js';
 
@@ -80,18 +80,21 @@ export const completeCommand: CommandModule<object, CompleteOptions> = {
     }
 
     // v0.14 strict: --publisher-email is the ONLY publisher identity input.
-    const parsed = parseEmail(argv['publisher-email'], 'publisherEmail', 'cli');
+    const parsed = requireEmailFlag(
+      'publisher-email',
+      argv as Record<string, unknown>,
+    );
     if (!parsed.ok) {
-      console.error(chalk.red(`\n${parsed.error}\n`));
-      process.exit(1);
+      exitWithEmailFlagError(parsed);
     }
+    const publisherEmail = parsed.value;
 
     try {
       const task = await bountyHttp<BountyTask>({
         baseUrl,
         path: `/api/tasks/${encodeURIComponent(argv['task-id'])}/complete`,
         method: 'PUT',
-        body: { publisherEmail: parsed.value },
+        body: { publisherEmail },
       });
 
       console.log(chalk.green('\n✓ Task completed successfully\n'));

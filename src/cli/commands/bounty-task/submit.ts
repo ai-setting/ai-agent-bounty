@@ -18,7 +18,7 @@ import { ProfileContext } from '../../config/context.js';
 import { resolveProfileApiBase } from '../../lib/profile-api-base.js';
 import { addServerUrlOption, resolveServerUrl } from '../../lib/server-url-option.js';
 import { bountyHttp } from '../../lib/bounty-http.js';
-import { parseEmail } from '../../../lib/email-resolver.js';
+import { requireEmailFlag, exitWithEmailFlagError } from '../../lib/email-flag.js';
 import { handleBountyError } from './publish.js';
 import { isValidTaskId } from './grab.js';
 
@@ -92,18 +92,18 @@ export const submitCommand: CommandModule<object, SubmitOptions> = {
     }
 
     // v0.14 strict: --email is the ONLY actor identity input.
-    const parsed = parseEmail(argv.email, 'email', 'cli');
+    const parsed = requireEmailFlag('email', argv as Record<string, unknown>);
     if (!parsed.ok) {
-      console.error(chalk.red(`\n${parsed.error}\n`));
-      process.exit(1);
+      exitWithEmailFlagError(parsed);
     }
+    const agentEmail = parsed.value;
 
     try {
       const task = await bountyHttp<BountyTask>({
         baseUrl,
         path: `/api/tasks/${encodeURIComponent(argv['task-id'])}/submit`,
         method: 'PUT',
-        body: { result: argv.result, agentEmail: parsed.value },
+        body: { result: argv.result, agentEmail },
       });
 
       console.log(chalk.green('\n✓ Result submitted successfully\n'));

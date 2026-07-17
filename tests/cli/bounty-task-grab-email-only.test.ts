@@ -54,10 +54,13 @@ describe("bounty-task grab — v0.14 strict email-only", () => {
     expect(src).not.toMatch(/BOUNTY_IM_ADDRESS/);
   });
 
-  test("T4 (static): grab.ts imports parseEmail from email-resolver", () => {
+  test("T4 (static): grab.ts uses the shared requireEmailFlag helper from email-flag.js", () => {
     const src = readFileSync(GRAB_SRC, "utf-8");
-    expect(src).toMatch(/from\s+['"][^'"]*email-resolver\.js['"]/);
-    expect(src).toMatch(/parseEmail/);
+    // v0.14.0 (Phase 4 R-1): centralised via the requireEmailFlag helper.
+    expect(src).toMatch(/from\s+['"][^'"]*email-flag\.js['"]/);
+    expect(src).toMatch(/requireEmailFlag/);
+    // No direct parseEmail call (use the helper, not the boundary directly).
+    expect(src).not.toMatch(/parseEmail\s*\(/);
   });
 
   test("T5 (static): grab.ts builds request body with agentEmail ONLY (no agentAddress)", () => {
