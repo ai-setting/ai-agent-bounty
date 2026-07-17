@@ -1,10 +1,14 @@
 /**
- * bounty publish command
+ * bounty publish command — v0.14 strict email-only contract.
  *
  * v0.7: address-based publisher identity + tolerant optional fields.
- *
- * Phase feat/bounty-task-profile (PR7): 改用 ProfileContext 决定 API base，
- *   与 auth/* 命令族行为一致：`--server-url` > active profile.api_base > API_BASE。
+ * v0.14 BREAKING:
+ *   - --publisher-address / -p REMOVED (renamed to --publisher-email / -e).
+ *   - legacy env fallback REMOVED.
+ *   - --publisher-email is the ONLY publisher identity input.
+ *   - <uuid>@<host>, bare UUIDs, malformed emails REJECTED with exit 1.
+ *   - HTTP body uses {publisherEmail} only (no publisherAddress key).
+ *   - X-Agent-Id soft-auth header REMOVED (publisherEmail in body is canonical).
  */
 
 import type { CommandModule } from 'yargs';
@@ -15,10 +19,9 @@ import { ProfileContext } from '../../config/context.js';
 import { resolveProfileApiBase } from '../../lib/profile-api-base.js';
 import { addServerUrlOption, resolveServerUrl } from '../../lib/server-url-option.js';
 import { bountyHttp, BountyHttpError } from '../../lib/bounty-http.js';
-import { resolveCurrentAgent, resolveCurrentAgentAddress } from '../../lib/current-agent.js';
 import { generateIdempotencyKey } from '../../lib/idempotency-key.js';
 import { shouldJson, jsonOutput, isQuiet, quietIdOutput } from '../../lib/json-output.js';
-import { resolveAddressOption } from '../../lib/address-parser.js';
+import { parseEmail } from '../../../lib/email-resolver.js';
 import { validatePublishInput } from '../../lib/input-validator.js';
 
 interface PublishOptions {
@@ -27,7 +30,7 @@ interface PublishOptions {
   'description-file'?: string;
   type: string;
   reward: number | string;
-  'publisher-address'?: string;
+  'publisher-email'?: string;
   tags?: string;
   deadline?: number | string;
   'server-url'?: string;
@@ -44,7 +47,7 @@ interface BountyTask {
   reward: number;
   status: string;
   publisherId: string;
-  publisherAddress?: string;
+  publisherEmail?: string;
   tags?: string[];
 }
 
@@ -85,13 +88,12 @@ export const publishCommand: CommandModule<object, PublishOptions> = {
           demandOption: true,
           description: 'Reward credits (must be > 0)',
         })
-        .option('publisher-address', {
-          alias: 'p',
+        .option('publisher-email', {
+          alias: 'e',
           type: 'string',
           description:
-            'Publisher agent address in <uuid>@<host> format. ' +
-            'Required (<uuid>@<host>) — bare UUID is REJECTED in v0.10. ' +
-            'Defaults to BOUNTY_IM_ADDRESS env.',
+            'Publisher agent email (v0.14 ONLY input). ' +
+            '<uuid>@<host> and bare UUIDs are REJECTED.',
         })
         .option('tags', {
           alias: 'g',
@@ -108,7 +110,7 @@ export const publishCommand: CommandModule<object, PublishOptions> = {
           type: 'string',
           description:
             'Optional Idempotency-Key for safe retry (server dedupes 24h). ' +
-            'Default: auto-generated from uuid+title+publisher.',
+            'Default: auto-generated from email+title.',
         })
         .option('json', {
           type: 'boolean',
@@ -139,19 +141,13 @@ export const publishCommand: CommandModule<object, PublishOptions> = {
     }
     const input = validated.value;
 
-    const publisher = resolveAddressOption({
-      address: argv['publisher-address'],
-      fallback: resolveCurrentAgentAddress(),
-      addressFlag: '--publisher-address',
-      missingMessage:
-        '✗ Cannot infer publisher address. Provide --publisher-address or set BOUNTY_IM_ADDRESS=<uuid>@<host>.',
-    });
-    if (!publisher.ok) {
-      console.error(chalk.red(`\n${publisher.error}\n`));
-      process.exit(2);
+    // v0.14 strict: --publisher-email is the ONLY publisher identity input.
+    const parsed = parseEmail(argv['publisher-email'], 'publisherEmail', 'cli');
+    if (!parsed.ok) {
+      console.error(chalk.red(`\n${parsed.error}\n`));
+      process.exit(1);
     }
-    const publisherUuid = publisher.value.uuid;
-    const publisherAddress = publisher.value.raw;
+    const publisherEmail = parsed.value;
 
     // Resolve optional description: --description wins if both are given.
     let description: string | undefined = input.description;
@@ -176,10 +172,11 @@ export const publishCommand: CommandModule<object, PublishOptions> = {
 
     const idempotencyKey =
       input.idempotencyKey ||
+      // v0.14: seed idempotency from publisher email (deterministic per publisher).
       generateIdempotencyKey({
-        uuid: resolveCurrentAgent() ?? publisherUuid,
+        uuid: publisherEmail,
         title: input.title,
-        publisher: publisherUuid,
+        publisher: publisherEmail,
       });
 
     try {
@@ -194,13 +191,11 @@ export const publishCommand: CommandModule<object, PublishOptions> = {
           reward: input.reward,
           tags: input.tags,
           deadline: input.deadline,
-          // v0.10: send full `<uuid>@<host>` address (BREAKING — server rejects bare UUID)
-          publisherAddress,
+          // v0.14: send registered email; server resolves to canonical id.
+          publisherEmail,
         },
         extraHeaders: {
           'Idempotency-Key': idempotencyKey,
-          // Soft-auth compatibility: X-Agent-Id header still carries bare uuid
-          'X-Agent-Id': publisherUuid,
         },
       });
 

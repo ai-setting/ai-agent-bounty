@@ -80,15 +80,27 @@ export type EmailValidationResult =
 export type HintSurface = "cli" | "http";
 
 /**
+ * Convert a camelCase / PascalCase identifier to kebab-case for CLI flag hints.
+ *   "publisherEmail" → "publisher-email"
+ *   "agentEmail"     → "agent-email"
+ *   "email"          → "email"
+ * Already-kebab / single-word identifiers are returned unchanged.
+ */
+function dasherize(s: string): string {
+  return s.replace(/[A-Z]/g, (m) => `-${m.toLowerCase()}`);
+}
+
+/**
  * Build the surface-appropriate remediation hint. Centralised so the
  * CLI / server can grep on a stable phrase per surface.
  *
- *   cli:  "use --email <your-registered-email>"
- *   http: "use email: <your-registered-email>"
+ *   cli:  "use --publisher-email <your-registered-email>"
+ *   http: "use publisherEmail: <your-registered-email>"
  */
 export function hintFor(field: string, surface: HintSurface = "cli"): string {
+  const cliField = dasherize(field);
   return surface === "cli"
-    ? `use --${field} <your-registered-email>`
+    ? `use --${cliField} <your-registered-email>`
     : `use ${field}: <your-registered-email>`;
 }
 
