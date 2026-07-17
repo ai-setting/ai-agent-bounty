@@ -1,3 +1,17 @@
+## [v0.13.2] - 2026-07-17 - Inbox Bugfixes (PATCH)
+
+### Fixed
+
+- **server/im inbox**: `GET /api/messages?email=...` now resolves via
+  `findAgentByEmailOrAddress` to canonical `<uuid>@<host>` before
+  ownership check (was returning 403 Forbidden for all email queries).
+- **cli/com inbox**: now attaches `Authorization: Bearer <jwt>` from
+  active ProfileContext (was 401 due to missing auth header).
+
+### Backward compatibility
+
+- `GET /api/messages?address=<uuid>@<host>` still works unchanged.
+
 # Changelog
 
 All notable changes to ai-agent-bounty are documented in this file.

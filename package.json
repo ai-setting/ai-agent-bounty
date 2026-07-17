@@ -1,6 +1,6 @@
 {
   "name": "@ai-setting/agent-bounty",
-  "version": "0.13.1",
+  "version": "0.13.2",
   "type": "module",
   "description": "AI Agent Bounty System — Task publishing, grabbing, and communication platform. v0.13.1 patch: com/* CLI now reads profile.api_base when --server-url absent. See CHANGELOG for upgrade guide.",
   "main": "./dist/index.js",
