@@ -1,88 +1,55 @@
 /**
  * Default agent inference helper for bounty CLI commands.
  *
- * Phase: feat/bounty-task-optimize
+ * v0.14 BREAKING (Q5 ✅ DELETE):
+ *   - `BOUNTY_IM_ADDRESS` env var is REMOVED.
+ *   - `resolveCurrentAgent` / `resolveCurrentAgentAddress` helpers are
+ *     DEPRECATED — they return `undefined` unconditionally now (callers
+ *     should use `requireEmailFlag` + `ProfileContext.active.email`
+ *     instead).
+ *   - Active identity resolution is driven EXCLUSIVELY by the
+ *     `ProfileContext.active.email` field, which `bounty profile use`
+ *     populates from a registered email.
  *
- * 设计动机: bounty-task/* 命令当前要求用户必须显式传 `--publisher-id` 或
- * `--agent-id`，对体验很差。改进后这些参数可以省略，从以下来源自动推断：
- *
- *   1. `BOUNTY_IM_ADDRESS` (形如 `agent-uuid@host`) → 提取 agent-uuid 部分
- *   2. `~/.config/bounty/token` (JWT) → 解码 payload.sub (后续 phase)
- *
- * 优先级: BOUNTY_IM_ADDRESS > token file > undefined
- *
- * 用法：
- *   import { resolveCurrentAgent } from '../lib/current-agent.js';
- *   const agentId = resolveCurrentAgent();
- *   if (!agentId) {
- *     console.error('Cannot infer current agent. Set BOUNTY_IM_ADDRESS or pass --publisher-id.');
- *     process.exit(2);
- *   }
- *
- * 测试支持：
- * - 接受可选的 `tokenPath` 参数（DI），便于单元测试用 temp 文件隔离
+ * Migration:
+ *   - `bounty profile use <name>` — sets active identity (email).
+ *   - `requireEmailFlag` helper (src/cli/lib/email-flag.ts) handles the
+ *     explicit `--email` / `--publisher-email` precedence + ProfileContext
+ *     fallback, with friendly errors when neither is available.
  */
 
 import { readAuthToken } from './auth-token.js';
-import { parseAgentAddress } from './address-parser.js';
 
 export interface ResolveCurrentAgentOptions {
   /**
-   * Explicit override for the token file path. Defaults to
-   * `~/.config/bounty/token`. Useful for tests.
+   * @deprecated Retained for API compatibility; ignored in v0.14.
    */
   tokenPath?: string;
 }
 
 /**
- * Resolve the current agent ID from environment / token file.
- *
- * Returns the agent UUID string if it can be inferred, otherwise undefined.
- * v0.10: `BOUNTY_IM_ADDRESS` MUST be `<uuid>@<host>`; bare UUID is rejected.
- *
- * @param options.tokenPath  Override the token file path (default: ~/.config/bounty/token)
- * @returns                  agent UUID string or undefined
+ * @deprecated v0.14: returns `undefined` unconditionally. Use
+ * `requireEmailFlag` + `ProfileContext.active.email` instead.
  */
 export function resolveCurrentAgent(
-  options: ResolveCurrentAgentOptions = {}
+  _options: ResolveCurrentAgentOptions = {}
 ): string | undefined {
-  // 优先级 1: BOUNTY_IM_ADDRESS env (e.g., "8de9b6aa-...@bounty.example.com")
-  // v0.10 BREAKING: bare UUIDs are rejected (was: lenient fallback in v0.7-v0.9)
-  const imAddress = process.env.BOUNTY_IM_ADDRESS;
-  if (imAddress && imAddress.trim()) {
-    const parsed = parseAgentAddress(imAddress, 'BOUNTY_IM_ADDRESS');
-    if (parsed.ok) return parsed.value.uuid;
-    // bare UUID or invalid format → not returned to caller (was: returned in v0.7)
-  }
-
-  // 优先级 2: ~/.config/bounty/token (JWT)
-  // TODO (后续 phase): 解码 JWT payload 提取 sub claim
-  // 现在先 placeholder — 有 token 文件存在表示有鉴权能力，但不提取 agent id
-  const token = readAuthToken(options.tokenPath);
-  if (token) {
-    // 未来可以加: const claims = decodeJwt(token); return claims?.sub;
-    // 当前先返回 undefined, 让 caller 走显式参数 fallback
-  }
-
+  // v0.14: BOUNTY_IM_ADDRESS removed; token-file based uuid extraction
+  // is no longer part of the v0.14 contract. Returning `undefined`
+  // forces callers to use the v0.14 fallback path (ProfileContext.email).
+  //
+  // The token file presence check is kept as a no-op for binary
+  // compatibility with legacy tests that assert behaviour on it.
+  // (No email extraction — agent uuid is server-side concern only.)
+  readAuthToken(_options.tokenPath);
   return undefined;
 }
 
 /**
- * Resolve the current agent's FULL address (`<uuid>@<host>`) for v0.10 callers
- * that need to send the address triple to the server (not just the uuid).
- *
- * v0.10: bare UUID BOUNTY_IM_ADDRESS returns undefined (rejected, not lenient).
- *
- * @param options.tokenPath  Override the token file path (default: ~/.config/bounty/token)
- * @returns                  full `Address` triple, or undefined
+ * @deprecated v0.14: returns `undefined` unconditionally.
  */
 export function resolveCurrentAgentAddress(
-  options: ResolveCurrentAgentOptions = {}
+  _options: ResolveCurrentAgentOptions = {}
 ): { uuid: string; host: string; raw: string } | undefined {
-  const imAddress = process.env.BOUNTY_IM_ADDRESS;
-  if (imAddress && imAddress.trim()) {
-    const parsed = parseAgentAddress(imAddress, 'BOUNTY_IM_ADDRESS');
-    if (parsed.ok) return parsed.value;
-  }
   return undefined;
 }

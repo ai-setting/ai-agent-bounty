@@ -29,24 +29,28 @@ bounty server status
 
 ### 启动 Interactive + EventSource（接收 IM 消息）
 
+> **🚨 v0.14 BREAKING**: `BOUNTY_IM_ADDRESS` env var is **REMOVED**. Identity
+> resolution now flows exclusively through registered email +
+> `ProfileContext`. See CHANGELOG for upgrade guide.
+
 ```bash
-# 启动 interactive 并启用 bounty-im EventSource
-BOUNTY_IM_ADDRESS=<your-address> BOUNTY_PORT=4005 bounty interactive --event-source bounty-im-auto
+# v0.14: use `bounty profile use <name>` to set the active identity (email),
+# then start interactive. bounty-im EventSource must be configured explicitly
+# (or omitted if push is not needed).
+bounty profile add my-agent --email alice@example.com --api-base https://api.example.com --token <jwt>
+bounty profile use my-agent
+bounty interactive
 ```
 
-### 配置多个 Agent 地址
-
-如果需要在多个 Agent 地址之间切换，可以设置 `BOUNTY_IM_ADDRESS`：
+### 切换多个 Agent
 
 ```bash
 # Agent A
-BOUNTY_IM_ADDRESS=<agent-a-address> BOUNTY_PORT=4005 bounty interactive --event-source bounty-im-auto
+bounty profile use agent-a   # reads email from ~/.config/bounty/profiles/agent-a.json
 
 # Agent B
-BOUNTY_IM_ADDRESS=<agent-b-address> BOUNTY_PORT=4005 bounty interactive --event-source bounty-im-auto
+bounty profile use agent-b   # same
 ```
-
-> **注意**: `bounty-im-auto` 是自动注册的事件源 ID，地址由 `BOUNTY_IM_ADDRESS` 环境变量指定。
 
 ## 用户身份（Profile）
 
@@ -143,7 +147,7 @@ EOF
 | `BOUNTY_IM_SERVER_URL` | `(同 BOUNTY_WS_URL)` | IM Server WebSocket URL |
 | `BOUNTY_DOMAIN` | `bounty.local` | Agent 地址域名 |
 | `BOUNTY_DB_PATH` | `./data/bounty.db` | 数据库文件路径 |
-| `BOUNTY_IM_ADDRESS` | `(自动设置)` | 你的 IM 地址 |
+| ~~`BOUNTY_IM_ADDRESS`~~ | **REMOVED in v0.14** | 旧版 IM 地址 env 已删除。改用 `bounty profile use <name>`。 |
 | `SMTP_HOST` | - | SMTP 服务器 |
 | `SMTP_PORT` | `587` | SMTP 端口 |
 | `SMTP_USER` | - | SMTP 用户名 |
@@ -256,18 +260,22 @@ bounty bounty-task cancel <taskId>
 | 选项 | 简写 | 描述 |
 |------|------|------|
 | `--server-url` | `-u` | 指定 bounty server URL（覆盖 `BOUNTY_API_URL` env / 默认 `localhost:4000`）。必须以 `http://` 或 `https://` 开头 |
-| `--publisher-address` | `-p` | **v0.10 BREAKING** — 发布者 / 操作者 agent 地址，**必须是 `<uuid>@<host>` 格式**（缺省从 `BOUNTY_IM_ADDRESS` env 推断） |
-| `--agent-address` | `-a` | **v0.10 BREAKING** — 认领者 / 提交者 agent 地址，**必须是 `<uuid>@<host>` 格式**（缺省从 `BOUNTY_IM_ADDRESS` env 推断） |
+| `--publisher-email` | `-e` | **v0.14 ONLY input** — 发布者 agent email（注册邮箱）。`<uuid>@<host>` / bare UUID 拒绝并退出 1；未提供时回退到 `ProfileContext.active.email` |
+| `--email` | `-e` | **v0.14 ONLY input** — 操作者 / 认领者 / 提交者 agent email（注册邮箱）。同上 |
 
-> **⚠️ v0.10 BREAKING**: `--publisher-id` / `--agent-id` **已移除**。
-> 所有 CLI 命令（含 `auth/*`、`register-agent/*`）现在要求完整 `<uuid>@<host>`。
-> Bare UUID 和 email-like 输入被 server 拒绝（HTTP 400 "Agent not found"）。
-> 旧脚本如使用了 `--agent-id` 需要先升级为 `--agent-address <uuid>@<host>`。
+> **🚨 v0.14 BREAKING (final)**: `--publisher-address` / `--agent-address` /
+> `--publisher-id` / `--agent-id` / `--id` / `--from` / `--to` 全部 **删除**。
+> 所有 CLI 命令（含 `auth/*`、`register-agent/*`、`com/*`、`profile/*`）和 HTTP
+> body 字段（`*Email` 必填，`*Address` / `*Id` 全部移除）只接受注册邮箱。
+> 不合法输入被 CLI 拒绝（exit 1 + "use --email <your-registered-email>"），
+> server 端失败输入返回 HTTP 400（malformed）/ 404（unknown）。
+> `BOUNTY_IM_ADDRESS` 环境变量已删除（Q5 ✅ DELETE）；
+> `--server-url / -e` 别名也已迁移到 `-u`（Q6 ✅）。
 
-**示例**：
+**示例**（v0.14）：
 
 ```bash
-# 默认（自动读 BOUNTY_API_URL + 推断 agent from BOUNTY_IM_ADDRESS）
+# 默认（profile.api_base + ProfileContext.active.email 作为 publisherEmail）
 bounty bounty-task publish -t "Fix bug" -d "..." -y coding -r 100
 
 # 远程 server（自签名证书走 -u 也兼容 TLS skip 默认值）
