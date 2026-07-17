@@ -5,6 +5,51 @@ All notable changes to ai-agent-bounty are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v0.13.1] - com/* Profile-Aware API Base (Patch)
+
+### Summary
+
+v0.13.1 is a **patch release** that fixes a v0.13.0 regression in the `com/*`
+CLI commands (`send`, `inbox`, `connect`, `disconnect`): they ignored the
+active profile's `api_base` when `--server-url` was not passed and silently
+fell back to `http://${host}:${port}/messages`. This forced users to either
+manually pass `--server-url` or rely on the legacy default fallback,
+behaving inconsistently with `auth/*`, `register-agent/*`, and
+`bounty-task/*` commands.
+
+### Fixed
+
+- **`bounty com send`**: now reads `profile.api_base` from `ProfileContext`
+  when `--server-url` is absent. Priority order:
+  `--server-url` > `profile.api_base` > `http://${host}:${port}`.
+- **`bounty com inbox`**: same wiring — `profile.api_base` wins over the
+  legacy host/port fallback.
+- **`bounty com connect`**: WebSocket probe now resolves through
+  `profile.api_base` (with `http→ws` scheme swap), matching `send`/`inbox`.
+- **`bounty com disconnect`**: no network call, but now wires
+  `ProfileContext` so the active profile name is reflected in the stub
+  notice for consistency.
+- **`ProfileContext.getApiBase()`**: changed return type from `string`
+  (throwing) to `string | undefined`. No real callers depended on the
+  throwing behavior — all callers (`auth/*`, `register-agent/*`,
+  `bounty-task/*`) already gate on `profile?.api_base` via
+  `resolveProfileApiBase`.
+
+### Backward compatibility
+
+- All `--server-url` and `--host/--port` paths retain their existing
+  semantics. No CLI surface changes.
+- The legacy `--host`/`--port` fallback (`http://${host}:${port}/messages`)
+  is preserved for users with no active profile.
+
+### Tests
+
+- New `tests/cli/v0.13.1-com-profile-api-base.test.ts` with 16 tests
+  (5 send + 5 inbox + 4 connect + 2 disconnect), covering:
+  - Profile-aware URL construction (static + integration)
+  - `--server-url` overrides profile (priority test)
+  - Host/port fallback when no profile (backward-compat test)
+
 ## [v0.13.0] - Email-First Identity (BREAKING-friendly)
 
 ### Summary
