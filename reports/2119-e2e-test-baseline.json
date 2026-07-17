@@ -1,0 +1,60 @@
+{
+  "schema": "roy-rd-pipeline-baseline/v1",
+  "stage": "e2e",
+  "task_id": 2119,
+  "captured_at": "2026-07-17T15:44:42.091Z",
+  "invocation_hash": "301b8c7705f41ea56d4a6b4f4660c0fb69804faf8864a11134c1cbebbcc3e696",
+  "worktree_path": "/home/dzk/work/codework/personal/roy_world/ai-agent-bounty-worktrees/refactor-bounty-email-only",
+  "command_lines": [
+    "test=BOUNTY_MAIL_DRY_RUN=1 bun test --parallel=4"
+  ],
+  "failures": {
+    "test": [],
+    "lint": [],
+    "typecheck": [],
+    "build": [],
+    "cli-smoke": []
+  },
+  "pass_counts": {
+    "test": 1031,
+    "lint": 0,
+    "typecheck": 0,
+    "build": 0,
+    "cli-smoke": 0
+  },
+  "exit_codes": {
+    "test": 0,
+    "lint": 0,
+    "typecheck": 0,
+    "build": 0,
+    "cli-smoke": 0
+  },
+  "log_tail": {
+    "test": [
+      "(pass) bounty bounty-task - error classification (exit code mapping, v0.14) > publish: network error → exit 4 + friendly message [639.96ms]",
+      "tests/im/client.test.ts:",
+      "(pass) Mailbox Client > fetchInbox > fetches inbox messages [5.06ms]",
+      "tests/cli/bounty-task-error-classification.test.ts:",
+      "(pass) bounty bounty-task - error classification (exit code mapping, v0.14) > publish: auth error (401) → exit 3 [2.60ms]",
+      "(pass) bounty bounty-task - error classification (exit code mapping, v0.14) > publish: business error (400 reward=0) → exit 2 [1.75ms]",
+      "(pass) bounty bounty-task - error classification (exit code mapping, v0.14) > publish: missing --publisher-email and no active profile email → exit 1 [0.34ms]",
+      "tests/im/client.test.ts:",
+      "(pass) Mailbox Client > fetchInbox > fetches empty inbox [4.15ms]",
+      "tests/cli/bounty-task-error-classification.test.ts:",
+      "(pass) bounty bounty-task - error classification (exit code mapping, v0.14) > publish: server error (500) → exit 4 [2.30ms]",
+      "tests/im/client.test.ts:",
+      "(pass) Mailbox Client > ping > sends ping without error [3.90ms]",
+      "tests/cli/bounty-task-error-classification.test.ts:",
+      "(pass) bounty bounty-task - error classification (exit code mapping, v0.14) > publish: network error → exit 4 + friendly message (alias check) [601.72ms]",
+      "(pass) bounty bounty-task - error classification (exit code mapping, v0.14) > grab: network error → exit 4 [699.82ms]",
+      " 1030 pass",
+      " 0 fail",
+      " 2826 expect() calls",
+      "Ran 1030 tests across 137 files. [3.37s]"
+    ],
+    "lint": [],
+    "typecheck": [],
+    "build": [],
+    "cli-smoke": []
+  }
+}

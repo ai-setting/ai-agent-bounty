@@ -1,0 +1,262 @@
+{
+  "schema": "phase-7-final-verify/v2",
+  "task_id": 2119,
+  "branch": "refactor/bounty-email-only",
+  "worktree": "/home/dzk/work/codework/personal/roy_world/ai-agent-bounty-worktrees/refactor-bounty-email-only",
+  "head_commit": "9c39e8c8c2922b0bd0584c2bb39ef29829648b80",
+  "captured_at": "2026-07-17T16:05:27.216866+00:00",
+  "operator": "roy-agent phase-7 final-verify",
+  "auto_merge": false,
+  "captures": {
+    "typecheck": {
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": "$ tsc --noEmit\n"
+    },
+    "test_parallel_4": {
+      "exit_code": 0,
+      "stdout_tail": "bun test v1.3.14 (0d9b296a) 4x PARALLEL\n",
+      "stderr": "ches empty inbox [10.79ms]\n(pass) Mailbox Client > ping > sends ping without error [10.37ms]\n\ntests/cli/bounty-task-error-classification.test.ts:\n(pass) bounty bounty-task - error classification (exit code mapping, v0.14) > publish: network error → exit 4 + friendly message (alias check) [533.00ms]\n(pass) bounty bounty-task - error classification (exit code mapping, v0.14) > grab: network error → exit 4 [497.63ms]\n\n 1030 pass\n 0 fail\n 2826 expect() calls\nRan 1030 tests across 137 files. [2.94s]\n",
+      "pass_count": 1030,
+      "fail_count": 0,
+      "summary": "1030 pass / 0 fail",
+      "ran": [
+        "1030",
+        "137"
+      ]
+    },
+    "test_isolate": {
+      "exit_code": 0,
+      "stdout_tail": "t:0/ws\n   HTTP/WS: ws://localhost:0/ws\n   HTTP/WS: ws://localhost:0/ws\n   HTTP/WS: ws://localhost:0/ws\n   HTTP/WS: ws://localhost:0/ws\n   HTTP/WS: ws://localhost:0/ws\n   HTTP/WS: ws://localhost:0/ws\n   HTTP/WS: ws://localhost:0/ws\n[BountyIM] 已发送 ACK for message: msg-test-001\n   HTTP/WS: ws://localhost:0/ws\n   HTTP/WS: ws://localhost:0/ws\n   HTTP/WS: ws://localhost:0/ws\n   HTTP/WS: ws://localhost:0/ws\n   HTTP/WS: ws://localhost:0/ws\n   HTTP/WS: ws://localhost:0/ws\n   HTTP/WS: ws://localhost:0/ws\n",
+      "stderr": "api/agents/me (默认 token check ON) > GET /api/agents/me 无 token → 401 [7.74ms]\n[JWT] JWT_SECRET not set — using a derived dev secret. Set JWT_SECRET for production use.\n(pass) PR4 HTTP auth middleware > 受保护接口 /api/agents/me (默认 token check ON) > GET /api/agents/me 坏 token → 401 [4.80ms]\n(pass) PR4 HTTP auth middleware > 受保护接口 /api/agents/me (默认 token check ON) > GET /api/agents/me 合法 token → 通过鉴权 (不返回 401) [5.39ms]\n\n 1030 pass\n 0 fail\n 2826 expect() calls\nRan 1030 tests across 137 files. [8.78s]\n",
+      "pass_count": 1030,
+      "fail_count": 0,
+      "summary": "1030 pass / 0 fail",
+      "ran": [
+        "1030",
+        "137"
+      ]
+    },
+    "build_cli": {
+      "exit_code": 0,
+      "stdout_tail": "Bundled 143 modules in 12ms\n\n  cli.js  0.51 MB  (entry point)\n\n",
+      "stderr": "$ bun build ./src/cli/cli.ts --outdir=./dist --target=bun --external @ai-setting/roy-agent-cli --external @ai-setting/roy-agent-core\n"
+    },
+    "git_status_short": " M reports/2119-review-modified.json\n?? reports/2119-e2e-build-baseline.json\n?? reports/2119-e2e-build-modified-failures.json\n?? reports/2119-e2e-cli-smoke-baseline.json\n?? reports/2119-e2e-cli-smoke-modified-failures.json\n?? reports/2119-e2e-test-baseline.json\n?? reports/2119-e2e-test-modified-failures.json\n?? reports/2119-phase-6-cli-e2e-summary.json\n?? reports/phase-7/\n?? scripts/capture-rd-pipeline-baseline.ts\n?? scripts/verify-rd-pipeline-baseline.ts\n",
+    "git_status_clean": false,
+    "head_commit": "9c39e8c8c2922b0bd0584c2bb39ef29829648b80",
+    "main_commit": "0e0fd4b026e648573d60db00b6f23dd441b291cd",
+    "commits_ahead_of_main": 18,
+    "commits_behind_main": 0,
+    "refactor_branch_merged_to_main": false,
+    "package_version": "0.14.0",
+    "BOUNTY_IM_ADDRESS_active_code_refs": [],
+    "cli_smoke_tests": [
+      {
+        "case": "grab --agent-address",
+        "exit": 1,
+        "kind": "REJECTED_LEGACY_FLAG_EXIT1",
+        "stdout_tail": "ttps://bou\n                    nty.example.com). When set, overrides BOUNTY_API_URL env var\n                     and default. Must start with http:// or https://. Trailing\n                    slashes are auto-trimmed.                           [string]\nUnknown arguments: agent-address, agentAddress\n"
+      },
+      {
+        "case": "submit --agent-address",
+        "exit": 1,
+        "kind": "REJECTED_LEGACY_FLAG_EXIT1",
+        "stdout_tail": "ttps://bou\n                    nty.example.com). When set, overrides BOUNTY_API_URL env var\n                     and default. Must start with http:// or https://. Trailing\n                    slashes are auto-trimmed.                           [string]\nUnknown arguments: agent-address, agentAddress\n"
+      },
+      {
+        "case": "publish --publisher-address",
+        "exit": 1,
+        "kind": "REJECTED_LEGACY_FLAG_EXIT1",
+        "stdout_tail": "s\n                          ://bounty.example.com). When set, overrides BOUNTY_API\n                          _URL env var and default. Must start with http:// or h\n                          ttps://. Trailing slashes are auto-trimmed.   [string]\nUnknown arguments: publisher-address, publisherAddress\n"
+      },
+      {
+        "case": "complete --publisher-address",
+        "exit": 1,
+        "kind": "REJECTED_LEGACY_FLAG_EXIT1",
+        "stdout_tail": ":\n                         //bounty.example.com). When set, overrides BOUNTY_API_U\n                         RL env var and default. Must start with http:// or http\n                         s://. Trailing slashes are auto-trimmed.       [string]\nUnknown arguments: publisher-address, publisherAddress\n"
+      },
+      {
+        "case": "cancel --publisher-address",
+        "exit": 1,
+        "kind": "REJECTED_LEGACY_FLAG_EXIT1",
+        "stdout_tail": ":\n                         //bounty.example.com). When set, overrides BOUNTY_API_U\n                         RL env var and default. Must start with http:// or http\n                         s://. Trailing slashes are auto-trimmed.       [string]\nUnknown arguments: publisher-address, publisherAddress\n"
+      },
+      {
+        "case": "com send --from/--to",
+        "exit": 1,
+        "kind": "REJECTED_LEGACY_FLAG_EXIT1",
+        "stdout_tail": "ed when --server-url is set.\n                                                 [string] [default: \"localhost\"]\n  -p, --port        IM server port (default uses BOUNTY_PORT env or 4000). Ignor\n                    ed when --server-url is set.        [number] [default: 4000]\nUnknown arguments: from, to\n"
+      },
+      {
+        "case": "grab --email=bare-uuid",
+        "exit": 1,
+        "kind": "REJECTED_MALFORMED_EXIT1",
+        "stdout_tail": "══════╝\n\n[OTelSpan] storage not initialized for \"agent.registry.loadFromDirectory\", initializing now...\n[roy-plugin-task-show] Port 7788 busy — trying 7789\n\n✗ email must be a registered email in local@domain.tld form (got \"00000000-0000-0000-0000-000000000001\"); use --email <your-registered-email>\n\n"
+      },
+      {
+        "case": "grab --email=malformed",
+        "exit": 1,
+        "kind": "REJECTED_MALFORMED_EXIT1",
+        "stdout_tail": "══════════════════════════════╝\n\n[OTelSpan] storage not initialized for \"agent.registry.loadFromDirectory\", initializing now...\n[roy-plugin-task-show] Port 7788 busy — trying 7789\n\n✗ email must be a registered email in local@domain.tld form (got \"not-an-email\"); use --email <your-registered-email>\n\n"
+      },
+      {
+        "case": "grab --email=valid",
+        "exit": 4,
+        "kind": "EMAIL_ACCEPTED_HTTP_ATTEMPTED",
+        "stdout_tail": "ng now...\n[roy-plugin-task-show] Port 7788 busy — trying 7789\n\n✗ Failed to grab task:\n  Network error: Unable to connect. Is the computer able to access the url?. Is the bounty server running? Try: bounty server start. URL: http://127.0.0.1:65535/api/tasks/550e8400-e29b-41d4-a716-446655440000/grab\n\n"
+      },
+      {
+        "case": "publish --publisher-email=valid",
+        "exit": 4,
+        "kind": "EMAIL_ACCEPTED_HTTP_ATTEMPTED",
+        "stdout_tail": "registry.loadFromDirectory\", initializing now...\n[roy-plugin-task-show] Port 7788 busy — trying 7789\n\n✗ Failed to publish task:\n  Network error: Unable to connect. Is the computer able to access the url?. Is the bounty server running? Try: bounty server start. URL: http://127.0.0.1:65535/api/tasks\n\n"
+      },
+      {
+        "case": "com send --from-email/--to-email=valid",
+        "exit": 1,
+        "kind": "EMAIL_ACCEPTED_HTTP_ATTEMPTED",
+        "stdout_tail": "╚════════════════════════════════════════════════════════════════╝\n\n[OTelSpan] storage not initialized for \"agent.registry.loadFromDirectory\", initializing now...\n[roy-plugin-task-show] Port 7788 busy — trying 7789\n\n✗ Error sending message: Unable to connect. Is the computer able to access the url?\n"
+      }
+    ],
+    "baseline_stable_failure_count": 30,
+    "current_stable_failure_count": 0,
+    "new_stable_failure_ids": [],
+    "resolved_baseline_failure_ids": [
+      "(fail) ProfileContext > getApiBase throws without active profile",
+      "(fail) bounty bounty-task - default agent inference (v0.10) > cancel.ts: --publisher-address fallback to resolveCurrentAgent()",
+      "(fail) bounty bounty-task - default agent inference (v0.10) > complete.ts: --publisher-address fallback to resolveCurrentAgent()",
+      "(fail) bounty bounty-task - default agent inference (v0.10) > grab.ts: --agent-address fallback to resolveCurrentAgent()",
+      "(fail) bounty bounty-task - default agent inference (v0.10) > publish.ts: --publisher-address fallback to resolveCurrentAgent()",
+      "(fail) bounty bounty-task - default agent inference (v0.10) > submit.ts: --agent-address fallback to resolveCurrentAgent()",
+      "(fail) bounty bounty-task - error classification (exit code mapping) > grab: network error → exit 4",
+      "(fail) bounty bounty-task - error classification (exit code mapping) > publish: auth error (401) → exit 3",
+      "(fail) bounty bounty-task - error classification (exit code mapping) > publish: business error (400 reward=0) → exit 2",
+      "(fail) bounty bounty-task - error classification (exit code mapping) > publish: missing --publisher-address and no BOUNTY_IM_ADDRESS → exit 2",
+      "(fail) bounty bounty-task - error classification (exit code mapping) > publish: network error → exit 4 + friendly message",
+      "(fail) bounty bounty-task - error classification (exit code mapping) > publish: server error (500) → exit 4",
+      "(fail) bounty bounty-task cancel - HTTP API migration > body uses publisherAddress (v0.10 strict resolveActor contract)",
+      "(fail) bounty bounty-task complete - HTTP API migration > body uses publisherAddress (v0.10 strict resolveActor contract)",
+      "(fail) bounty bounty-task complete - HTTP API migration > source uses resolveCurrentAgent as default for --publisher-id",
+      "(fail) bounty bounty-task grab - HTTP API migration > source uses resolveCurrentAgent as default for --agent-id",
+      "(fail) bounty bounty-task grab — 409 friendly message (D.1 client) > grab 409 → CLI should include friendly \"task already grabbed\" hint and exit 2",
+      "(fail) bounty bounty-task publish - HTTP API migration > source uses resolveCurrentAgent as default for --publisher-id",
+      "(fail) bounty bounty-task publish — large-payload handling (D.3) > --description wins when both --description and --description-file are given",
+      "(fail) bounty bounty-task publish — large-payload handling (D.3) > --description-file: missing file → friendly error + exit 2",
+      "(fail) bounty bounty-task publish — large-payload handling (D.3) > --description-file: reads file content as description",
+      "(fail) bounty bounty-task publish — large-payload handling (D.3) > large description (~80KB) still allowed, content forwarded as-is",
+      "(fail) bounty bounty-task publish — large-payload handling (D.3) > short description (< 50KB) goes through to server",
+      "(fail) bounty bounty-task submit - HTTP API migration > source uses resolveCurrentAgent as default for --agent-id",
+      "(fail) bounty bounty-task — Tier B --json / --quiet flags > publish (no flag) → decorative text on stdout (default behavior)",
+      "(fail) bounty bounty-task — Tier B --json / --quiet flags > publish --json --quiet → JSON only (no decoration)",
+      "(fail) bounty bounty-task — Tier B --json / --quiet flags > publish --json → outputs valid JSON on stdout (no decorative text)",
+      "(fail) bounty bounty-task — Tier B --json / --quiet flags > publish --quiet → minimal output on stdout (no decoration)",
+      "(fail) bounty-task address-based flags (v0.10 strict) > source exposes ONLY preferred address flags (v0.10 BREAKING: --*-id REMOVED)",
+      "(fail) com/send - v0.13 --from-email / --to-email flags > --from and --to are no longer demandOption (replaced by .check)"
+    ],
+    "changelog_v014_entries": [
+      "## [v0.14.0] - 2026-07-17 - Strict Email-Only Refactor (BREAKING MINOR)"
+    ],
+    "dist_artifacts": {
+      "dist/cli.js": 507515,
+      "dist/bin/bounty.js": 507501,
+      "dist/server/server.js": 498230,
+      "dist/plugin/index.js": 124021
+    },
+    "branches_containing_HEAD": [
+      "refactor/bounty-email-only"
+    ],
+    "BOUNTY_IM_ADDRESS_doc_only_refs": [
+      "src/cli/cli.ts:72",
+      "src/cli/cli.ts:151",
+      "src/cli/lib/email-flag.ts:11",
+      "src/cli/lib/current-agent.ts:5",
+      "src/cli/lib/current-agent.ts:37",
+      "src/cli/lib/address-parser.ts:48",
+      "src/cli/lib/address-parser.ts:67",
+      "src/lib/mail/bounty-constants.ts:34",
+      "src/lib/config/bounty-config.ts:222"
+    ],
+    "BOUNTY_IM_ADDRESS_classification_note": "All 9 remaining references in src/ are doc-only: 5 JSDoc comments, 3 // line comments, 1 inside markdown template string (BOUNTY_CAPABILITIES help-text). No executable code reads BOUNTY_IM_ADDRESS — `get imAddress()` getter, DEFAULTS.IM_ADDRESS entry, and toConfigItems BOUNTY_IM_ADDRESS entry are all deleted (RC-1 fix)."
+  },
+  "deviations_from_strict_email_only": [
+    {
+      "id": "DEV-1",
+      "surface": "HTTP /api/messages POST (IM send)",
+      "file": "src/server/http/im-routes.ts:120-125",
+      "deviation": "Accepts `body.from` / `body.to` as legacy fallback to `body.from_email` / `body.to_email`. Comment: 'v0.13: prefer *_email, fall back to legacy *'.",
+      "severity": "MINOR — only when tokenCheckOff (legacy dev mode); server still resolves email-first when *_email present",
+      "scope": "Server-only; CLI com send is fully email-only"
+    },
+    {
+      "id": "DEV-2",
+      "surface": "HTTP /api/auth/login POST",
+      "file": "src/server/http/auth-routes.ts:106",
+      "deviation": "Accepts `body.agent_id` as alternative to `body.email`. Comment: 'Email or agent_id is required'.",
+      "severity": "MINOR — pre-existing v0.13 contract; CLI auth login is fully email-only (`--email` enforced)",
+      "scope": "Server-only; CLI auth login is fully email-only"
+    },
+    {
+      "id": "DEV-3",
+      "surface": "HTTP /api/auth/register POST",
+      "file": "src/server/http/auth-routes.ts:49-50",
+      "deviation": "Accepts `body.address` (must be strict uuid@host format) as optional hint. Comment: 'optional address field validation'.",
+      "severity": "MINOR — only for the register endpoint's optional address hint (overwritten by verify step)",
+      "scope": "Server-only"
+    },
+    {
+      "id": "DEV-4",
+      "surface": "WebSocket /ws upgrade",
+      "file": "src/server/http/index.ts:178-186",
+      "deviation": "Accepts `?address=<uuid>@<host>` as fallback to `?email=`. Comment: 'v0.13: prefer ?email=, fall back to legacy ?address='.",
+      "severity": "MINOR — pre-existing v0.13 contract",
+      "scope": "WS upgrade only"
+    },
+    {
+      "id": "DEV-5",
+      "surface": "Stale help-text in BOUNTY_CAPABILITIES prompt",
+      "file": "src/lib/mail/bounty-constants.ts:34",
+      "deviation": "Inside the markdown prompt string, a stale help line tells AI agents: '缺省时从 BOUNTY_IM_ADDRESS env 推断'. This is a documentation/help-text issue — no active code reads BOUNTY_IM_ADDRESS.",
+      "severity": "DOC-ONLY — affects AI agent prompts shown to LLM callers, but no runtime impact",
+      "scope": "Documentation/help-text"
+    },
+    {
+      "id": "DEV-6",
+      "surface": "JSDoc comment referencing BOUNTY_IM_ADDRESS",
+      "file": "src/cli/lib/address-parser.ts:67",
+      "deviation": "JSDoc comment for `ResolveAddressOptionInput.fallback` says '(e.g. resolved BOUNTY_IM_ADDRESS)'.",
+      "severity": "DOC-ONLY — JSDoc comment only; no active code path",
+      "scope": "Documentation"
+    }
+  ],
+  "strict_email_only_compliance": {
+    "cli_surface": "FULLY COMPLIANT — all bounty CLI commands + com send + auth/profile commands reject legacy flags with 'Unknown arguments' exit 1, malformed/bare-UUID email with 'use --email <your-registered-email>' exit 1",
+    "server_api_bounty": "FULLY COMPLIANT — /api/bounty/* /api/tasks reject body.publisherAddress / body.agentAddress with 400 'use publisherEmail' (RC-2); ?publisherId=<email> resolves to agent.id (FB-1)",
+    "server_api_messages_get": "FULLY COMPLIANT — GET /api/messages rejects ?address= with 400 'use ?email=' (RC-3)",
+    "server_api_messages_send": "PARTIAL — DEV-1: legacy body.from/body.to fallback retained",
+    "server_api_auth": "PARTIAL — DEV-2/DEV-3: legacy body.agent_id / body.address accepted",
+    "ws_upgrade": "PARTIAL — DEV-4: legacy ?address= fallback retained"
+  },
+  "verdict_summary": {
+    "build_pass": true,
+    "typecheck_pass": true,
+    "test_parallel_4_pass": true,
+    "test_isolate_pass": true,
+    "git_status_clean": false,
+    "version_v0140": true,
+    "no_merge_to_main": true,
+    "all_dist_artifacts_present": true,
+    "BOUNTY_IM_ADDRESS_active_code_deleted": true,
+    "cli_smoke_legacy_rejection_ok": true,
+    "cli_smoke_valid_email_happy_path_ok": true,
+    "stable_failure_ids_baseline_count": 30,
+    "stable_failure_ids_current_count": 0,
+    "new_stable_failure_ids": [],
+    "deviations_count": 6,
+    "overall_status": "PASS_WITH_NOTED_DEVIATIONS",
+    "blocking_issues": [
+      "git_status_not_clean: 1 modified tracked file (reports/2119-review-modified.json) + 9 untracked files in reports/ and scripts/. All non-source artifacts (Phase 6 reports + Phase 7 outputs + helper scripts). Per Phase 7 spec 'git status clean' literal requirement, this is a FAIL on that dimension. Per 'Fix nothing in verify' rule, no auto-commit. Source code (src/, tests/) IS clean."
+    ],
+    "BOUNTY_IM_ADDRESS_doc_refs_remaining": 9
+  }
+}

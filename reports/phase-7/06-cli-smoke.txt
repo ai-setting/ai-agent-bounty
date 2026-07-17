@@ -1,0 +1,45 @@
+=== CLI Smoke Tests (Phase 7 FINAL VERIFY) ===
+Time: 2026-07-17T16:00:17Z
+
+=== Test 1: CLI --help ===
+1
+(0 if help printed, 1 if Commands: found)
+
+=== Test 2: invalid UUID/address smoke (legacy flags) ===
+
+--- 2.1 grab with --agent-address (legacy) ---
+Unknown arguments: agent-address, agentAddress
+EXIT=1
+
+--- 2.2 submit with --agent-address (legacy) ---
+Unknown arguments: agent-address, agentAddress
+
+--- 2.3 publish with --publisher-address (legacy) ---
+Unknown arguments: publisher-address, publisherAddress
+
+--- 2.4 complete with --publisher-address (legacy) ---
+Unknown arguments: publisher-address, publisherAddress
+
+--- 2.5 cancel with --publisher-address (legacy) ---
+Unknown arguments: publisher-address, publisherAddress
+
+--- 2.6 com send with --from / --to (legacy) ---
+Unknown arguments: from, to
+
+--- 2.7 bare UUID as --email ---
+✗ email must be a registered email in local@domain.tld form (got "00000000-0000-0000-0000-000000000001"); use --email <your-registered-email>
+
+--- 2.8 malformed email (no @) ---
+✗ email must be a registered email in local@domain.tld form (got "not-an-email"); use --email <your-registered-email>
+
+=== Test 3: valid email happy-path (HTTP request attempted) ===
+--- 3.1 grab with valid email ---
+✗ Failed to grab task:
+  Network error: Unable to connect. Is the computer able to access the url?. Is the bounty server running? Try: bounty server start. URL: http://127.0.0.1:65535/api/tasks/550e8400-e29b-41d4-a716-446655440000/grab
+
+--- 3.2 publish with valid --publisher-email ---
+✗ Failed to publish task:
+  Network error: Unable to connect. Is the computer able to access the url?. Is the bounty server running? Try: bounty server start. URL: http://127.0.0.1:65535/api/tasks
+
+--- 3.3 com send with valid --from-email/--to-email ---
+✗ Error sending message: Unable to connect. Is the computer able to access the url?

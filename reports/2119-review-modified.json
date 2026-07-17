@@ -1,200 +1,132 @@
 {
-  "schema": "phase-5-code-review-modified/v1",
+  "schema": "phase-5-code-review-modified/v2",
   "task_id": 2119,
   "branch": "refactor/bounty-email-only",
   "worktree": "/home/dzk/work/codework/personal/roy_world/ai-agent-bounty-worktrees/refactor-bounty-email-only",
-  "head_commit": "1ecffa4",
-  "reviewed_at": "2026-07-17T15:30:00+08:00",
-  "operator": "roy-agent phase-5 code review",
-  "verdict": "NEEDS_FIX",
+  "head_commit": "9c39e8c",
+  "previous_review_head": "1ecffa4",
+  "new_commits_reviewed": ["2c02161", "9c39e8c"],
+  "reviewed_at": "2026-07-17T23:50:00+08:00",
+  "operator": "roy-agent phase-5 code review (re-run after NEEDS_FIX)",
+  "verdict": "PASS",
   "auto_merge": false,
   "command_runs": {
     "cli_tests_parallel_4": {
       "command": "BOUNTY_MAIL_DRY_RUN=1 bun test tests/cli --parallel 4",
-      "result": "604 pass / 0 fail / 88 files (vs baseline 504/36/86)",
+      "result": "604 pass / 0 fail / 88 files",
       "exit_code": 0
     },
     "server_tests_parallel_4": {
       "command": "BOUNTY_MAIL_DRY_RUN=1 bun test tests/server --parallel 4",
-      "result": "190 pass / 0 fail / 24 files (vs baseline 190/0/24)",
+      "result": "196 pass / 0 fail / 26 files (was 190/0/24; +6 new tests for FB-1+RC-3)",
       "exit_code": 0
     },
-    "full_default_serial": {
+    "full_default_serial_isolate": {
       "command": "BOUNTY_MAIL_DRY_RUN=1 bun test --isolate",
-      "result": "1024 pass / 0 fail / 135 files",
+      "result": "1030 pass / 0 fail / 137 files (was 1024/0/135; +6 new tests)",
       "exit_code": 0
     },
-    "typecheck": {
-      "command": "bun run typecheck",
-      "result": "exit 0",
-      "exit_code": 0
-    },
-    "build_cli": {
-      "command": "bun run build:cli",
-      "result": "exit 0 — cli.js 0.51 MB",
-      "exit_code": 0
-    },
-    "build_bin": {
-      "command": "bun run build:bin",
-      "result": "exit 0 — bounty.js 0.51 MB",
-      "exit_code": 0
-    },
-    "build_server": {
-      "command": "bun run build:server",
-      "result": "exit 0 — server.js 0.50 MB",
-      "exit_code": 0
-    },
-    "build_plugin": {
-      "command": "bun run build:plugin",
-      "result": "exit 0 — plugin/index.js 124.26 KB",
-      "exit_code": 0
-    }
+    "typecheck":         { "command": "bun run typecheck",     "result": "exit 0", "exit_code": 0 },
+    "build_cli":         { "command": "bun run build:cli",     "result": "exit 0 — cli.js 0.51 MB", "exit_code": 0 },
+    "build_bin":         { "command": "bun run build:bin",     "result": "exit 0 — bounty.js 0.51 MB", "exit_code": 0 },
+    "build_server":      { "command": "bun run build:server",  "result": "exit 0 — server.js 0.50 MB", "exit_code": 0 },
+    "build_plugin":      { "command": "bun run build:plugin",  "result": "exit 0 — plugin/index.js 124 KB", "exit_code": 0 }
   },
   "summary": {
-    "baseline_at_22:18": { "cli_pass": 504, "cli_fail": 36, "cli_files": 86, "server_pass": 190, "server_fail": 0 },
-    "review_at_15:30":    { "cli_pass": 604, "cli_fail": 0,  "cli_files": 88, "server_pass": 190, "server_fail": 0, "full_serial_pass": 1024, "full_serial_fail": 0, "full_serial_files": 135 },
-    "delta_cli": "+100 pass / -36 fail / +2 files",
-    "delta_server": "unchanged (190/0)",
+    "baseline_v1_3": { "cli_pass": 504, "cli_fail": 36, "cli_files": 86, "server_pass": 190, "server_fail": 0 },
+    "review_v1_needfix":  { "cli_pass": 604, "cli_fail": 0, "cli_files": 88, "server_pass": 190, "server_fail": 0, "full_serial_pass": 1024, "full_serial_fail": 0 },
+    "review_v2_pass":     { "cli_pass": 604, "cli_fail": 0, "cli_files": 88, "server_pass": 196, "server_fail": 0, "full_serial_pass": 1030, "full_serial_fail": 0 },
+    "delta_cli_v1_to_v2": "+0 pass / +0 fail (stable)",
+    "delta_server_v1_to_v2": "+6 pass / +0 fail (new FB-1 + RC-3 tests)",
+    "delta_serial_v1_to_v2": "+6 pass / +0 fail",
     "non_legacy_regression_count": 0,
-    "stable_failure_set_compare_vs_baseline": "All 36 baseline CLI failures resolved; no new failures introduced; typecheck/build green"
+    "baseline_failures_resolved": 36,
+    "new_failures_introduced": 0
   },
-  "seven_previous_blockers_status": {
-    "B-1_requireEmailFlag_in_5_bounty_commands_and_com_sender": {
-      "status": "PASS",
+  "previous_blockers_resolution": {
+    "FB-1_board_publisher_email_filter_end_to_end": {
+      "status": "RESOLVED",
       "evidence": [
-        "src/cli/lib/email-flag.ts has requireEmailFlag + parseEmailFromArgv + resolveActiveProfileEmail + exitWithEmailFlagError",
-        "Applied to grab.ts:95, submit.ts:95, publish.ts:148, complete.ts:83, cancel.ts:80 (5 bounty commands)",
-        "Applied to com/send.ts:103 (from-email) + send.ts:110 (to-email) — com sender also routes through requireEmailFlag",
-        "Helper precedence: explicit argv > ProfileContext.active.email (verified in helper source)"
+        "src/server/http/bounty-routes.ts: getTasks() now calls resolvePublisherIdFilter() which resolves email-shape input to agent.id via findAgentByEmail BEFORE the WHERE clause",
+        "UUID-shape input continues to work as before for backward-compat with internal/k8s callers",
+        "Unregistered valid-format email returns empty list (not 404 — list() semantics)",
+        "tests/server/bounty-board-publisher-email-filter.test.ts (NEW, 4 tests): all pass",
+        "Runtime end-to-end test: GET /api/tasks?publisherId=alice@example.com now returns Alice's tasks (was 0 in v1)"
       ]
     },
-    "B-2_board_publisher_email_filter": {
-      "status": "FAIL — FUNCTIONAL BLOCKER",
+    "RC-1_config_imAddress_dead_code": {
+      "status": "RESOLVED",
       "evidence": [
-        "src/cli/commands/bounty-task/board.ts:113 sets params.set('publisherId', parsed.value) — wire format is ?publisherId=<email>",
-        "CLI test T5 (board-publisher-email.test.ts:119) verifies only the URL contract, not server response shape",
-        "Server's BountyService.list() at src/lib/bounty/index.ts:226-229 compares filter.publisherId DIRECTLY against tasks.publisher_id column (UUID)",
-        "tasks.publisher_id is TEXT holding UUID (FK to agents.id); tasks.publisher_email is a separate column",
-        "RUNTIME TEST CONFIRMED: GET /api/tasks?publisherId=alice@example.com returns 0 tasks; GET /api/tasks?publisherId=<uuid> returns 1 task (the legacy UUID path still works)",
-        "No end-to-end server test exists for the ?publisherId=<email> filter path (grep tests/server/ for publisherId+email returns 0 matches)"
-      ],
-      "blocker_impact": "bounty-task board --publisher-email <email> silently returns empty list — defeats the entire purpose of the filter; users have no signal that the wire contract mismatch is the cause"
-    },
-    "B-3_com_send_server_url_alias_u": {
-      "status": "PASS",
-      "evidence": [
-        "src/cli/commands/com/send.ts:61: option('server-url', { alias: 'u' })",
-        "CHANGELOG marks v0.14 BREAKING flag-alias rename",
-        "addServerUrlOption helper standardizes -u across com/{inbox,connect,disconnect}.ts and now send.ts"
+        "src/lib/config/bounty-config.ts: get imAddress() getter REMOVED",
+        "src/lib/config/bounty-config.ts: toConfigItems() BOUNTY_IM_ADDRESS entry REMOVED",
+        "src/lib/config/bounty-config.ts: DEFAULTS.IM_ADDRESS REMOVED",
+        "Only doc-comment references to BOUNTY_IM_ADDRESS remain (in migration guide / cli.ts / current-agent.ts)",
+        "No runtime process.env.BOUNTY_IM_ADDRESS reads anywhere in src/"
       ]
     },
-    "B-4_29_non_legacy_regressions_fixed": {
-      "status": "PASS",
+    "RC-2_server_rejects_legacy_body_address_fields": {
+      "status": "RESOLVED",
       "evidence": [
-        "tests/cli --parallel 4: 604/604 (was 504/36)",
-        "All 36 baseline failures resolved: error-classification (7), large-payload (5), --json/--quiet (4), 409 friendly (1), default-agent-inference legacy-contract rewrites (9), ProfileContext getApiBase (1), com-send flag-removal (1), register-agent/credits flag (1), inbox source-wiring (1), grab 409 friendly (1), remaining legacy-contract rewrites (5)"
+        "src/server/http/bounty-routes.ts: resolveActor() rewritten — body[${fieldName}Address] now returns 400 'use ${fieldName}Email: <your-registered-email>'",
+        "resolveActorOrError() helper added for clean error-to-Response conversion",
+        "All 6 legacy body.publisherAddress / body.agentAddress matches in server code replaced",
+        "tests/server/bounty-routes-address.test.ts rewritten to v0.14 contract (12 tests)",
+        "tests/server/bounty-routes-email-first.test.ts: legacy-contract tests updated",
+        "tests/server/soft-auth-no-header-grab.test.ts: rewritten to email-only contract"
       ]
     },
-    "B-5_runtime_valid_email_tests_not_static_only": {
-      "status": "PARTIAL",
+    "RC-3_server_rejects_query_address_param": {
+      "status": "RESOLVED",
       "evidence": [
-        "tests/cli/bounty-task-board-publisher-email.test.ts:75-130 has fetch-mock runtime tests asserting URL contract",
-        "tests/cli/bounty-task-grab-profile.test.ts, cancel-email-only, complete-email-only, etc. use fetch mock + process.exit + console.error spies",
-        "BUT: no server-side runtime test asserts the server actually returns tasks matching ?publisherId=<email> (see B-2)"
-      ],
-      "blocker_impact": "B-2 root cause — wire contract is verified, server-side filter behavior is not"
-    },
-    "B-6_com_send_sender_identity_via_requireEmailFlag": {
-      "status": "PASS",
-      "evidence": [
-        "src/cli/commands/com/send.ts:103 fromParsed = requireEmailFlag('from-email', args)",
-        "src/cli/commands/com/send.ts:110 toParsed = requireEmailFlag('to-email', args)",
-        "R-6 implementation complete"
+        "src/server/http/im-routes.ts: getMessages() rejects ?address= query with 400 'use ?email=<'",
+        "src/server/http/im-routes.ts: getMessagesForAddress() also rejects ?address= with 400",
+        "tests/server/im-routes-reject-address-query.test.ts (NEW, 4 tests): all pass",
+        "tests/server/im-routes-auth.test.ts: ?address= → ?email= in test cases",
+        "tests/server/im-routes-inbox-email.test.ts: T4 rewritten to assert 400 on legacy ?address="
       ]
-    },
-    "B-7_remaining_cli_server_cleanup_version_docs": {
-      "status": "PARTIAL",
-      "evidence": [
-        "BOUNTY_IM_ADDRESS still read at src/lib/config/bounty-config.ts:133 (config.imAddress getter) — DEAD CODE (no caller found in src/)",
-        "BOUNTY_IM_ADDRESS still listed in src/lib/config/bounty-config.ts:229 toConfigItems() — DEAD CODE (CONFIG_ITEMS exported but no caller)",
-        "Server endpoints still accept legacy body.publisherAddress / body.agentAddress as fallback (src/server/http/bounty-routes.ts:196,234,292,321,352,381) — returns 201/200 instead of 400",
-        "Server im-routes still accepts ?address= query (src/server/http/im-routes.ts:190,258) — backward-compat path",
-        "Version bumped 0.13.4 → 0.14.0 (BREAKING MINOR) in package.json",
-        "CHANGELOG.md updated with v0.14.0 section (Removed/Changed/Migration)",
-        "README.md updated with BREAKING callout",
-        "k8s/deployment.yaml image tag updated to v0.14.0",
-        "src/cli/lib/current-agent.ts BOUNTY_IM_ADDRESS references — only doc/comment mentions, no env reads (PASS per existing test)"
-      ],
-      "blocker_impact": "BOUNTY_IM_ADDRESS dead-code remnants + server-side legacy compat paths are residual cleanup items; not functional blockers (no caller, no end-user-visible bug) but fail the 'remaining CLI/server cleanup' mandate strictly read"
     }
   },
-  "user_decisions_compliance": {
-    "Q1_KEEP_agents_address_column": "PASS — column retained in src/lib/storage/database.ts CREATE TABLE agents",
-    "Q2_KEEP_api_agents_by_email": "PASS — src/server/http/auth-routes.ts:204 getAgentByEmail returns 200/404",
-    "Q3_404_for_unregistered_valid_email": "PASS — auth-routes.ts:213 / deleteAgentByEmail:243 returns 404 with 'Agent not found for email: ...'",
-    "Q4_canonical_internal_storage": "PASS — src/server/http/bounty-routes.ts:94 'address' (uuid@host) is canonical; messages.from_address / to_address unchanged",
-    "Q5_DELETE_BOUNTY_IM_ADDRESS": "PARTIAL — env reads DELETED from src/cli/lib/current-agent.ts (PASS per test) and src/cli/cli.ts EventSource auto-registration removed; HOWEVER dead-code env read REMAINS at src/lib/config/bounty-config.ts:133 (config.imAddress getter — no caller)",
-    "Q6_com_send_server_url_alias_u": "PASS — send.ts:61 alias 'u' (was 'e')"
+  "seven_previous_blockers_status_v2": {
+    "B-1_requireEmailFlag_in_5_bounty_commands_and_com_sender": "PASS — verified in v1; helper applied to grab/submit/publish/complete/cancel + com/send.ts from-email/to-email",
+    "B-2_board_publisher_email_filter": "PASS — server-side resolvePublisherIdFilter() resolves email → agent.id; verified by new bounty-board-publisher-email-filter.test.ts (4 tests pass) + runtime e2e",
+    "B-3_com_send_server_url_alias_u": "PASS — verified in v1; alias 'u' in com/send.ts:61",
+    "B-4_29_non_legacy_regressions_fixed": "PASS — 604/0 CLI tests stable; +0 new failures",
+    "B-5_runtime_valid_email_tests": "PASS — both CLI mock-fetch tests (board-publisher-email.test.ts) AND server-side integration tests (bounty-board-publisher-email-filter.test.ts, im-routes-reject-address-query.test.ts) exist and pass",
+    "B-6_com_send_sender_identity_via_requireEmailFlag": "PASS — verified in v1; com/send.ts:103,110",
+    "B-7_remaining_cli_server_cleanup_version_docs": "PASS — RC-1 (BOUNTY_IM_ADDRESS dead code), RC-2 (legacy body.*Address), RC-3 (?address= query) all resolved; version bumped; CHANGELOG + README + k8s updated"
   },
-  "functional_blockers": [
-    {
-      "id": "FB-1",
-      "title": "board --publisher-email filter is broken end-to-end",
-      "blocker_class": "functional",
-      "scope": "src/lib/bounty/index.ts:226 (server list() SQL) + src/cli/commands/bounty-task/board.ts:113 (wire contract) + tests/cli/bounty-task-board-publisher-email.test.ts (incomplete coverage)",
-      "description": "CLI sends `?publisherId=<email>` on the wire (verified). Server's BountyService.list() SQL is `WHERE publisher_id = ?` comparing against tasks.publisher_id (UUID FK column). The server never translates the email to a UUID before the WHERE clause, so all matches return zero. The existing CLI test only mocks fetch and asserts URL contract — never asserts that the server returns matching tasks.",
-      "evidence": "Runtime test (since deleted): published 1 task as alice@example.com (UUID 8de9b6aa-...). GET /api/tasks?publisherId=alice@example.com → 0 tasks; GET /api/tasks?publisherId=8de9b6aa-... → 1 task.",
-      "user_directive_clause": "shared requireEmailFlag ... board --publisher-email filter and publisherId=<email>",
-      "fix_recommendation": "Server-side: in src/lib/bounty/index.ts list() and getBoard(), when filter.publisherId is supplied, if it contains '@' treat it as an email and resolve to agent.id via findAgentByEmail first; or rename the CLI wire to `?publisherEmail=<email>` and the server to filter on tasks.publisher_email column. Add server-side integration test that creates a task, then GETs the board with publisherId=<email> AND asserts len(result) == 1."
-    }
-  ],
-  "residual_cleanup_items": [
-    {
-      "id": "RC-1",
-      "title": "src/lib/config/bounty-config.ts:133 still reads process.env.BOUNTY_IM_ADDRESS (DEAD CODE)",
-      "blocker_class": "cleanup",
-      "fix": "Delete the `get imAddress()` getter and the corresponding entry in toConfigItems() (line 229). No callers reference config.imAddress; CONFIRMED via grep src/."
-    },
-    {
-      "id": "RC-2",
-      "title": "Server endpoints still accept body.publisherAddress / body.agentAddress legacy fallback (returns 201/200 instead of 400)",
-      "blocker_class": "cleanup",
-      "fix": "Strict email-only per plan: src/server/http/bounty-routes.ts:196,234,292,321,352,381 should reject legacy address body fields with 400 'use publisherEmail / agentEmail'. (Per parent task description: '彻底移除 agent address、short address、uuid 以及任何隐式 fallback/兼容分支')"
-    },
-    {
-      "id": "RC-3",
-      "title": "Server im-routes still accepts ?address= legacy query param",
-      "blocker_class": "cleanup",
-      "fix": "src/server/http/im-routes.ts:190 and :258 should reject ?address= with 400 'use ?email='"
-    }
-  ],
-  "tests_added_during_review": [
-    {
-      "file": "tests/manual-board-runtime-check.test.ts",
-      "purpose": "Reproduce FB-1 with minimal runtime scenario; PASSES (showing the bug exists in the current implementation)",
-      "kept": false,
-      "removal_rationale": "Removed after reproducing — fix should land in tdd-implement as a new RED test in tests/server/"
-    }
-  ],
+  "user_decisions_compliance_v2": {
+    "Q1_KEEP_agents_address_column": "PASS — column retained in schema",
+    "Q2_KEEP_api_agents_by_email": "PASS — auth-routes.ts getAgentByEmail returns 200/404",
+    "Q3_404_for_unregistered_valid_email": "PASS — bounty-routes.ts:resolveActor returns 404 'No registered agent for email <email>' on unregistered valid-format email",
+    "Q4_canonical_internal_storage": "PASS — messages.from_address / to_address still canonical; agents.address column kept",
+    "Q5_DELETE_BOUNTY_IM_ADDRESS": "PASS — fully removed from src/; only doc comments remain (migration guide); no process.env.BOUNTY_IM_ADDRESS reads",
+    "Q6_com_send_server_url_alias_u": "PASS — com/send.ts:61 alias 'u'"
+  },
+  "functional_blockers": [],
+  "residual_cleanup_items": [],
   "stable_failure_set_vs_baseline": {
     "baseline_stable_failures": 36,
-    "review_new_failures": 0,
+    "review_v2_failures": 0,
     "baseline_failures_now_passing": 36,
-    "blocker_summary": "All 36 baseline failures are gone; HOWEVER FB-1 is a NEW functional bug exposed by inspecting the wire contract end-to-end. It was not in the baseline failure set because no test exercised it. Per directive 'Functional blockers always block even if baseline', FB-1 BLOCKS this review.",
+    "new_tests_added": 6,
+    "new_failures_introduced": 0,
     "non_legacy_regression_count": 0
   },
-  "decisions_implemented": ["Q1 KEEP agents.address", "Q2 KEEP /api/agents/by-email", "Q3 404 unregistered", "Q4 canonical storage", "Q5 DELETE BOUNTY_IM_ADDRESS (PARTIAL — dead-code remnants in config.imAddress)", "Q6 com-send --server-url alias -u"],
+  "runtime_end_to_end_verification": {
+    "fb1_board_publisher_email_filter": "PASS — runtime test confirmed: GET /api/tasks?publisherId=alice@example.com returns Alice's 1 task (was 0 in v1)",
+    "rc2_server_rejects_legacy_body": "PASS — runtime test confirmed: POST /api/tasks with body.publisherAddress returns 400 with 'publisherEmail' in error",
+    "rc3_server_rejects_query_address": "PASS — tests/server/im-routes-reject-address-query.test.ts (4 tests) confirm 400 on ?address= query"
+  },
+  "decisions_implemented": ["Q1 KEEP agents.address", "Q2 KEEP /api/agents/by-email", "Q3 404 unregistered", "Q4 canonical storage", "Q5 DELETE BOUNTY_IM_ADDRESS (FULLY DELETED)", "Q6 com-send --server-url alias -u"],
   "merge_to_main": {
     "status": "FORBIDDEN",
-    "rationale": "Phase 5 review returned NEEDS_FIX; user must approve merge-to-main per global memory ⚠️ 合并主分支铁律; this review did NOT merge main."
+    "rationale": "Phase 5 review re-run returned PASS; auto_merge=false per task mandate; user must approve merge-to-main per global memory ⚠️ 合并主分支铁律. Review did NOT merge main."
   },
   "next_actions": [
-    "Return verdict=NEEDS_FIX to workflow so it loops back to tdd-implement",
-    "TDD-implement: RED test in tests/server/ asserting GET /api/tasks?publisherId=<email> returns tasks published by that email",
-    "TDD-implement: GREEN — server-side list()/getBoard() resolves email → agent.id before WHERE publisher_id = ?",
-    "TDD-implement: cleanup RC-1 (delete config.imAddress getter) + RC-2 (server rejects legacy body.address) + RC-3 (server rejects ?address=)",
-    "After TDD-implement GREEN + REFACTOR, re-run Phase 5 code review",
-    "AWAIT user merge-to-main approval (auto_merge=false)"
+    "Verdict PASS — workflow can proceed to next phase (summary-report / task_complete)",
+    "AWAIT user merge-to-main approval (auto_merge=false)",
+    "After merge approval: tag v0.14.0 + npm publish (--tag beta per parent task #2103) + docker build/push v0.14.0 image"
   ],
-  "outstanding_user_action": "Verdict NEEDS_FIX → workflow loops to tdd-implement. User must NOT merge main until review returns PASS."
+  "outstanding_user_action": "AWAITING merge-to-main approval. auto_merge=false. Never merged main."
 }
