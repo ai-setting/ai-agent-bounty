@@ -20,6 +20,8 @@ metadata:
     app: bounty-server
 spec:
   replicas: 1
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       app: bounty-server
@@ -45,10 +47,6 @@ spec:
               value: /app/data/bounty.db
             - name: BOUNTY_DOMAIN
               value: bounty.tongagents.example.com
-            # Phase 4: token check toggle. 设为 "true" 启用 JWT 验证。
-            # 默认 (注释或删除此 env) 即禁用 — 任何 caller 都能访问 /api/messages。
-            - name: BOUNTY_TOKEN_CHECK_ENABLED
-              value: "false"
             - name: JWT_SECRET
               valueFrom:
                 secretKeyRef:
