@@ -1,11 +1,12 @@
 /**
- * Token policy consistency — bounty vs IM routes (v0.9 audit)
+ * Token policy consistency — bounty vs IM routes (PR4 update)
  *
- * 合约:
- *   - BOUNTY_TOKEN_CHECK_ENABLED 默认 (false/未设): /api/tasks/* 与 /api/messages/* 都放行
- *     无 Authorization 头的请求 — server 端用 body.actorAddress 定位 actor。
- *   - BOUNTY_TOKEN_CHECK_ENABLED=true: /api/tasks/* 与 /api/messages/* 都需要
- *     Authorization: Bearer <valid-jwt>; 没 header → 401; 坏 token → 401。
+ * 合约 (PR4):
+ *   - BOUNTY_TOKEN_CHECK_ENABLED 默认 (未设): token check **开启** — /api/tasks/* 与 /api/messages/*
+ *     都强制 Authorization: Bearer <valid-jwt>; 没 header → 401; 坏 token → 401。
+ *   - BOUNTY_TOKEN_CHECK_ENABLED=false: 软鉴权 — 两套接口都放行无 Authorization 头的请求;
+ *     server 端用 body.actorAddress 定位 actor。
+ *   - BOUNTY_TOKEN_CHECK_ENABLED=true: 同默认行为 (token check ON)。
  *
  * 这是 review/optimize 任务的核心断言: 两套接口必须使用同一策略, 不能有
  * drift — 例如 bounty 公开但 IM 要 token (或反之)。
@@ -60,8 +61,8 @@ describe('Token policy consistency: bounty vs IM (v0.9 audit)', () => {
     }
   });
 
-  describe('默认 (env 未设) → token check 关闭: 两套接口行为一致', () => {
-    test('bounty publish 不带 token 成功', async () => {
+  describe('默认 (env 未设) → token check 开启: 两套接口都需要 401 (PR4)', () => {
+    test('bounty publish 不带 token → 401', async () => {
       delete process.env.BOUNTY_TOKEN_CHECK_ENABLED;
       const { baseUrl, cleanup } = await makeStartedServer();
       try {
@@ -76,13 +77,13 @@ describe('Token policy consistency: bounty vs IM (v0.9 audit)', () => {
             publisherAddress: '8de9b6aa-1111-4000-8000-0000000000a1@bounty.local',
           }),
         });
-        expect(res.status).toBe(201);
+        expect(res.status).toBe(401);
       } finally {
         cleanup();
       }
     });
 
-    test('IM send 不带 token 成功', async () => {
+    test('IM send 不带 token → 401', async () => {
       delete process.env.BOUNTY_TOKEN_CHECK_ENABLED;
       const { baseUrl, cleanup } = await makeStartedServer();
       try {
@@ -95,17 +96,16 @@ describe('Token policy consistency: bounty vs IM (v0.9 audit)', () => {
             content: { type: 'text', body: 'audit' },
           }),
         });
-        expect(res.status).toBe(201);
+        expect(res.status).toBe(401);
       } finally {
         cleanup();
       }
     });
 
-    test('bounty grab 不带 token 成功 (提供 agentAddress)', async () => {
+    test('bounty grab 不带 token → 401', async () => {
       delete process.env.BOUNTY_TOKEN_CHECK_ENABLED;
       const { baseUrl, cleanup } = await makeStartedServer();
       try {
-        // 先发一个任务
         const pub = await fetch(`${baseUrl}/api/tasks`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -117,15 +117,50 @@ describe('Token policy consistency: bounty vs IM (v0.9 audit)', () => {
             publisherAddress: '8de9b6aa-1111-4000-8000-0000000000a1@bounty.local',
           }),
         });
-        const task = (await pub.json()) as { id: string };
+        expect(pub.status).toBe(401);
+        void (await pub.json().catch(() => ({} as Record<string, unknown>)));
+      } finally {
+        cleanup();
+      }
+    });
+  });
 
-        const grabRes = await fetch(`${baseUrl}/api/tasks/${task.id}/grab`, {
-          method: 'PUT',
+  describe('BOUNTY_TOKEN_CHECK_ENABLED=false → token check 关闭: 软鉴权放行', () => {
+    test('bounty publish 不带 token → 201 (soft auth)', async () => {
+      process.env.BOUNTY_TOKEN_CHECK_ENABLED = 'false';
+      const { baseUrl, cleanup } = await makeStartedServer();
+      try {
+        const res = await fetch(`${baseUrl}/api/tasks`, {
+          method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ agentAddress: '8de9b6aa-1111-4000-8000-0000000000a1@bounty.local' }),
+          body: JSON.stringify({
+            title: 'audit-no-token-pub-soft',
+            description: 'D',
+            reward: 1,
+            type: 'writing',
+            publisherAddress: '8de9b6aa-1111-4000-8000-0000000000a1@bounty.local',
+          }),
         });
-        // 注: publisherId 自抢会被 service 拒绝, 但 HTTP 路由接受 → 200/409 均合法
-        expect([200, 400, 409]).toContain(grabRes.status);
+        expect(res.status).toBe(201);
+      } finally {
+        cleanup();
+      }
+    });
+
+    test('IM send 不带 token → 201 (soft auth)', async () => {
+      process.env.BOUNTY_TOKEN_CHECK_ENABLED = 'false';
+      const { baseUrl, cleanup } = await makeStartedServer();
+      try {
+        const res = await fetch(`${baseUrl}/api/messages`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            from: 'sender@server.com',
+            to: '8de9b6aa-1111-4000-8000-0000000000a1@bounty.local',
+            content: { type: 'text', body: 'audit-soft' },
+          }),
+        });
+        expect(res.status).toBe(201);
       } finally {
         cleanup();
       }
@@ -222,18 +257,24 @@ describe('Token policy consistency: bounty vs IM (v0.9 audit)', () => {
   });
 
   describe('策略切换无状态泄漏 (audit invariant)', () => {
-    test('不同 server 实例各自读取 env 状态', async () => {
-      // 实例 1: env off
+    test('不同 server 实例各自读取 env 状态 (PR4 默认 ON)', async () => {
+      // 实例 1: env 未设 → 默认 ON
       delete process.env.BOUNTY_TOKEN_CHECK_ENABLED;
       const r1 = await makeStartedServer();
-      expect((r1.server as any).tokenCheckEnabled).toBe(false);
+      expect((r1.server as any).tokenCheckEnabled).toBe(true);
       r1.cleanup();
 
-      // 实例 2: env on
+      // 实例 2: env=1 → ON
       process.env.BOUNTY_TOKEN_CHECK_ENABLED = '1';
       const r2 = await makeStartedServer();
       expect((r2.server as any).tokenCheckEnabled).toBe(true);
       r2.cleanup();
+
+      // 实例 3: env=false → OFF (soft auth)
+      process.env.BOUNTY_TOKEN_CHECK_ENABLED = 'false';
+      const r3 = await makeStartedServer();
+      expect((r3.server as any).tokenCheckEnabled).toBe(false);
+      r3.cleanup();
     });
   });
 });

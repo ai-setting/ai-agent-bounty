@@ -30,7 +30,7 @@ describe('BOUNTY_TOKEN_CHECK_ENABLED toggle', () => {
     }
   });
 
-  test('默认 (env 未设): token check 关闭', () => {
+  test('默认 (env 未设): token check 开启', () => {
     delete process.env.BOUNTY_TOKEN_CHECK_ENABLED;
     const bountyDb = new Database(':memory:');
     const imDb = makeImDb();
@@ -39,8 +39,8 @@ describe('BOUNTY_TOKEN_CHECK_ENABLED toggle', () => {
       bountyDb: bountyDb as any,
       port: 0,  // any free port
     });
-    
-    expect((srv as any).tokenCheckEnabled).toBe(false);
+
+    expect((srv as any).tokenCheckEnabled).toBe(true);
   });
 
   test('BOUNTY_TOKEN_CHECK_ENABLED=true 开启 token check', () => {
@@ -52,7 +52,7 @@ describe('BOUNTY_TOKEN_CHECK_ENABLED toggle', () => {
       bountyDb: bountyDb as any,
       port: 0,
     });
-    
+
     expect((srv as any).tokenCheckEnabled).toBe(true);
   });
 
@@ -63,7 +63,7 @@ describe('BOUNTY_TOKEN_CHECK_ENABLED toggle', () => {
       bountyDb: new Database(':memory:') as any,
       port: 0,
     });
-    
+
     expect((srv as any).tokenCheckEnabled).toBe(true);
   });
 
@@ -74,18 +74,29 @@ describe('BOUNTY_TOKEN_CHECK_ENABLED toggle', () => {
       bountyDb: new Database(':memory:') as any,
       port: 0,
     });
-    
+
     expect((srv as any).tokenCheckEnabled).toBe(false);
   });
 
-  test('未识别值 (例如 "yes") 默认禁用', () => {
+  test('BOUNTY_TOKEN_CHECK_ENABLED=0 (数字) 也关闭', () => {
+    process.env.BOUNTY_TOKEN_CHECK_ENABLED = '0';
+    const srv = new BountyHTTPServer({
+      imDb: makeImDb() as any,
+      bountyDb: new Database(':memory:') as any,
+      port: 0,
+    });
+
+    expect((srv as any).tokenCheckEnabled).toBe(false);
+  });
+
+  test('未识别值 (例如 "yes") 默认关闭 (因为 != true/1)', () => {
     process.env.BOUNTY_TOKEN_CHECK_ENABLED = 'yes';
     const srv = new BountyHTTPServer({
       imDb: makeImDb() as any,
       bountyDb: new Database(':memory:') as any,
       port: 0,
     });
-    
+
     expect((srv as any).tokenCheckEnabled).toBe(false);
   });
 });
@@ -98,45 +109,8 @@ describe('checkAuth behavior under token check toggle', () => {
     imDb = new Database(':memory:') as any;
   });
 
-  test('token check 关闭: 不带 Authorization 头也能过 checkAuth', async () => {
+  test('token check 开启 (默认): 不带 Authorization 头 → 401', async () => {
     delete process.env.BOUNTY_TOKEN_CHECK_ENABLED;
-    server = new BountyHTTPServer({
-      imDb,
-      bountyDb: new Database(':memory:') as any,
-      port: 0,
-    });
-
-    const req = new Request('http://localhost/api/messages', {
-      method: 'POST',
-      body: '{}',
-    });
-    // no Authorization header
-
-    const result = await (server as any).checkAuth(req);
-    expect(result.error).toBeUndefined();
-    expect(result.agentId).toBeUndefined(); // bypass, no agentId extracted
-  });
-
-  test('token check 关闭: 即使带坏 header 也能过 (bypass)', async () => {
-    delete process.env.BOUNTY_TOKEN_CHECK_ENABLED;
-    server = new BountyHTTPServer({
-      imDb,
-      bountyDb: new Database(':memory:') as any,
-      port: 0,
-    });
-
-    const req = new Request('http://localhost/api/messages', {
-      method: 'POST',
-      headers: { 'Authorization': 'Bearer bad-token-format' },
-      body: '{}',
-    });
-
-    const result = await (server as any).checkAuth(req);
-    expect(result.error).toBeUndefined();
-  });
-
-  test('token check 开启: 没 header → 401', async () => {
-    process.env.BOUNTY_TOKEN_CHECK_ENABLED = 'true';
     server = new BountyHTTPServer({
       imDb,
       bountyDb: new Database(':memory:') as any,

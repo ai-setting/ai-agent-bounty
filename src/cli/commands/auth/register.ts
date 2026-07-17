@@ -1,21 +1,21 @@
 /**
- * auth register command
- * Register a new agent with email verification
+ * Auth register command.
  *
- * Phase feat/bounty-all-commands-server-url:
- * - 通过 addServerUrlOption helper 复用 --server-url / -u 选项
+ * PR3: 用 active profile 的 api_base 调用 /api/auth/register；register 接口通常不返回
+ * token（需要 verify 后才有），所以不写 profile.auth。如果 active profile 不存在，
+ * 回退到 `--server-url` / `API_BASE`。
  */
 
 import type { CommandModule } from 'yargs';
 import chalk from 'chalk';
 import { API_BASE } from '../../config.js';
-// v0.5.0: TLS skip default — use bountyFetch wrapper
 import { bountyFetch } from '../../lib/fetch-helper.js';
-
 import {
   addServerUrlOption,
   resolveServerUrl,
 } from '../../lib/server-url-option.js';
+import { ProfileContext } from '../../config/context.js';
+import { resolveProfileApiBase } from '../../lib/profile-api-base.js';
 
 export const registerCommand: CommandModule = {
   command: 'register',
@@ -56,12 +56,18 @@ export const registerCommand: CommandModule = {
 
       console.log(chalk.cyan('\n📝 Registering agent...'));
 
-      const baseUrl = resolveServerUrl(argv['server-url'] as string | undefined, API_BASE);
+      const profile = ProfileContext.getActive();
+      const baseUrl = resolveProfileApiBase({
+        cliServerUrl: argv['server-url'] as string | undefined,
+        fallbackApiBase: API_BASE,
+        profile,
+        resolveServerUrlFn: resolveServerUrl,
+      });
 
       const response = await bountyFetch(`${baseUrl}/api/auth/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body)
+        body: JSON.stringify(body),
       });
 
       const data = await response.json() as {
@@ -79,6 +85,9 @@ export const registerCommand: CommandModule = {
       console.log(chalk.green('\n✓ Registration successful!'));
       console.log(chalk.cyan('  Agent ID:'), data.agent_id);
       console.log(chalk.cyan('  Status:'), data.status);
+      if (profile) {
+        console.log(chalk.cyan('  Profile:'), profile.name, chalk.gray(`(${profile.api_base})`));
+      }
       console.log(`  ${data.message || 'Please check your email for verification code'}`);
       console.log('\nNext step:');
       console.log('  bounty auth verify --email ' + argv.email);
@@ -88,3 +97,5 @@ export const registerCommand: CommandModule = {
     }
   },
 };
+
+export default registerCommand;

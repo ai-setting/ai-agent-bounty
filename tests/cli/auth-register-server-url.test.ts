@@ -1,6 +1,5 @@
 /**
- * Tests for `bounty auth register` CLI command — --server-url option.
- * Pattern: same as auth-login-server-url.test.ts (DRY via shared helper).
+ * Tests for `bounty auth register` CLI command — PR3 ProfileContext flow.
  */
 
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
@@ -10,44 +9,49 @@ import { resolve } from 'path';
 const SRC = resolve(import.meta.dir, '../../src/cli/commands/auth/register.ts');
 const HELPER_SRC = resolve(import.meta.dir, '../../src/cli/lib/server-url-option.ts');
 
-describe('bounty auth register - --server-url option', () => {
-  let origApiUrl: string | undefined;
+describe('bounty auth register - PR3 ProfileContext integration', () => {
+  let origBountyToken: string | undefined;
 
   beforeEach(() => {
-    origApiUrl = process.env.BOUNTY_API_URL;
-    delete process.env.BOUNTY_API_URL;
+    origBountyToken = process.env.BOUNTY_TOKEN;
+    delete process.env.BOUNTY_TOKEN;
   });
 
   afterEach(() => {
-    if (origApiUrl === undefined) {
-      delete process.env.BOUNTY_API_URL;
+    if (origBountyToken === undefined) {
+      delete process.env.BOUNTY_TOKEN;
     } else {
-      process.env.BOUNTY_API_URL = origApiUrl;
+      process.env.BOUNTY_TOKEN = origBountyToken;
     }
   });
 
-  test('T1: register.ts references shared --server-url helper', () => {
+  test('register.ts references shared --server-url helper', () => {
     const src = readFileSync(SRC, 'utf-8');
     expect(src).toContain("from '../../lib/server-url-option.js'");
     expect(src).toMatch(/addServerUrlOption\(/);
     expect(src).not.toMatch(/alias:\s*['"]u['"]/);
   });
 
-  test('T2: register.ts uses resolveServerUrl with API_BASE fallback', () => {
+  test('register.ts uses resolveProfileApiBase for base URL', () => {
     const src = readFileSync(SRC, 'utf-8');
-    expect(src).toMatch(/resolveServerUrl\(.*API_BASE\s*\)/);
+    expect(src).toContain("from '../../lib/profile-api-base.js'");
+    expect(src).toMatch(/resolveProfileApiBase\(/);
   });
 
-  test('T3: fetch URL uses /api/auth/register', () => {
+  test('register.ts reads ProfileContext for active profile', () => {
+    const src = readFileSync(SRC, 'utf-8');
+    expect(src).toContain("from '../../config/context.js'");
+    expect(src).toMatch(/ProfileContext\.getActive\(/);
+  });
+
+  test('fetch URL uses /api/auth/register', () => {
     const src = readFileSync(SRC, 'utf-8');
     expect(src).toMatch(/baseUrl.*\/api\/auth\/register/);
   });
 
-  test('T4: scheme validation is delegated to helper (no inline logic)', () => {
+  test('register.ts does not read BOUNTY_TOKEN env (PR1 invariant)', () => {
     const src = readFileSync(SRC, 'utf-8');
-    expect(src).not.toMatch(/\/\^https\?:\\\/\\\//);
-    expect(src).not.toMatch(/^https\?:\/\/\.test/);
-    expect(src).toMatch(/resolveServerUrl/);
+    expect(src).not.toMatch(/BOUNTY_TOKEN/);
   });
 });
 

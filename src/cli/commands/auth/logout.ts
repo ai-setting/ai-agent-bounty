@@ -1,24 +1,62 @@
 /**
- * auth logout command
- * Clear stored authentication token
+ * Auth logout command.
+ *
+ * PR3: 优先清空 active profile 的 access_token / refresh_token / expires_at（保留 profile
+ * 文件本身，不删除 agent 信息）。如果没有任何 active profile，则回退到清理
+ * `~/.config/bounty/token` 旧文件（向后兼容）。
  */
 
 import type { CommandModule } from 'yargs';
 import chalk from 'chalk';
-import { clearToken } from '../../storage.js';
+import { rm } from 'fs/promises';
+import { ProfileContext } from '../../config/context.js';
+import { loadProfile, saveProfile, type StoreOptions } from '../../config/store.js';
+import { DEFAULT_TOKEN_PATH } from '../../lib/auth-token.js';
+
+function buildStoreOptions(argv: Record<string, unknown>): StoreOptions {
+  const raw = argv.__storeOptions;
+  if (raw && typeof raw === 'object') return raw as StoreOptions;
+  return {};
+}
 
 export const logoutCommand: CommandModule = {
   command: 'logout',
-  describe: 'Clear stored authentication token',
+  describe: 'Clear stored authentication token from active profile',
 
-  handler: async () => {
+  handler: async (argv) => {
     try {
-      await clearToken();
-      console.log(chalk.green('\n✓ Logged out successfully'));
-      console.log('  Token cleared from storage');
+      const opts = buildStoreOptions(argv as Record<string, unknown>);
+      const profile = ProfileContext.getActive();
+      if (profile) {
+        const current = loadProfile(profile.name, opts);
+        if (current) {
+          current.auth.access_token = undefined;
+          current.auth.refresh_token = undefined;
+          current.auth.expires_at = undefined;
+          current.updated_at = Math.floor(Date.now() / 1000);
+          saveProfile(current, opts);
+        }
+        const displayName = profile.name;
+        console.log(chalk.green(`\n✓ Logged out (profile "${displayName}")`));
+        console.log('  Cleared access_token / refresh_token from active profile');
+        return;
+      }
+
+      // No active profile — fall back to removing the legacy token file so
+      // pre-PR1 users still get logged out cleanly.
+      try {
+        await rm(DEFAULT_TOKEN_PATH);
+        console.log(chalk.green('\n✓ Logged out'));
+        console.log(`  Cleared legacy token at ${DEFAULT_TOKEN_PATH}`);
+      } catch {
+        console.log(chalk.green('\n✓ Logged out'));
+        console.log('  No active profile or legacy token file to clear');
+      }
     } catch (error) {
       console.error(chalk.red(`\n✗ Error: ${error instanceof Error ? error.message : 'Logout failed'}\n`));
       process.exit(1);
     }
   },
 };
+
+export default logoutCommand;

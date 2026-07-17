@@ -41,8 +41,9 @@ describe('BountyRoutes — address-based API (v0.10 strict)', () => {
   let baseUrl: string;
 
   beforeEach(async () => {
-    // 默认关闭 token check (v0.10 软鉴权默认)
-    delete process.env.BOUNTY_TOKEN_CHECK_ENABLED;
+    // PR4: token check defaults to ON. These tests exercise the soft-auth
+    // (token check OFF) path — opt out explicitly.
+    process.env.BOUNTY_TOKEN_CHECK_ENABLED = 'false';
     bountyDb = makeBountyDb();
     imDb = new IMDatabase({ memory: true });
     server = new BountyHTTPServer({ imDb, bountyDb, port: 0 });
@@ -52,6 +53,7 @@ describe('BountyRoutes — address-based API (v0.10 strict)', () => {
 
   afterEach(() => {
     server.stop();
+    delete process.env.BOUNTY_TOKEN_CHECK_ENABLED;
   });
 
   // ===== createTask =====
