@@ -155,4 +155,21 @@ describe('bounty profile show', () => {
     expect(typeof parsed.auth.access_token).toBe('string');
     expect(parsed.auth.access_token.length).toBeGreaterThan(0);
   });
+
+  test('honours global --profile override when --name is omitted', async () => {
+    writeProfile('alpha');
+    writeProfile('beta');
+    writeFileSync(configFile, JSON.stringify({
+      version: 1,
+      active_profile: 'alpha',
+      schema_version: '0.11.0',
+    }));
+    await callShow({
+      profile: 'beta',
+      __storeOptions: { profilesDir, configFile },
+    });
+    const out = logSpy.mock.calls.map((c) => c.join(' ')).join('\n');
+    expect(out).toContain('beta');
+    expect(out).not.toContain('alpha');
+  });
 });

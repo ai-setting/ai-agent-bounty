@@ -100,8 +100,12 @@ export const removeCommand: CommandModule<object, RemoveOptions> = {
       exitWith(1, `Profile "${name}" not found.\n  Run \`bounty profile list\` to see available profiles.`);
     }
 
-    // Refuse to remove the effective active profile (resolver-driven).
-    const resolved = resolveActiveProfile(null, opts);
+    // Refuse to remove the effective active profile (resolver-driven,
+    // honouring global --profile/-P override).
+    const cliProfile = typeof args.profile === 'string' && args.profile.trim().length > 0
+      ? args.profile.trim()
+      : null;
+    const resolved = resolveActiveProfile(cliProfile, opts);
     if (resolved.exists && resolved.name === name) {
       exitWith(
         1,

@@ -171,4 +171,25 @@ describe('bounty profile list', () => {
     expect(oneScope.scope_count).toBe(1);
     expect(noScope.scope_count).toBe(0);
   });
+
+  test('marks global --profile as active in --json (overrides config active)', async () => {
+    writeProfile('alpha');
+    writeProfile('beta');
+    writeFileSync(configFile, JSON.stringify({
+      version: 1,
+      active_profile: 'alpha',
+      schema_version: '0.11.0',
+    }));
+    let captured = '';
+    logSpy.mockImplementation((...args: unknown[]) => {
+      captured += args.map((a) => (typeof a === 'string' ? a : JSON.stringify(a))).join(' ');
+    });
+    await callList({
+      json: true,
+      profile: 'beta',
+      __storeOptions: { profilesDir, configFile },
+    });
+    const parsed = JSON.parse(captured);
+    expect(parsed.active).toBe('beta');
+  });
 });

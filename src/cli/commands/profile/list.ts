@@ -79,14 +79,21 @@ export const listCommand: CommandModule<object, ListOptions> = {
 
     // Resolve active profile using PR1 resolver so --profile/BOUNTY_PROFILE
     // win over the on-disk config (consistent with the rest of PR2).
-    const resolved = resolveActiveProfile(null, opts);
+    const cliProfile = typeof argv.profile === 'string' && argv.profile.trim().length > 0
+      ? argv.profile.trim()
+      : null;
+    const resolved = resolveActiveProfile(cliProfile, opts);
     let active = resolved.source === 'default' && !existsConfig(opts)
       ? DEFAULT_PROFILE_NAME
       : resolved.name;
 
-    // If config reports an active profile, prefer it explicitly.
+    // If the resolver did not pick up an explicit override (cli/env), fall
+    // back to the on-disk config's active_profile. A `cli` source means
+    // --profile was honored; we MUST NOT overwrite it with the config value.
     const cfg = readGlobalConfig(opts);
-    if (cfg?.active_profile) active = cfg.active_profile;
+    if (resolved.source !== 'cli' && cfg?.active_profile) {
+      active = cfg.active_profile;
+    }
 
     if (argv.json) {
       const payload = {

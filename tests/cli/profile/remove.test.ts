@@ -172,4 +172,24 @@ describe('bounty profile remove', () => {
     const cfg = JSON.parse(cfgRaw);
     expect(cfg.active_profile).toBe('default');
   });
+
+  test('refuses to remove the profile named via global --profile override', async () => {
+    writeProfile('alpha');
+    writeProfile('beta');
+    writeFileSync(configFile, JSON.stringify({
+      version: 1,
+      active_profile: 'alpha',
+      schema_version: '0.11.0',
+    }));
+    await expect(
+      callRemove({
+        name: 'beta',
+        force: true,
+        profile: 'beta',
+        __storeOptions: { profilesDir, configFile },
+        __confirm: () => Promise.resolve(true),
+      }),
+    ).rejects.toThrow(/__exit:1/);
+    expect(existsSync(join(profilesDir, 'beta.json'))).toBe(true);
+  });
 });

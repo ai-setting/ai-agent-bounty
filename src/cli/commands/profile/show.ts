@@ -123,7 +123,12 @@ export const showCommand: CommandModule<object, ShowOptions> = {
     if (typeof argv.name === 'string' && argv.name.trim().length > 0) {
       name = argv.name.trim();
     } else {
-      const resolved = resolveActiveProfile(null, opts);
+      // Honour the global --profile/-P override before falling back to the
+      // on-disk config active.
+      const cliProfile = typeof argv.profile === 'string' && argv.profile.trim().length > 0
+        ? argv.profile.trim()
+        : null;
+      const resolved = resolveActiveProfile(cliProfile, opts);
       name = resolved.name;
     }
 
