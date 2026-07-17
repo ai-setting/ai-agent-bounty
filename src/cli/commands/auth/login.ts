@@ -6,7 +6,7 @@
  * - 登录成功后将 access_token / refresh_token / expires_at 写回 active profile，
  *   而不是只写 `~/.config/bounty/token`。
  * - 兼容 `--server-url` flag：当用户显式传入时仍然优先于 profile（保留逃生通道）。
- * - 删除对 `BOUNTY_TOKEN` env 的任何读取（PR1 已移除）。
+ * - 删除对 token env 的任何读取（PR1 已移除）。
  *
  * 兼容行为：
  * - 当没有任何 active profile 时，回退到 `--server-url` 或 `API_BASE`；如果都不存在
