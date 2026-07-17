@@ -62,6 +62,7 @@ import { registerAgentCommands } from './commands/register-agent/index.js';
 import { bountyTaskCommands } from './commands/bounty-task/index.js';
 import { comCommands } from './commands/com/index.js';
 import { authCommands } from './commands/auth/index.js';
+import { profileCommands } from './commands/profile/index.js';
 import { serverCommands } from './commands/server/index.js';
 
 // 注册 Bounty Prompt Hook（注入 bounty 特有命令到 default agent prompt）
@@ -305,6 +306,7 @@ export async function runBountyCli(): Promise<void> {
       .command(bountyTaskCommands)
       .command(comCommands)
       .command(authCommands)
+      .command(profileCommands)
       .command(serverCommands)
 
       .demandCommand(1, 'See --help for available commands')
