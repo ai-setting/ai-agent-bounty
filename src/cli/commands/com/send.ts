@@ -28,6 +28,7 @@ import chalk from 'chalk';
 import { bountyConfig } from '../../../lib/config/bounty-config.js';
 import { bountyFetch, setTlsVerifyMode } from '../../lib/fetch-helper.js';
 import { readAuthToken } from '../../lib/auth-token.js';
+import { ProfileContext } from '../../config/context.js';
 // Backward compat: existing tests (com-send-auth-insecure.test.ts) import readAuthToken from here
 export { readAuthToken };
 
@@ -151,8 +152,9 @@ export const sendCommand: CommandModule<object, SendOptions> = {
     // Authorization header：自动从 ~/.config/bounty/token 加载（如果存在）
     const authToken = readAuthToken();
 
-    // 优先级：--server-url > --host/--port
+    // 优先级：--server-url > profile.api_base > --host/--port
     // --server-url 必须带 scheme（http:// 或 https://），且不含尾斜杠
+    // v0.13.1: 新增 profile.api_base 兜底，与 auth/*, bounty-task/* 行为一致
     let url: string;
     if (serverUrl) {
       const trimmed = serverUrl.replace(/\/+$/, '');
@@ -165,8 +167,15 @@ export const sendCommand: CommandModule<object, SendOptions> = {
       }
       url = `${trimmed}/api/messages`;
     } else {
-      // 回退：--host/--port 拼接（默认 http://）
-      url = `http://${host}:${port}/messages`;
+      // v0.13.1: 先尝试 active profile 的 api_base
+      const profileApiBase = ProfileContext.getApiBase();
+      if (profileApiBase) {
+        const trimmed = profileApiBase.replace(/\/+$/, '');
+        url = `${trimmed}/api/messages`;
+      } else {
+        // 回退：--host/--port 拼接（默认 http://，legacy /messages 路径）
+        url = `http://${host}:${port}/messages`;
+      }
     }
 
     try {

@@ -20,6 +20,7 @@ import type { CommandModule } from 'yargs';
 import chalk from 'chalk';
 import { bountyConfig } from '../../../lib/config/bounty-config.js';
 import { printStubNotice } from './stub.js';
+import { ProfileContext } from '../../config/context.js';
 import {
   addServerUrlOption,
   resolveServerUrl,
@@ -77,13 +78,20 @@ export const connectCommand: CommandModule<object, ConnectOptions> = {
       ? email.trim()
       : (address ?? '');
 
-    // 决定 ws base：--server-url（转 ws scheme） > ws://${host}:${port}
+    // 决定 ws base：--server-url（转 ws scheme） > profile.api_base（转 ws scheme） > ws://${host}:${port}
     // 注：connect 是 WS probe，scheme 通常是 ws:// 或 wss://。
     // 我们要求 --server-url 仍传 http/https（与 helper 一致），
     // 然后用 replace(http→ws, https→wss) 转换 scheme 给 WebSocket probe 用。
     // 这保留了 helper 的统一校验语义，同时正确处理 WS endpoint。
+    // v0.13.1: 新增 profile.api_base 兜底（与 auth/*, bounty-task/* 行为一致）
+    const profileApiBase = ProfileContext.getApiBase();
     const fallbackBase = `http://${host}:${port}`;
-    const httpBase = resolveServerUrl(args['server-url'], fallbackBase);
+    let httpBase: string;
+    if (!args['server-url'] && profileApiBase) {
+      httpBase = profileApiBase.replace(/\/+$/, '');
+    } else {
+      httpBase = resolveServerUrl(args['server-url'], fallbackBase);
+    }
     const wsBase = httpBase.replace(/^http/, 'ws');
 
     // v0.13: prefer `?email=`; legacy `?address=` remains supported by server.
