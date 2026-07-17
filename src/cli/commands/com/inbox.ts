@@ -18,6 +18,7 @@ import chalk from 'chalk';
 import { bountyConfig } from '../../../lib/config/bounty-config.js';
 // v0.5.0: TLS skip default — use bountyFetch wrapper
 import { bountyFetch } from '../../lib/fetch-helper.js';
+import { readAuthToken } from '../../lib/auth-token.js';
 import { ProfileContext } from '../../config/context.js';
 
 import {
@@ -101,7 +102,16 @@ export const inboxCommand: CommandModule<object, InboxOptions> = {
     const url = `${baseUrl}/messages?email=${encodeURIComponent(identifier)}`;
 
     try {
-      const response = await bountyFetch(url);
+      // v0.13.2: attach Bearer JWT so the server's token check (default ON
+      // since v0.13) accepts the request. Previously the inbox handler
+      // always returned 401 with the v0.13 default token policy. Compare
+      // to `com send` which already attaches the same header.
+      const authToken = readAuthToken();
+      const authHeaders: Record<string, string> = {};
+      if (authToken) {
+        authHeaders['Authorization'] = `Bearer ${authToken}`;
+      }
+      const response = await bountyFetch(url, { headers: authHeaders });
       
       if (response.ok) {
         const messages = await response.json() as any[];
