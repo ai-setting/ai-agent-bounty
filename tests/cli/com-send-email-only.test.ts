@@ -31,10 +31,13 @@ describe("com send — v0.14 strict email-only", () => {
     expect(src).toMatch(/\.option\(\s*['"]to-email['"]/);
   });
 
-  test("T3: parseEmail imported + body uses from_email/to_email ONLY", () => {
+  test("T3: requireEmailFlag helper from email-flag.js + body uses from_email/to_email ONLY", () => {
     const src = readFileSync(SEND_SRC, "utf-8");
-    expect(src).toMatch(/from\s+['"][^'"]*email-resolver\.js['"]/);
-    expect(src).toMatch(/parseEmail/);
+    // v0.14.0 (Phase 4 R-1+R-6): centralised via the requireEmailFlag helper.
+    expect(src).toMatch(/from\s+['"][^'"]*email-flag\.js['"]/);
+    expect(src).toMatch(/requireEmailFlag/);
+    // No direct parseEmail call (use the helper, not the boundary directly).
+    expect(src).not.toMatch(/parseEmail\s*\(/);
     // Body must use from_email + to_email, not legacy `from` / `to` keys.
     expect(src).toMatch(/from_email:/);
     expect(src).toMatch(/to_email:/);

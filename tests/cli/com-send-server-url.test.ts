@@ -91,13 +91,15 @@ describe('bounty com send - --server-url option', () => {
 });
 
 describe('bounty com send - help output reflects --server-url', () => {
-  test('--server-url / -e alias / description must be in send.ts', () => {
+  test('--server-url / -u alias / description must be in send.ts (v0.14 BREAKING rename)', () => {
     const src = readFileSync(
       resolve(import.meta.dir, '../../src/cli/commands/com/send.ts'),
       'utf-8'
     );
     expect(src).toContain("'server-url'");
-    expect(src).toContain("alias: 'e'");
+    // v0.14: alias renamed from `e` to `u` to free -e for --from-email/--to-email.
+    expect(src).toContain("alias: 'u'");
+    expect(src).not.toContain("alias: 'e'");
     // 描述含 "server base URL"
     expect(src).toMatch(/server base url/i);
     expect(src).toMatch(/IM server base URL/);

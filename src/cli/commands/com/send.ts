@@ -16,7 +16,10 @@ import { bountyConfig } from '../../../lib/config/bounty-config.js';
 import { bountyFetch, setTlsVerifyMode } from '../../lib/fetch-helper.js';
 import { readAuthToken } from '../../lib/auth-token.js';
 import { ProfileContext } from '../../config/context.js';
-import { parseEmail } from '../../../lib/email-resolver.js';
+import {
+  requireEmailFlag,
+  exitWithEmailFlagError,
+} from '../../lib/email-flag.js';
 // Backward compat: existing tests (com-send-auth-insecure.test.ts) import readAuthToken from here
 export { readAuthToken };
 
@@ -55,12 +58,13 @@ export const sendCommand: CommandModule<object, SendOptions> = {
         description: 'Message body',
       })
       .option('server-url', {
-        alias: 'e',
+        alias: 'u',
         type: 'string',
         description:
           'IM server base URL with scheme (e.g. https://bounty.tongagents.example.com:443). ' +
           'When set, overrides --host/--port. Recommended for remote or HTTPS endpoints. ' +
-          'Auto-attaches Authorization header from ~/.config/bounty/token if present.',
+          'Auto-attaches Authorization header from ~/.config/bounty/token if present. ' +
+          'v0.14 alias renamed from `-e` to `-u` to free `-e` for --from-email / --to-email.',
       })
       .option('insecure', {
         alias: 'k',
@@ -94,15 +98,21 @@ export const sendCommand: CommandModule<object, SendOptions> = {
     const { body, host, port, serverUrl, tlsVerify } = args;
 
     // v0.14 strict: --from-email / --to-email are the ONLY actor inputs.
-    const fromParsed = parseEmail(args.fromEmail ?? args['from-email'], 'fromEmail', 'cli');
+    // requireEmailFlag handles precedence (explicit > ProfileContext.active.email)
+    // and rejects legacy <uuid>@<host> / bare UUIDs / malformed input.
+    const fromParsed = requireEmailFlag(
+      'from-email',
+      args as Record<string, unknown>,
+    );
     if (!fromParsed.ok) {
-      console.error(chalk.red(`\n${fromParsed.error}\n`));
-      process.exit(1);
+      exitWithEmailFlagError(fromParsed);
     }
-    const toParsed = parseEmail(args.toEmail ?? args['to-email'], 'toEmail', 'cli');
+    const toParsed = requireEmailFlag(
+      'to-email',
+      args as Record<string, unknown>,
+    );
     if (!toParsed.ok) {
-      console.error(chalk.red(`\n${toParsed.error}\n`));
-      process.exit(1);
+      exitWithEmailFlagError(toParsed);
     }
 
     // v0.5.0: TLS mode decision
