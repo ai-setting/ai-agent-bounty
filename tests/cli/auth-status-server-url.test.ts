@@ -1,8 +1,5 @@
 /**
- * Tests for `bounty auth status` CLI command — --server-url option.
- *
- * 注意：status.ts 当前没有 builder（只有 handler），所以"加 --server-url"意味着
- * 需要新增 builder。这是 task description 中的设计决策。
+ * Tests for `bounty auth status` CLI command — PR3 ProfileContext flow.
  */
 
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
@@ -12,43 +9,51 @@ import { resolve } from 'path';
 const SRC = resolve(import.meta.dir, '../../src/cli/commands/auth/status.ts');
 const HELPER_SRC = resolve(import.meta.dir, '../../src/cli/lib/server-url-option.ts');
 
-describe('bounty auth status - --server-url option', () => {
-  let origApiUrl: string | undefined;
+describe('bounty auth status - PR3 ProfileContext integration', () => {
+  let origBountyToken: string | undefined;
 
   beforeEach(() => {
-    origApiUrl = process.env.BOUNTY_API_URL;
-    delete process.env.BOUNTY_API_URL;
+    origBountyToken = process.env.BOUNTY_TOKEN;
+    delete process.env.BOUNTY_TOKEN;
   });
 
   afterEach(() => {
-    if (origApiUrl === undefined) {
-      delete process.env.BOUNTY_API_URL;
+    if (origBountyToken === undefined) {
+      delete process.env.BOUNTY_TOKEN;
     } else {
-      process.env.BOUNTY_API_URL = origApiUrl;
+      process.env.BOUNTY_TOKEN = origBountyToken;
     }
   });
 
-  test('T1: status.ts has builder that references shared --server-url helper', () => {
+  test('status.ts references shared --server-url helper', () => {
     const src = readFileSync(SRC, 'utf-8');
     expect(src).toContain("from '../../lib/server-url-option.js'");
     expect(src).toMatch(/addServerUrlOption\(/);
     expect(src).not.toMatch(/alias:\s*['"]u['"]/);
   });
 
-  test('T2: status.ts uses resolveServerUrl with API_BASE fallback', () => {
+  test('status.ts uses resolveProfileApiBase for base URL', () => {
     const src = readFileSync(SRC, 'utf-8');
-    expect(src).toMatch(/resolveServerUrl\(.*API_BASE\s*\)/);
+    expect(src).toContain("from '../../lib/profile-api-base.js'");
+    expect(src).toMatch(/resolveProfileApiBase\(/);
   });
 
-  test('T3: fetch URL uses /api/agents/me', () => {
+  test('status.ts reads ProfileContext for active profile + token', () => {
+    const src = readFileSync(SRC, 'utf-8');
+    expect(src).toContain("from '../../config/context.js'");
+    expect(src).toMatch(/ProfileContext\.getActive\(/);
+    expect(src).toContain("from '../../lib/auth-token.js'");
+    expect(src).toMatch(/readAuthToken\(/);
+  });
+
+  test('status.ts fetch URL uses /api/agents/me', () => {
     const src = readFileSync(SRC, 'utf-8');
     expect(src).toMatch(/baseUrl.*\/api\/agents\/me/);
   });
 
-  test('T4: scheme validation is delegated to helper (no inline logic)', () => {
+  test('status.ts does not read BOUNTY_TOKEN env (PR1 invariant)', () => {
     const src = readFileSync(SRC, 'utf-8');
-    expect(src).not.toMatch(/^https\?:\/\/\.test/);
-    expect(src).toMatch(/resolveServerUrl/);
+    expect(src).not.toMatch(/BOUNTY_TOKEN/);
   });
 });
 

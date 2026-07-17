@@ -108,7 +108,7 @@ export const refreshCommand: CommandModule<object, RefreshOptions> = {
         loadProfileFn: loadProfile,
         saveProfileFn: saveProfile,
         consoleOut: console.log,
-        logger: (msg) => console.log(chalk.cyan(`  ${msg}`)),
+        logger: (msg: string) => console.log(chalk.cyan(`  ${msg}`)),
       });
 
       console.log(chalk.green('\n✓ Token refreshed'));
