@@ -7,6 +7,10 @@
  * placeholder notice. Use the long-running IM HTTP/WebSocket
  * flow via the integrated server for live delivery.
  *
+ * Phase feat/v0.13-email-instead-of-uuid:
+ * - 新增 --email 选项（v0.13 primary）；--address 仍可用（legacy）
+ * - 当同时提供时，--email 优先；客户端会让 server 解析 email → address
+ *
  * Phase feat/bounty-all-commands-server-url:
  * - 新增 --server-url / -u 选项：通过 addServerUrlOption helper 复用
  * - --server-url 提供时覆盖 --host/--port，回退保持向后兼容
@@ -22,7 +26,8 @@ import {
 } from '../../lib/server-url-option.js';
 
 interface ConnectOptions {
-  address: string;
+  email?: string;
+  address?: string;
   host?: string;
   port?: number;
   'server-url'?: string;
@@ -35,11 +40,16 @@ export const connectCommand: CommandModule<object, ConnectOptions> = {
   builder: (yargs) =>
     addServerUrlOption(
       yargs
+        .option('email', {
+          alias: 'e',
+          type: 'string',
+          description: 'Agent email (v0.13 primary; preferred over --address)',
+        })
         .option('address', {
           alias: 'a',
           type: 'string',
-          demandOption: true,
-          description: 'Your address (format: agent-id@host)',
+          description:
+            'Agent address (format: <uuid>@<host>) [LEGACY: prefer --email in v0.13]',
         })
         .option('host', {
           alias: 'H',
@@ -53,10 +63,19 @@ export const connectCommand: CommandModule<object, ConnectOptions> = {
           description: 'IM server port. Ignored when --server-url is set.',
           default: bountyConfig.port,
         })
+        .check((argv) => {
+          if (!argv.email && !argv.address) {
+            throw new Error('Either --email or --address is required (v0.13 email-first).');
+          }
+          return true;
+        })
     ),
 
   handler: async (args) => {
-    const { address, host, port } = args;
+    const { email, address, host, port } = args;
+    const identifier = (typeof email === 'string' && email.trim())
+      ? email.trim()
+      : (address ?? '');
 
     // 决定 ws base：--server-url（转 ws scheme） > ws://${host}:${port}
     // 注：connect 是 WS probe，scheme 通常是 ws:// 或 wss://。
@@ -67,10 +86,11 @@ export const connectCommand: CommandModule<object, ConnectOptions> = {
     const httpBase = resolveServerUrl(args['server-url'], fallbackBase);
     const wsBase = httpBase.replace(/^http/, 'ws');
 
-    const wsUrl = `${wsBase}/ws?address=${encodeURIComponent(address)}`;
+    // v0.13: prefer `?email=`; legacy `?address=` remains supported by server.
+    const wsUrl = `${wsBase}/ws?email=${encodeURIComponent(identifier)}`;
 
     console.log(chalk.bold('\n🔗 Probing Agent IM server...\n'));
-    console.log(chalk.gray('  Address:'), address);
+    console.log(chalk.gray('  Identifier:'), identifier);
     console.log(chalk.gray('  Server:'), `${wsBase}/ws`);
     console.log(chalk.gray('  Port:'), port, chalk.gray('(from BOUNTY_PORT)'));
     console.log();
@@ -106,7 +126,7 @@ export const connectCommand: CommandModule<object, ConnectOptions> = {
       process.exit(1);
     }
 
-    printStubNotice('connect', { address, host, port });
+    printStubNotice('connect', { identifier, host, port });
   },
 };
 

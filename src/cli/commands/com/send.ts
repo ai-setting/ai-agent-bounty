@@ -2,6 +2,11 @@
  * com send command
  * Send message via Agent IM
  *
+ * v0.13 changes:
+ * - 新增 --from-email / -F 和 --to-email / -T 选项（推荐用 email 替代 address）。
+ * - 仍保留 --from / -f 和 --to / -t（address）作为兼容选项；user 不应混用 email 和 address。
+ * - 邮箱优先级：--from-email > --from；--to-email > --to。
+ *
  * v0.5.0 changes:
  * - 默认开启 TLS 跳过（无需 -k / --insecure flag），通过 fetch-helper.ts 实现
  * - 新增 --tls-verify flag 让用户重新开启 TLS 验证（反向开关）
@@ -27,8 +32,10 @@ import { readAuthToken } from '../../lib/auth-token.js';
 export { readAuthToken };
 
 interface SendOptions {
-  from: string;
-  to: string;
+  from?: string;
+  to?: string;
+  fromEmail?: string;
+  toEmail?: string;
   body: string;
   host?: string;
   port?: number;
@@ -45,14 +52,26 @@ export const sendCommand: CommandModule<object, SendOptions> = {
       .option('from', {
         alias: 'f',
         type: 'string',
-        demandOption: true,
-        description: 'Sender address (format: agent-id@host)',
+        description:
+          'Sender address (format: agent-id@host) [LEGACY: prefer --from-email in v0.13]',
+      })
+      .option('from-email', {
+        alias: 'F',
+        type: 'string',
+        description:
+          'Sender email (v0.13 primary; preferred over --from)',
       })
       .option('to', {
         alias: 't',
         type: 'string',
-        demandOption: true,
-        description: 'Recipient address (format: agent-id@host)',
+        description:
+          'Recipient address (format: agent-id@host) [LEGACY: prefer --to-email in v0.13]',
+      })
+      .option('to-email', {
+        alias: 'T',
+        type: 'string',
+        description:
+          'Recipient email (v0.13 primary; preferred over --to)',
       })
       .option('body', {
         alias: 'b',
@@ -95,9 +114,26 @@ export const sendCommand: CommandModule<object, SendOptions> = {
         type: 'number',
         description: 'IM server port (default uses BOUNTY_PORT env or 4000). Ignored when --server-url is set.',
         default: bountyConfig.port,
+      })
+      .check((argv) => {
+        const fromEmail = argv['from-email'];
+        const fromAddr = argv.from;
+        const toEmail = argv['to-email'];
+        const toAddr = argv.to;
+        if (!fromEmail && !fromAddr) {
+          throw new Error('Either --from-email/-F or --from/-f is required (v0.13 email-first).');
+        }
+        if (!toEmail && !toAddr) {
+          throw new Error('Either --to-email/-T or --to/-t is required (v0.13 email-first).');
+        }
+        return true;
       }),
   handler: async (args) => {
-    const { from, to, body, host, port, serverUrl, tlsVerify } = args;
+    const { from, to, fromEmail, toEmail, body, host, port, serverUrl, tlsVerify } = args;
+
+    // v0.13: email fields win over address fields when both are provided.
+    const resolvedFrom = (typeof fromEmail === 'string' && fromEmail.trim()) ? fromEmail.trim() : from;
+    const resolvedTo = (typeof toEmail === 'string' && toEmail.trim()) ? toEmail.trim() : to;
 
     // v0.5.0: TLS mode decision
     // --tls-verify → 开启验证（反向开关）
@@ -137,14 +173,22 @@ export const sendCommand: CommandModule<object, SendOptions> = {
         authHeaders['Authorization'] = `Bearer ${authToken}`;
       }
       // v0.5.0: 用 bountyFetch helper（自动应用 TLS skip 默认值）
+      const requestBody: Record<string, unknown> = {
+        content: { type: 'text', body },
+      };
+      // v0.13: pass email fields when caller supplied them so server can
+      // resolve via findAgentByEmailOrAddress. Otherwise fall back to
+      // legacy from/to (treated as <uuid>@<host> addresses).
+      if (resolvedFrom) requestBody.from_email = resolvedFrom;
+      if (resolvedTo) requestBody.to_email = resolvedTo;
+      // Always include legacy fields as well so old servers continue to work.
+      if (resolvedFrom) requestBody.from = resolvedFrom;
+      if (resolvedTo) requestBody.to = resolvedTo;
+
       const response = await bountyFetch(url, {
         method: 'POST',
         headers: authHeaders,
-        body: JSON.stringify({
-          from,
-          to,
-          content: { type: 'text', body },
-        }),
+        body: JSON.stringify(requestBody),
       });
 
       if (response.ok) {

@@ -49,7 +49,9 @@ describe('bounty com connect - --server-url option', () => {
 
   test('T3: ws path is preserved (probe endpoint /ws)', () => {
     const src = readFileSync(SRC, 'utf-8');
-    expect(src).toMatch(/\/ws\?address=/);
+    // v0.13: ws probe prefers `?email=`; legacy `?address=` still allowed.
+    // Accept either form — the WS upgrade handler resolves both.
+    expect(src).toMatch(/\/ws\?email=|\/ws\?address=/);
   });
 
   test('T4: scheme validation is delegated to helper', () => {

@@ -3,6 +3,9 @@
  *
  * v0.10: STRICT address-based agent identity (`<uuid>@<host>` required).
  * Bare UUID and `--agent-id` flag REMOVED (BREAKING).
+ *
+ * v0.13: --email is the PRIMARY lookup key; --agent-address remains as a
+ *   backward-compatible secondary option. At least one is required.
  */
 
 import type { CommandModule } from 'yargs';
@@ -20,6 +23,7 @@ import { isValidTaskId } from './grab.js';
 interface SubmitOptions {
   'task-id': string;
   'agent-address'?: string;
+  email?: string;
   result: string;
   'server-url'?: string;
 }
@@ -43,11 +47,16 @@ export const submitCommand: CommandModule<object, SubmitOptions> = {
           demandOption: true,
           description: 'Task ID',
         })
+        .option('email', {
+          alias: 'e',
+          type: 'string',
+          description: 'Agent email (v0.13 primary; preferred over --agent-address)',
+        })
         .option('agent-address', {
           alias: 'a',
           type: 'string',
           description:
-            'Agent address in <uuid>@<host> format (REQUIRED). ' +
+            'Agent address in <uuid>@<host> format [LEGACY: prefer --email in v0.13]. ' +
             'Bare UUID is REJECTED in v0.10. Defaults to BOUNTY_IM_ADDRESS env.',
         })
         .option('result', {
@@ -67,19 +76,24 @@ export const submitCommand: CommandModule<object, SubmitOptions> = {
       resolveServerUrlFn: resolveServerUrl,
     });
 
-    const agent = resolveAddressOption({
-      address: argv['agent-address'],
-      fallback: resolveCurrentAgentAddress(),
-      addressFlag: '--agent-address',
-      missingMessage:
-        '✗ Cannot infer agent address. Provide --agent-address <uuid>@<host> or set BOUNTY_IM_ADDRESS=<uuid>@<host>.',
-    });
-    if (!agent.ok) {
-      console.error(chalk.red(`\n${agent.error}\n`));
-      process.exit(2);
+    // v0.13: email takes priority; falls back to address parser.
+    const body: Record<string, unknown> = { result: argv.result };
+    if (argv.email) {
+      body.agentEmail = argv.email;
+    } else {
+      const agent = resolveAddressOption({
+        address: argv['agent-address'],
+        fallback: resolveCurrentAgentAddress(),
+        addressFlag: '--agent-address',
+        missingMessage:
+          '✗ Cannot infer agent identity. Provide --email <email> or --agent-address <uuid>@<host> (or set BOUNTY_IM_ADDRESS=<uuid>@<host>).',
+      });
+      if (!agent.ok) {
+        console.error(chalk.red(`\n${agent.error}\n`));
+        process.exit(2);
+      }
+      body.agentAddress = agent.value.raw;
     }
-    const agentUuid = agent.value.uuid;
-    const agentAddress = agent.value.raw;
 
     if (!argv['task-id']) {
       console.error(chalk.red('\n✗ --task-id is required.\n'));
@@ -106,8 +120,7 @@ export const submitCommand: CommandModule<object, SubmitOptions> = {
         baseUrl,
         path: `/api/tasks/${encodeURIComponent(argv['task-id'])}/submit`,
         method: 'PUT',
-        body: { agentAddress, result: argv.result },
-        extraHeaders: { 'X-Agent-Id': agentUuid },
+        body,
       });
 
       console.log(chalk.green('\n✓ Result submitted successfully\n'));

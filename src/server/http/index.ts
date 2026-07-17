@@ -270,11 +270,27 @@ export class BountyHTTPServer {
             return this.authRoutes.getCurrentAgentCredits(agentId!);
           }
           if (method === 'GET' && path === '/api/agents') {
+            // v0.13: GET /api/agents?email=<email> resolves via agents.email
+            // UNIQUE column. Without ?email= this returns the full list.
+            const emailFilter = url.searchParams.get('email');
+            if (emailFilter && emailFilter.trim()) {
+              return this.authRoutes.getAgentByEmail(emailFilter.trim());
+            }
             return this.authRoutes.listAgents();
+          }
+          // v0.13: GET /api/agents/by-email?email=<email> for explicit lookup
+          if (method === 'GET' && path === '/api/agents/by-email') {
+            const email = url.searchParams.get('email');
+            return this.authRoutes.getAgentByEmail(email ?? '');
           }
           if (method === 'GET' && path.startsWith('/api/agents/') && path !== '/api/agents/me') {
             const id = path.slice('/api/agents/'.length);
             return this.authRoutes.getAgentById(id);
+          }
+          // v0.13: DELETE /api/agents/by-email?email=<email>
+          if (method === 'DELETE' && path === '/api/agents/by-email') {
+            const email = url.searchParams.get('email');
+            return this.authRoutes.deleteAgentByEmail(email ?? '', agentId);
           }
           if (method === 'DELETE' && path.startsWith('/api/agents/')) {
             const id = path.slice('/api/agents/'.length);
