@@ -1,8 +1,12 @@
 /**
- * bounty complete command
+ * bounty complete command — v0.14 strict email-only contract.
  *
- * v0.10: STRICT address-based publisher identity (`<uuid>@<host>` required).
- * Bare UUID and `--publisher-id` flag REMOVED (BREAKING).
+ * v0.10 BREAKING: bare UUIDs REMOVED.
+ * v0.14 BREAKING:
+ *   - --publisher-address / -p REMOVED (renamed to --publisher-email / -e).
+ *   - legacy env fallback REMOVED.
+ *   - --publisher-email is the ONLY publisher identity input.
+ *   - HTTP body uses {publisherEmail} only.
  */
 
 import type { CommandModule } from 'yargs';
@@ -12,14 +16,13 @@ import { ProfileContext } from '../../config/context.js';
 import { resolveProfileApiBase } from '../../lib/profile-api-base.js';
 import { addServerUrlOption, resolveServerUrl } from '../../lib/server-url-option.js';
 import { bountyHttp } from '../../lib/bounty-http.js';
-import { resolveCurrentAgentAddress } from '../../lib/current-agent.js';
-import { resolveAddressOption } from '../../lib/address-parser.js';
+import { parseEmail } from '../../../lib/email-resolver.js';
 import { handleBountyError } from './publish.js';
 import { isValidTaskId } from './grab.js';
 
 interface CompleteOptions {
   'task-id': string;
-  'publisher-address'?: string;
+  'publisher-email'?: string;
   'server-url'?: string;
 }
 
@@ -44,12 +47,11 @@ export const completeCommand: CommandModule<object, CompleteOptions> = {
           demandOption: true,
           description: 'Task ID',
         })
-        .option('publisher-address', {
-          alias: 'p',
+        .option('publisher-email', {
+          alias: 'e',
           type: 'string',
           description:
-            'Publisher agent address in <uuid>@<host> format (REQUIRED). ' +
-            'Bare UUID is REJECTED in v0.10. Defaults to BOUNTY_IM_ADDRESS env.',
+            'Publisher agent email (v0.14 ONLY input). <uuid>@<host> and bare UUIDs REJECTED.',
         })
     ),
 
@@ -61,20 +63,6 @@ export const completeCommand: CommandModule<object, CompleteOptions> = {
       profile,
       resolveServerUrlFn: resolveServerUrl,
     });
-
-    const publisher = resolveAddressOption({
-      address: argv['publisher-address'],
-      fallback: resolveCurrentAgentAddress(),
-      addressFlag: '--publisher-address',
-      missingMessage:
-        '✗ Cannot infer publisher address. Provide --publisher-address <uuid>@<host> or set BOUNTY_IM_ADDRESS=<uuid>@<host>.',
-    });
-    if (!publisher.ok) {
-      console.error(chalk.red(`\n${publisher.error}\n`));
-      process.exit(2);
-    }
-    const publisherUuid = publisher.value.uuid;
-    const publisherAddress = publisher.value.raw;
 
     if (!argv['task-id']) {
       console.error(chalk.red('\n✗ --task-id is required.\n'));
@@ -91,24 +79,26 @@ export const completeCommand: CommandModule<object, CompleteOptions> = {
       process.exit(2);
     }
 
+    // v0.14 strict: --publisher-email is the ONLY publisher identity input.
+    const parsed = parseEmail(argv['publisher-email'], 'publisherEmail', 'cli');
+    if (!parsed.ok) {
+      console.error(chalk.red(`\n${parsed.error}\n`));
+      process.exit(1);
+    }
+
     try {
       const task = await bountyHttp<BountyTask>({
         baseUrl,
         path: `/api/tasks/${encodeURIComponent(argv['task-id'])}/complete`,
         method: 'PUT',
-        // v0.10: send full `<uuid>@<host>` (BREAKING — server rejects bare UUID)
-        body: { publisherAddress },
-        extraHeaders: { 'X-Agent-Id': publisherUuid },
+        body: { publisherEmail: parsed.value },
       });
 
       console.log(chalk.green('\n✓ Task completed successfully\n'));
       console.log(chalk.cyan('  Task ID:'), task.id);
       console.log(chalk.cyan('  Status:'), task.status);
-      if (task.reward !== undefined) {
-        console.log(chalk.cyan('  Reward:'), task.reward, 'credits released');
-      }
       if (task.assigneeId) {
-        console.log(chalk.cyan('  Assigned to:'), task.assigneeId);
+        console.log(chalk.cyan('  Completed by:'), task.assigneeId);
       }
       console.log();
     } catch (error: any) {
