@@ -118,12 +118,12 @@ export class IMRoutes {
 
     const { content } = body;
     // v0.13: prefer `*_email` body fields; fall back to legacy `*` (address).
-    const to = normalizeAgentIdentifier(body.to_email) ??
-                normalizeAgentIdentifier(body.to);
+    const toRaw = normalizeAgentIdentifier(body.to_email) ??
+                  normalizeAgentIdentifier(body.to);
     const fromExplicit = normalizeAgentIdentifier(body.from_email) ??
                           normalizeAgentIdentifier(body.from);
 
-    if (!to) {
+    if (!toRaw) {
       return Response.json(
         { error: 'Missing required field: to_email (or legacy to)' },
         { status: 400 }
@@ -133,6 +133,18 @@ export class IMRoutes {
     if (!content) {
       return Response.json({ error: 'Missing required field: content' }, { status: 400 });
     }
+
+    // v0.13.4: Normalize the recipient to the canonical `<uuid>@<host>` form
+    // before persisting. The protected inbox handler (v0.13.2) already maps
+    // `?email=<email>` to canonical before the IM DB lookup, so leaving the
+    // raw email in `messages.to_address` caused the just-sent message to be
+    // invisible to the sender's own inbox query.
+    //
+    // We fall back to the raw input when the resolver is not wired or cannot
+    // map the input to a known agent. This preserves the pre-v0.13 behavior
+    // of accepting arbitrary recipient strings (e.g. external systems,
+    // unregistered identifiers) so we don't silently drop messages.
+    const to = this.resolveCanonicalAddress(toRaw) ?? toRaw;
 
     // Phase 4 (token check toggle): from 来源策略
     // - 检查 requester.agentId (有值) → 该 agent 的 agent_id 是 authoritative sender
