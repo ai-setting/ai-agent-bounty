@@ -7,10 +7,12 @@
 
 import type { CommandModule } from 'yargs';
 import chalk from 'chalk';
-import { bountyConfig } from '../../../lib/config/bounty-config.js';
+import { API_BASE } from '../../config.js';
+import { ProfileContext } from '../../config/context.js';
+import { resolveProfileApiBase } from '../../lib/profile-api-base.js';
 import { addServerUrlOption, resolveServerUrl } from '../../lib/server-url-option.js';
 import { bountyHttp } from '../../lib/bounty-http.js';
-import { resolveCurrentAgent, resolveCurrentAgentAddress } from '../../lib/current-agent.js';
+import { resolveCurrentAgentAddress } from '../../lib/current-agent.js';
 import { resolveAddressOption } from '../../lib/address-parser.js';
 import { handleBountyError } from './publish.js';
 import { isValidTaskId } from './grab.js';
@@ -52,7 +54,13 @@ export const completeCommand: CommandModule<object, CompleteOptions> = {
     ),
 
   handler: async (argv) => {
-    const baseUrl = resolveServerUrl(argv['server-url'], bountyConfig.apiUrl);
+    const profile = ProfileContext.getActive();
+    const baseUrl = resolveProfileApiBase({
+      cliServerUrl: argv['server-url'] as string | undefined,
+      fallbackApiBase: API_BASE,
+      profile,
+      resolveServerUrlFn: resolveServerUrl,
+    });
 
     const publisher = resolveAddressOption({
       address: argv['publisher-address'],
