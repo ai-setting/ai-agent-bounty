@@ -3,14 +3,19 @@
  *
  * v0.10: STRICT address-based agent identity (`<uuid>@<host>` required).
  * Bare UUID and `--agent-id` flag REMOVED (BREAKING).
+ *
+ * Phase feat/bounty-task-profile (PR7): 改用 ProfileContext 决定 API base，
+ *   与 auth/* 命令族行为一致：`--server-url` > active profile.api_base > API_BASE。
  */
 
 import type { CommandModule } from 'yargs';
 import chalk from 'chalk';
-import { bountyConfig } from '../../../lib/config/bounty-config.js';
+import { API_BASE } from '../../config.js';
+import { ProfileContext } from '../../config/context.js';
+import { resolveProfileApiBase } from '../../lib/profile-api-base.js';
 import { addServerUrlOption, resolveServerUrl } from '../../lib/server-url-option.js';
 import { bountyHttp } from '../../lib/bounty-http.js';
-import { resolveCurrentAgent, resolveCurrentAgentAddress } from '../../lib/current-agent.js';
+import { resolveCurrentAgentAddress } from '../../lib/current-agent.js';
 import { resolveAddressOption } from '../../lib/address-parser.js';
 import { handleBountyError } from './publish.js';
 
@@ -59,7 +64,13 @@ export const grabCommand: CommandModule<object, GrabOptions> = {
     ),
 
   handler: async (argv) => {
-    const baseUrl = resolveServerUrl(argv['server-url'], bountyConfig.apiUrl);
+    const profile = ProfileContext.getActive();
+    const baseUrl = resolveProfileApiBase({
+      cliServerUrl: argv['server-url'] as string | undefined,
+      fallbackApiBase: API_BASE,
+      profile,
+      resolveServerUrlFn: resolveServerUrl,
+    });
 
     const agent = resolveAddressOption({
       address: argv['agent-address'],

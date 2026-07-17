@@ -2,11 +2,15 @@
  * bounty board command
  *
  * Phase feat/bounty-task-optimize: 重构为 HTTP API 调用
+ * Phase feat/bounty-task-profile (PR7): 改用 ProfileContext 决定 API base，
+ *   与 auth/* 命令族行为一致：`--server-url` > active profile.api_base > API_BASE。
  */
 
 import type { CommandModule } from 'yargs';
 import chalk from 'chalk';
-import { bountyConfig } from '../../../lib/config/bounty-config.js';
+import { API_BASE } from '../../config.js';
+import { ProfileContext } from '../../config/context.js';
+import { resolveProfileApiBase } from '../../lib/profile-api-base.js';
 import { addServerUrlOption, resolveServerUrl } from '../../lib/server-url-option.js';
 import { bountyHttp } from '../../lib/bounty-http.js';
 import { handleBountyError } from './publish.js';
@@ -54,7 +58,13 @@ export const boardCommand: CommandModule<object, BoardOptions> = {
     ),
 
   handler: async (argv) => {
-    const baseUrl = resolveServerUrl(argv['server-url'], bountyConfig.apiUrl);
+    const profile = ProfileContext.getActive();
+    const baseUrl = resolveProfileApiBase({
+      cliServerUrl: argv['server-url'] as string | undefined,
+      fallbackApiBase: API_BASE,
+      profile,
+      resolveServerUrlFn: resolveServerUrl,
+    });
 
     // Build query string from filters (with input validation)
     const params = new URLSearchParams();

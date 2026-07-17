@@ -2,12 +2,17 @@
  * bounty publish command
  *
  * v0.7: address-based publisher identity + tolerant optional fields.
+ *
+ * Phase feat/bounty-task-profile (PR7): 改用 ProfileContext 决定 API base，
+ *   与 auth/* 命令族行为一致：`--server-url` > active profile.api_base > API_BASE。
  */
 
 import type { CommandModule } from 'yargs';
 import chalk from 'chalk';
 import { existsSync, readFileSync } from 'fs';
-import { bountyConfig } from '../../../lib/config/bounty-config.js';
+import { API_BASE } from '../../config.js';
+import { ProfileContext } from '../../config/context.js';
+import { resolveProfileApiBase } from '../../lib/profile-api-base.js';
 import { addServerUrlOption, resolveServerUrl } from '../../lib/server-url-option.js';
 import { bountyHttp, BountyHttpError } from '../../lib/bounty-http.js';
 import { resolveCurrentAgent, resolveCurrentAgentAddress } from '../../lib/current-agent.js';
@@ -119,7 +124,13 @@ export const publishCommand: CommandModule<object, PublishOptions> = {
     ),
 
   handler: async (argv) => {
-    const baseUrl = resolveServerUrl(argv['server-url'], bountyConfig.apiUrl);
+    const profile = ProfileContext.getActive();
+    const baseUrl = resolveProfileApiBase({
+      cliServerUrl: argv['server-url'] as string | undefined,
+      fallbackApiBase: API_BASE,
+      profile,
+      resolveServerUrlFn: resolveServerUrl,
+    });
 
     const validated = validatePublishInput(argv as Record<string, unknown>);
     if (!validated.ok) {
