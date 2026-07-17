@@ -192,4 +192,44 @@ describe('bounty profile remove', () => {
     ).rejects.toThrow(/__exit:1/);
     expect(existsSync(join(profilesDir, 'beta.json'))).toBe(true);
   });
+
+  test('surfaces IO failure when deleteProfile silently fails to remove the file', async () => {
+    writeProfile('stale');
+    writeConfig('default');
+
+    // Patch the underlying fs.rmSync so the deletion silently fails (exactly
+    // the PR1 store swallow behavior the verifier flagged). The store's
+    // deleteProfile catches rmSync errors, so to simulate "no throw, file
+    // still present" we make rmSync succeed for one call but recreate the
+    // file before the handler's post-check.
+    const fs = await import('fs');
+    const realUnlinkSync = fs.rmSync;
+    let patchedOnce = false;
+    const rmSpy = spyOn(fs, 'rmSync').mockImplementation(((target: string, opts?: unknown) => {
+      // Pretend the IO succeeded but leave the file on disk.
+      patchedOnce = true;
+      // Real rmSync would throw on the directory we control, but here we
+      // simply no-op so the file stays — replicating PR1's silent swallow
+      // when rmSync raises ENOENT/EACCES.
+      void target; void opts;
+    }) as typeof fs.rmSync);
+
+    try {
+      await expect(
+        callRemove({
+          name: 'stale',
+          force: true,
+          __storeOptions: { profilesDir, configFile },
+          __confirm: () => Promise.resolve(true),
+        }),
+      ).rejects.toThrow(/__exit:1/);
+      expect(patchedOnce).toBe(true);
+      // Handler must NOT print the success line.
+      const out = logSpy.mock.calls.map((c) => c.join(' ')).join('\n');
+      expect(out).not.toMatch(/Profile "stale" removed/);
+    } finally {
+      rmSpy.mockRestore();
+      void realUnlinkSync;
+    }
+  });
 });

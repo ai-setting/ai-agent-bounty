@@ -16,6 +16,7 @@ import type { CommandModule } from 'yargs';
 import chalk from 'chalk';
 import {
   existsSync,
+  rmSync,
 } from 'fs';
 import { join } from 'path';
 import * as readline from 'node:readline/promises';
@@ -132,7 +133,29 @@ export const removeCommand: CommandModule<object, RemoveOptions> = {
       exitWith(1, `Profile "${name}" disappeared during confirmation. Aborted.`);
     }
 
-    deleteProfile(name, opts);
+    try {
+      deleteProfile(name, opts);
+    } catch (err) {
+      exitWith(
+        1,
+        `Failed to remove profile "${name}": ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+
+    // PR1's `deleteProfile` swallows every rmSync failure (including EACCES
+    // and ENOENT) so the file may still exist. Verify on disk to surface the
+    // silent failure as a user-visible error.
+    if (file && existsSync(file)) {
+      try { rmSync(file); } catch { /* best effort */ }
+      if (existsSync(file)) {
+        exitWith(
+          1,
+          `Profile "${name}" could not be removed (delete was silently dropped). ` +
+            `Check file permissions on ${file}.`,
+        );
+      }
+    }
+
     console.log(chalk.green(`\n✓ Profile "${name}" removed.\n`));
   },
 };
