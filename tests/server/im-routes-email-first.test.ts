@@ -84,7 +84,11 @@ describe('IM routes — email-first API (v0.13)', () => {
 
   // ===== POST /api/messages =====
 
-  test('sendMessage 接受 to_email（v0.13 primary）', async () => {
+  // v0.13.4: sendMessage now normalizes `to_email` to the canonical
+  // `<uuid>@<host>` form before persisting (so the message is visible
+  // to the recipient's inbox lookup). Legacy `to=<address>` is
+  // unchanged because it already matches the canonical form.
+  test('sendMessage 接受 to_email（v0.13 primary）→ 持久化为 canonical 地址', async () => {
     const res = await fetch(`${baseUrl}/api/messages`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -95,7 +99,7 @@ describe('IM routes — email-first API (v0.13)', () => {
     });
     expect(res.status).toBe(201);
     const msg = (await res.json()) as { to: string };
-    expect(msg.to).toBe(BOB_EMAIL);
+    expect(msg.to).toBe(BOB_ADDR);
   });
 
   test('sendMessage to (legacy address) 仍可用', async () => {
