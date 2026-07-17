@@ -20,7 +20,7 @@ import type { Database } from '../../lib/storage/database.js';
 /**
  * RFC-5322-ish email regex: very loose but rejects obvious garbage
  * (multiple `@`, whitespace, empty local/domain). Used to distinguish
- * "looks like an email" from "looks like an address" at the entry point.
+ * an email-shaped input from an address-shaped input at the entry point.
  */
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
