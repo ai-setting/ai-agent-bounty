@@ -23,7 +23,7 @@ import {
   resolveServerUrl,
 } from '../../lib/server-url-option.js';
 import { ProfileContext } from '../../config/context.js';
-import { loadProfile, saveProfile } from '../../config/store.js';
+import { loadProfile, saveProfile, type StoreOptions } from '../../config/store.js';
 import { resolveProfileApiBase } from '../../lib/profile-api-base.js';
 import { writeAuthToProfile } from '../../lib/profile-auth-writer.js';
 
@@ -31,6 +31,12 @@ interface LoginOptions {
   email?: string;
   'agent-address'?: string;
   'server-url'?: string;
+}
+
+function buildStoreOptions(argv: Record<string, unknown>): StoreOptions {
+  const raw = argv.__storeOptions;
+  if (raw && typeof raw === 'object') return raw as StoreOptions;
+  return {};
 }
 
 export const loginCommand: CommandModule<object, LoginOptions> = {
@@ -55,6 +61,7 @@ export const loginCommand: CommandModule<object, LoginOptions> = {
     ),
 
   handler: async (argv) => {
+    const opts = buildStoreOptions(argv as Record<string, unknown>);
     if (!argv.email && !argv['agent-address']) {
       console.error(chalk.red('\n✗ Error: --email or --agent-address is required\n'));
       console.error('Usage: bounty auth login --agent-address <uuid>@<host>');
@@ -127,10 +134,10 @@ export const loginCommand: CommandModule<object, LoginOptions> = {
         accessToken,
         refreshToken: data.refresh_token ?? undefined,
         expiresAt,
-        agentId: data.agent_id ?? '',
+        agentId: data.agent_id,
         email: data.email ?? '',
-        loadProfileFn: loadProfile,
-        saveProfileFn: saveProfile,
+        loadProfileFn: (name) => loadProfile(name, opts),
+        saveProfileFn: (p) => saveProfile(p, opts),
         consoleOut: console.log,
         logger: (msg: string) => console.log(chalk.cyan(`  ${msg}`)),
       });

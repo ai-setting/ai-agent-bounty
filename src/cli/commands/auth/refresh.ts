@@ -18,12 +18,18 @@ import {
   resolveServerUrl,
 } from '../../lib/server-url-option.js';
 import { ProfileContext } from '../../config/context.js';
-import { loadProfile, saveProfile } from '../../config/store.js';
+import { loadProfile, saveProfile, type StoreOptions } from '../../config/store.js';
 import { resolveProfileApiBase } from '../../lib/profile-api-base.js';
 import { writeAuthToProfile } from '../../lib/profile-auth-writer.js';
 
 interface RefreshOptions {
   'server-url'?: string;
+}
+
+function buildStoreOptions(argv: Record<string, unknown>): StoreOptions {
+  const raw = argv.__storeOptions;
+  if (raw && typeof raw === 'object') return raw as StoreOptions;
+  return {};
 }
 
 export const refreshCommand: CommandModule<object, RefreshOptions> = {
@@ -33,6 +39,7 @@ export const refreshCommand: CommandModule<object, RefreshOptions> = {
   builder: (yargs) => addServerUrlOption(yargs),
 
   handler: async (argv) => {
+    const opts = buildStoreOptions(argv as Record<string, unknown>);
     try {
       const profile = ProfileContext.getActive();
       if (!profile) {
@@ -43,7 +50,7 @@ export const refreshCommand: CommandModule<object, RefreshOptions> = {
         );
         process.exit(1);
       }
-      const loaded = loadProfile(profile.name);
+      const loaded = loadProfile(profile.name, opts);
       const refreshToken = loaded?.auth.refresh_token;
       if (!refreshToken) {
         console.error(
@@ -105,8 +112,8 @@ export const refreshCommand: CommandModule<object, RefreshOptions> = {
         expiresAt,
         agentId: data.agent_id,
         email: data.email,
-        loadProfileFn: loadProfile,
-        saveProfileFn: saveProfile,
+        loadProfileFn: (name) => loadProfile(name, opts),
+        saveProfileFn: (p) => saveProfile(p, opts),
         consoleOut: console.log,
         logger: (msg: string) => console.log(chalk.cyan(`  ${msg}`)),
       });

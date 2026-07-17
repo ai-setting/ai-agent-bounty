@@ -10,24 +10,31 @@ import type { CommandModule } from 'yargs';
 import chalk from 'chalk';
 import { rm } from 'fs/promises';
 import { ProfileContext } from '../../config/context.js';
-import { loadProfile, saveProfile } from '../../config/store.js';
+import { loadProfile, saveProfile, type StoreOptions } from '../../config/store.js';
 import { DEFAULT_TOKEN_PATH } from '../../lib/auth-token.js';
+
+function buildStoreOptions(argv: Record<string, unknown>): StoreOptions {
+  const raw = argv.__storeOptions;
+  if (raw && typeof raw === 'object') return raw as StoreOptions;
+  return {};
+}
 
 export const logoutCommand: CommandModule = {
   command: 'logout',
   describe: 'Clear stored authentication token from active profile',
 
-  handler: async () => {
+  handler: async (argv) => {
     try {
+      const opts = buildStoreOptions(argv as Record<string, unknown>);
       const profile = ProfileContext.getActive();
       if (profile) {
-        const current = loadProfile(profile.name);
+        const current = loadProfile(profile.name, opts);
         if (current) {
           current.auth.access_token = undefined;
           current.auth.refresh_token = undefined;
           current.auth.expires_at = undefined;
           current.updated_at = Math.floor(Date.now() / 1000);
-          saveProfile(current);
+          saveProfile(current, opts);
         }
         const displayName = profile.name;
         console.log(chalk.green(`\n✓ Logged out (profile "${displayName}")`));
