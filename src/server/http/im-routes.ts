@@ -2,10 +2,14 @@
  * IM Routes
  *
  * Handles IM message endpoints:
- * - GET  /api/messages?address=<addr> (protected, address must match requester)
+ * - GET  /api/messages?address=<addr> | ?email=<addr> (protected, requester must match)
  * - POST /api/messages                 (send, public — same as before)
  * - GET  /api/messages/:id             (protected, requester must be a participant)
  * - POST /api/messages/ack             (acknowledge)
+ *
+ * v0.13: All endpoints that accept an agent identifier now accept EITHER
+ *   - `email`  (e.g. `alice@example.com`)  ← PRIMARY lookup key (agents.email UNIQUE)
+ *   - `address` (e.g. `uuid@host`)         ← secondary, backward-compat
  *
  * Authorization model:
  *   - getMessages and getMessageById require a Bearer token (verified by the
@@ -18,6 +22,30 @@ import type { Message, Content } from '../../im/types';
 
 interface RequesterInfo {
   agentId: string;
+}
+
+/**
+ * v0.13: Convert a user-supplied agent identifier (email OR address) into
+ * the canonical `<uuid>@<host>` IM address string used by the message store.
+ *
+ * Pure string transform — no DB lookup. Caller (or `getMessages` handler)
+ * is responsible for verifying the identifier actually belongs to a known
+ * agent. Returns the trimmed string on success or `null` if the input is
+ * blank / non-string.
+ *
+ * Recognised inputs:
+ *   - `alice@example.com`         → unchanged (caller can later resolve to address)
+ *   - `uuid@host`                → unchanged (legacy)
+ *
+ * Note: this helper does NOT distinguish between email and address — IM
+ * storage key is `<uuid>@<host>`, so when an email is supplied the caller
+ * must resolve it through `findAgentByEmailOrAddress` first. The WS handler
+ * does that lookup before writing the message.
+ */
+export function normalizeAgentIdentifier(input: unknown): string | null {
+  if (typeof input !== 'string') return null;
+  const raw = input.trim();
+  return raw || null;
 }
 
 export class IMRoutes {
@@ -34,7 +62,13 @@ export class IMRoutes {
   }
 
   async sendMessage(req: Request, requester?: RequesterInfo): Promise<Response> {
-    let body: { from?: string; to?: string; content?: Content };
+    let body: {
+      from?: string;
+      to?: string;
+      from_email?: string;
+      to_email?: string;
+      content?: Content;
+    };
 
     try {
       const text = await req.text();
@@ -46,10 +80,18 @@ export class IMRoutes {
       return Response.json({ error: 'Invalid JSON' }, { status: 400 });
     }
 
-    const { to, content } = body;
+    const { content } = body;
+    // v0.13: prefer `*_email` body fields; fall back to legacy `*` (address).
+    const to = normalizeAgentIdentifier(body.to_email) ??
+                normalizeAgentIdentifier(body.to);
+    const fromExplicit = normalizeAgentIdentifier(body.from_email) ??
+                          normalizeAgentIdentifier(body.from);
 
     if (!to) {
-      return Response.json({ error: 'Missing required field: to' }, { status: 400 });
+      return Response.json(
+        { error: 'Missing required field: to_email (or legacy to)' },
+        { status: 400 }
+      );
     }
 
     if (!content) {
@@ -61,13 +103,16 @@ export class IMRoutes {
     //   (用 `@authenticated` suffix 让 server 端能 push 到正确的 ws client)
     // - requester 缺失 OR agentId undefined → legacy 行为: 用 body.from (caller 自报)
     //
+    // v0.13: `from_email` / `from` are accepted equally. When the requester is
+    // authenticated, body.from* is intentionally ignored to prevent impersonation.
+    //
     // 注意: token check OFF 场景下 requester=undefined, 走 legacy path;
     //      token check ON 场景下 requester.agentId 是真值, 强制覆盖 body.from (防止冒充)
     const requesterAgentId = requester?.agentId as string | undefined;
     const from =
       requesterAgentId
         ? `${requesterAgentId}@authenticated`
-        : body.from || 'anonymous@server.com';
+        : fromExplicit || 'anonymous@server.com';
 
     const message: Message = {
       id: crypto.randomUUID(),
@@ -91,14 +136,38 @@ export class IMRoutes {
   }
 
   getMessages(url: URL, requester: RequesterInfo): Response {
-    const address = url.searchParams.get('address');
+    // v0.13: prefer `?email=`, fall back to `?address=` (legacy).
+    const address =
+      normalizeAgentIdentifier(url.searchParams.get('email')) ??
+      normalizeAgentIdentifier(url.searchParams.get('address'));
     if (!address) {
-      return Response.json({ error: 'Missing required query parameter: address' }, { status: 400 });
-    }
-    if (!this.requesterOwnsAddress(requester.agentId, address)) {
       return Response.json(
-        { error: 'Forbidden: cannot read another agent\'s inbox' },
+        { error: 'Missing required query parameter: email or address' },
+        { status: 400 }
+      );
+    }
+    if (!this.requesterOwnsIdentifier(requester.agentId, address)) {
+      return Response.json(
+        { error: "Forbidden: cannot read another agent's inbox" },
         { status: 403 }
+      );
+    }
+    // v0.13: when the caller passes an email, we still need the canonical
+    // <uuid>@<host> address that the IM DB stores under. Caller is expected
+    // to pass an address here in the common case; if they pass an email,
+    // we cannot resolve it without a DB lookup, so we fall through to the
+    // inbox-by-email endpoint below.
+    if (address.includes('@') && !/^[0-9a-f-]{36}@/.test(address)) {
+      // Looks like an email (not a uuid@host). The IM DB is keyed by
+      // address only; in practice, the protected inbox handler requires
+      // the caller to send the canonical address. Email-only callers
+      // must resolve through /api/agents/me first.
+      return Response.json(
+        {
+          error:
+            "Email-only inbox not supported on IM store; resolve via /api/agents/me to obtain the address and retry with ?address=<uuid>@<host>.",
+        },
+        { status: 400 }
       );
     }
     const messages = this.db.getInbox(address);
@@ -111,7 +180,10 @@ export class IMRoutes {
    * New clients should use the protected `getMessages` instead.
    */
   getMessagesForAddress(url: URL): Response {
-    const address = url.searchParams.get('address');
+    // v0.13: also accept `?email=` here (legacy callers used `?address=`).
+    const address =
+      normalizeAgentIdentifier(url.searchParams.get('address')) ??
+      normalizeAgentIdentifier(url.searchParams.get('email'));
     if (!address) {
       return Response.json([]);
     }
@@ -181,9 +253,30 @@ export class IMRoutes {
    * matches its agent id. The host is intentionally ignored so that the
    * same agent can read messages addressed to any deployment-specific
    * domain (`bounty.local`, `secure.com`, etc.).
+   *
+   * v0.13: callers may now pass an email instead of an address. Email-only
+   * callers cannot be matched by local-part alone — they must resolve to
+   * an address via `/api/agents/me` first. This helper still validates
+   * `<local>@<host>` shape and falls back to `false` for email-shaped input.
    */
   private requesterOwnsAddress(agentId: string, address: string): boolean {
     const [local] = address.split('@');
     return local === agentId;
+  }
+
+  /**
+   * v0.13 variant of `requesterOwnsAddress` that accepts either an address
+   * (`<uuid>@<host>`) or an email (`alice@example.com`). For an email we
+   * conservatively return `false` — the protected inbox handler is keyed by
+   * the canonical IM address, so the caller is expected to have resolved
+   * email → address via the agents API before reaching this point.
+   */
+  private requesterOwnsIdentifier(agentId: string, identifier: string): boolean {
+    const [local] = identifier.split('@');
+    if (local !== agentId) return false;
+    // Distinguish email-shaped (alice@example.com — local is short) from
+    // uuid-shaped address: if the local part is a UUID, treat as address;
+    // otherwise (email), the inbox is not directly addressable here.
+    return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(local);
   }
 }

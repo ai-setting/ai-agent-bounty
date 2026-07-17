@@ -6,6 +6,10 @@
  * - POST /api/auth/verify
  * - POST /api/auth/login
  * - POST /api/auth/send-code
+ *
+ * v0.13: `POST /api/auth/login` accepts the registered email as the PRIMARY
+ * lookup key. The legacy `agent_id` (UUID) field is preserved for callers
+ * that have not yet migrated. Both are optional — at least one is required.
  */
 
 import type { Database } from '../../lib/storage/database';
@@ -186,6 +190,30 @@ export class AuthRoutes {
     return Response.json(agent);
   }
 
+  /**
+   * v0.13: Look up an agent by registered email. Used by the
+   * `bounty register-agent get --email <email>` CLI path so callers
+   * no longer need to know the UUID.
+   *
+   * Returns the agent row on hit, or 404 when the email is not in the
+   * `agents` table.
+   */
+  getAgentByEmail(email: string): Response {
+    if (typeof email !== 'string' || !email.trim()) {
+      return Response.json({ error: 'email query parameter is required' }, { status: 400 });
+    }
+    const agent = this.db.prepare(`
+      SELECT id, name, email, status, credits, address, description, created_at, updated_at
+      FROM agents WHERE email = ?
+    `).get(email.trim());
+
+    if (!agent) {
+      return Response.json({ error: `Agent not found for email: ${email}` }, { status: 404 });
+    }
+
+    return Response.json(agent);
+  }
+
   deleteAgent(id: string, requesterId: string): Response {
     const agent = this.db.prepare('SELECT * FROM agents WHERE id = ?').get(id);
     if (!agent) {
@@ -201,5 +229,25 @@ export class AuthRoutes {
     this.db.prepare('DELETE FROM agents WHERE id = ?').run(id);
 
     return Response.json({ message: 'Agent deleted successfully' });
+  }
+
+  /**
+   * v0.13: Delete-by-email variant of `deleteAgent`. Resolves the email to
+   * an agent id and applies the same rules (cannot delete self, etc.).
+   */
+  deleteAgentByEmail(email: string, requesterId: string | undefined): Response {
+    if (typeof email !== 'string' || !email.trim()) {
+      return Response.json({ error: 'email query parameter is required' }, { status: 400 });
+    }
+    const agent = this.db.prepare(
+      'SELECT id FROM agents WHERE email = ?'
+    ).get(email.trim()) as { id: string } | undefined;
+    if (!agent) {
+      return Response.json({ error: `Agent not found for email: ${email}` }, { status: 404 });
+    }
+    // Reuse the id-based delete path so the same safeguards apply.
+    // Pass undefined requesterId if caller is not authenticated; the
+    // self-delete guard becomes a no-op in that case.
+    return this.deleteAgent(agent.id, requesterId ?? '__no_auth__');
   }
 }

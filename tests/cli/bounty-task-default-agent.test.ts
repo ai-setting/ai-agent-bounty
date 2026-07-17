@@ -49,7 +49,9 @@ describe('bounty bounty-task - default agent inference (v0.10)', () => {
     expect(src).toContain("address: argv['agent-address']");
     expect(src).not.toContain("deprecatedId: argv['agent-id']");
     expect(src).toContain('fallback: resolveCurrentAgentAddress()');
-    expect(src).toContain('Cannot infer agent address');
+    // v0.13: error message expanded to mention --email as the primary path
+    expect(src).toContain('Cannot infer agent identity');
+    expect(src).toContain('--email');
   });
 
   test('submit.ts: --agent-address fallback to resolveCurrentAgent()', () => {
@@ -58,7 +60,9 @@ describe('bounty bounty-task - default agent inference (v0.10)', () => {
     expect(src).toContain("address: argv['agent-address']");
     expect(src).not.toContain("deprecatedId: argv['agent-id']");
     expect(src).toContain('fallback: resolveCurrentAgentAddress()');
-    expect(src).toContain('Cannot infer agent address');
+    // v0.13: error message expanded to mention --email as the primary path
+    expect(src).toContain('Cannot infer agent identity');
+    expect(src).toContain('--email');
   });
 
   test('complete.ts: --publisher-address fallback to resolveCurrentAgent()', () => {

@@ -2,7 +2,10 @@
  * agent credits command
  * Check agent credits and transaction history
  *
- * v0.10 BREAKING: --id / -i REMOVED. Use --agent-address <uuid>@<host>.
+ * v0.10: --id / -i REMOVED. Use --agent-address <uuid>@<host>.
+ *
+ * v0.13: --email is now the PRIMARY lookup key; --agent-address remains as
+ *   a backward-compatible secondary option. At least one is required.
  */
 
 import type { CommandModule } from 'yargs';
@@ -12,6 +15,7 @@ import { resolveAddressOption } from '../../lib/address-parser.js';
 
 interface CreditsOptions {
   'agent-address'?: string;
+  email?: string;
   history?: number;
 }
 
@@ -21,19 +25,29 @@ export const creditsCommand: CommandModule<object, CreditsOptions> = {
 
   builder: (yargs) =>
     yargs
+      .option('email', {
+        alias: 'e',
+        type: 'string',
+        description: 'Agent email (v0.13 primary; preferred over --agent-address)',
+      })
       .option('agent-address', {
         alias: 'a',
         type: 'string',
-        demandOption: true,
         description:
           'Agent address in <uuid>@<host> format (REQUIRED). ' +
-          'Bare UUID is REJECTED in v0.10.',
+          'Bare UUID is REJECTED in v0.10. [LEGACY: prefer --email in v0.13]',
       })
       .option('history', {
         alias: 'h',
         type: 'number',
         default: 10,
         description: 'Number of recent transactions to show',
+      })
+      .check((argv) => {
+        if (!argv.email && !argv['agent-address']) {
+          throw new Error('Either --email or --agent-address is required (v0.13 email-first).');
+        }
+        return true;
       }),
 
   handler: async (argv) => {
@@ -41,20 +55,25 @@ export const creditsCommand: CommandModule<object, CreditsOptions> = {
     const ctx = createContext();
 
     try {
-      const resolvedAgent = resolveAddressOption({
-        address: options['agent-address'],
-        addressFlag: '--agent-address',
-        missingMessage: '✗ --agent-address is required (<uuid>@<host> format)',
-      });
+      // v0.13: email-first lookup; falls back to address parser.
+      let agent: ReturnType<typeof ctx.agentService.findByAddress> | null = null;
 
-      if (!resolvedAgent.ok) {
-        console.error(chalk.red(`\n${resolvedAgent.error}\n`));
-        ctx.db.close();
-        process.exit(2);
+      if (options.email) {
+        agent = ctx.agentService.getByEmail(options.email);
+      } else if (options['agent-address']) {
+        const resolvedAgent = resolveAddressOption({
+          address: options['agent-address'],
+          addressFlag: '--agent-address',
+          missingMessage: '✗ --agent-address is required (<uuid>@<host> format)',
+        });
+
+        if (!resolvedAgent.ok) {
+          console.error(chalk.red(`\n${resolvedAgent.error}\n`));
+          ctx.db.close();
+          process.exit(2);
+        }
+        agent = ctx.agentService.findByAddress(resolvedAgent.value.raw);
       }
-
-      // v0.10: resolve via full address → look up agent
-      const agent = ctx.agentService.findByAddress(resolvedAgent.value.raw);
 
       if (!agent) {
         console.error(chalk.red('\n✗ Error: Agent not found\n'));

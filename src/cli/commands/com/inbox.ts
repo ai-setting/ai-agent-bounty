@@ -2,6 +2,11 @@
  * com inbox command
  * Check inbox messages via Agent IM
  *
+ * Phase feat/v0.13-email-instead-of-uuid:
+ * - 新增 --email 选项（v0.13 primary；优先于 --address）
+ * - --address 仍可用（legacy 兼容）
+ * - 当同时提供时，--email 优先；否则回退到 --address
+ *
  * Phase feat/bounty-all-commands-server-url:
  * - 新增 --server-url / -u 选项：通过 addServerUrlOption helper 复用
  * - --server-url 提供时覆盖 --host/--port，回退保持向后兼容
@@ -20,7 +25,8 @@ import {
 } from '../../lib/server-url-option.js';
 
 interface InboxOptions {
-  address: string;
+  address?: string;
+  email?: string;
   host?: string;
   port?: number;
   limit?: number;
@@ -34,11 +40,16 @@ export const inboxCommand: CommandModule<object, InboxOptions> = {
   builder: (yargs) =>
     addServerUrlOption(
       yargs
+        .option('email', {
+          alias: 'e',
+          type: 'string',
+          description: 'Agent email (v0.13 primary; preferred over --address)',
+        })
         .option('address', {
           alias: 'a',
           type: 'string',
-          demandOption: true,
-          description: 'Agent address (format: agent-id@host)',
+          description:
+            'Agent address (format: <uuid>@<host>) [LEGACY: prefer --email in v0.13]',
         })
         .option('host', {
           alias: 'H',
@@ -58,17 +69,29 @@ export const inboxCommand: CommandModule<object, InboxOptions> = {
           description: 'Number of messages to show',
           default: 10,
         })
+        .check((argv) => {
+          if (!argv.email && !argv.address) {
+            throw new Error('Either --email or --address is required (v0.13 email-first).');
+          }
+          return true;
+        })
     ),
 
   handler: async (args) => {
-    const { address, host, port, limit } = args;
+    const { email, address, host, port, limit } = args;
+    // v0.13: email takes priority over address when both are supplied.
+    const identifier = (typeof email === 'string' && email.trim())
+      ? email.trim()
+      : (address ?? '');
 
     // baseUrl: --server-url > 默认 (http://localhost:port)
     // 注意：inbox 的 fallback base 是动态拼出来的（包含 port），不是 API_BASE 那种静态值
     const fallbackBase = `http://${host}:${port}`;
     const baseUrl = resolveServerUrl(args['server-url'], fallbackBase);
-    const url = `${baseUrl}/messages?address=${encodeURIComponent(address)}`;
-    
+    // v0.13: prefer `?email=`; legacy callers may still send `?address=`.
+    // The server resolves either form via findAgentByEmailOrAddress.
+    const url = `${baseUrl}/messages?email=${encodeURIComponent(identifier)}`;
+
     try {
       const response = await bountyFetch(url);
       

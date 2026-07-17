@@ -5,7 +5,8 @@
  * credit accounting, status transitions) lives in BountyService; this
  * module is responsible for:
  *   - request body parsing + validation
- *   - looking up the agent by id OR address and resolving the publisher email
+ *   - looking up the agent by email OR address (v0.13 email-first)
+ *     and resolving the publisher/agent identity
  *   - mapping service return values to HTTP responses
  *
  * Endpoints:
@@ -23,12 +24,22 @@
  *     legacy `*Id` (auth-derived or explicit body field).
  *   - When `BOUNTY_TOKEN_CHECK_ENABLED=false`, `agentId` is `undefined`;
  *     callers MUST supply an address in the body.
+ *
+ * v0.13 additions:
+ *   - Handlers now accept `*Email` (the agents.email UNIQUE column) as
+ *     the PRIMARY lookup key. `*Address` is preserved as a fallback for
+ *     legacy callers.
+ *   - Callers SHOULD migrate from `*Address` to `*Email`. The legacy
+ *     form continues to work and is wired through `findAgentByAddress`.
  */
 
 import type { Database } from '../../lib/storage/database';
 import { BountyService, type Task, type TaskFilter, TaskStatus } from '../../lib/bounty/index.js';
 import { AgentService } from '../../lib/agent/index.js';
-import { findAgentByAddress } from '../lib/address-resolver.js';
+import {
+  findAgentByAddress,
+  findAgentByEmailOrAddress,
+} from '../lib/address-resolver.js';
 
 interface JsonBody {
   [k: string]: unknown;
@@ -63,14 +74,16 @@ function internalError(message = 'Internal server error'): Response {
 /**
  * Resolve the acting agent from request body + auth fallback.
  *
- * Priority (v0.10):
- *   1. body[`${fieldName}Address`] (STRICT uuid@host — bare UUIDs rejected)
- *   2. authId (from JWT — only present when BOUNTY_TOKEN_CHECK_ENABLED=true)
+ * Priority (v0.13):
+ *   1. body[`${fieldName}Email`] (preferred — agents.email UNIQUE column)
+ *   2. body[`${fieldName}Address`] (STRICT uuid@host — bare UUIDs rejected; legacy v0.10+)
+ *   3. authId (from JWT — only present when BOUNTY_TOKEN_CHECK_ENABLED=true)
  *
- * v0.10 BREAKING: removed `body[${fieldName}Id]` branch. Callers MUST send
- * the full address.
+ * v0.13 BREAKING-friendly: email is now the primary lookup key. The address
+ * field is preserved as a backward-compatible secondary path for callers that
+ * have not yet migrated.
  *
- * Returns `null` if no source provided or address lookup fails.
+ * Returns `null` if no source provided or lookup fails.
  * Caller should 400 / 404 as appropriate.
  */
 function resolveActor(
@@ -79,9 +92,18 @@ function resolveActor(
   fieldName: 'publisher' | 'agent',
   authId: string | undefined
 ): { id: string; email: string } | null {
+  const emailKey = `${fieldName}Email` as const;
   const addrKey = `${fieldName}Address` as const;
 
-  // 1. address field (STRICT — must be uuid@host)
+  // 1. email field (preferred in v0.13 — RFC-ish email syntax)
+  const email = body[emailKey];
+  if (typeof email === 'string' && email.trim()) {
+    const r = findAgentByEmailOrAddress(db, email);
+    if (!r) return null;
+    return { id: r.id, email: r.email };
+  }
+
+  // 2. address field (STRICT — must be uuid@host)
   const addr = body[addrKey];
   if (typeof addr === 'string' && addr.trim()) {
     const r = findAgentByAddress(db, addr);
@@ -89,7 +111,7 @@ function resolveActor(
     return r;
   }
 
-  // 2. authId (JWT-based)
+  // 3. authId (JWT-based)
   if (authId) {
     const row = db
       .prepare('SELECT id, email FROM agents WHERE id = ?')
@@ -167,13 +189,15 @@ export class BountyRoutes {
 
     const taskType = typeof type === 'string' && type.trim() ? type : 'bounty';
 
-    // 解析 publisher (address 优先 → body id → auth)
+    // 解析 publisher (email 优先 → address → auth)
     const publisher = resolveActor(this.db, body, 'publisher', authId);
     if (!publisher) {
       return badRequest(
         typeof body.publisherAddress === 'string' && body.publisherAddress
           ? `Agent not found: ${body.publisherAddress}`
-          : 'publisherAddress required (<uuid>@<host>)'
+          : typeof body.publisherEmail === 'string' && body.publisherEmail
+            ? `Agent not found: ${body.publisherEmail}`
+            : 'publisherEmail or publisherAddress required (v0.13 email-first)'
       );
     }
 
@@ -209,7 +233,7 @@ export class BountyRoutes {
       return badRequest(
         typeof body.agentAddress === 'string' && body.agentAddress
           ? `Agent not found: ${body.agentAddress}`
-          : 'agentAddress required (<uuid>@<host>)'
+          : 'agentEmail or agentAddress required (v0.13 email-first)'
       );
     }
 
@@ -267,7 +291,7 @@ export class BountyRoutes {
       return badRequest(
         typeof body.agentAddress === 'string' && body.agentAddress
           ? `Agent not found: ${body.agentAddress}`
-          : 'agentAddress required (<uuid>@<host>)'
+          : 'agentEmail or agentAddress required (v0.13 email-first)'
       );
     }
 
@@ -296,7 +320,7 @@ export class BountyRoutes {
       return badRequest(
         typeof body.publisherAddress === 'string' && body.publisherAddress
           ? `Agent not found: ${body.publisherAddress}`
-          : 'publisherAddress required (<uuid>@<host>)'
+          : 'publisherEmail or publisherAddress required (v0.13 email-first)'
       );
     }
 
@@ -327,7 +351,7 @@ export class BountyRoutes {
       return badRequest(
         typeof body.publisherAddress === 'string' && body.publisherAddress
           ? `Agent not found: ${body.publisherAddress}`
-          : 'publisherAddress required (<uuid>@<host>)'
+          : 'publisherEmail or publisherAddress required (v0.13 email-first)'
       );
     }
 
@@ -356,7 +380,7 @@ export class BountyRoutes {
       return badRequest(
         typeof body.publisherAddress === 'string' && body.publisherAddress
           ? `Agent not found: ${body.publisherAddress}`
-          : 'publisherAddress required (<uuid>@<host>)'
+          : 'publisherEmail or publisherAddress required (v0.13 email-first)'
       );
     }
 

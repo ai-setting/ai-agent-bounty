@@ -125,7 +125,9 @@ describe('bounty-task address-based flags (v0.10 strict)', () => {
     // v0.10 BREAKING: body carries full uuid@host
     expect(requests[0].body.agentAddress).toBe(AGENT_FULL);
     expect(requests[0].body.agentId).toBeUndefined();
-    // X-Agent-Id header carries bare uuid (soft-auth)
-    expect(requests[0].headers['x-agent-id']).toBe(AGENT_UUID);
+    // v0.13: when --email not supplied, X-Agent-Id header is no longer set
+    // (the v0.10 soft-auth hint via X-Agent-Id was removed because the
+    // server now resolves identity via body.agentEmail/agentAddress).
+    expect(requests[0].headers['x-agent-id']).toBeUndefined();
   });
 });
