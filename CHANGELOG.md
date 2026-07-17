@@ -1,3 +1,12 @@
+## [v0.13.3] - 2026-07-17 - Inbox URL Path Fix (PATCH)
+
+### Fixed
+
+- **cli/com inbox**: URL path now uses `/api/messages?email=...` (was `/messages?email=...`).
+  The missing `/api` prefix caused the CLI to hit k8s nginx ingress SPA
+  HTML fallback when `baseUrl` resolved to the production hostname
+  (e.g. via profile.api_base), resulting in "Failed to parse JSON" errors.
+
 ## [v0.13.2] - 2026-07-17 - Inbox Bugfixes (PATCH)
 
 ### Fixed
