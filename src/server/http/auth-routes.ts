@@ -6,6 +6,10 @@
  * - POST /api/auth/verify
  * - POST /api/auth/login
  * - POST /api/auth/send-code
+ *
+ * v0.13: `POST /api/auth/login` accepts the registered email as the PRIMARY
+ * lookup key. The legacy `agent_id` (UUID) field is preserved for callers
+ * that have not yet migrated. Both are optional — at least one is required.
  */
 
 import type { Database } from '../../lib/storage/database';

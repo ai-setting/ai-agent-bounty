@@ -162,12 +162,32 @@ export class BountyHTTPServer {
 
     // Handle WebSocket upgrade for /ws endpoint
     if (path === '/ws') {
-      const address = url.searchParams.get('address');
+      // v0.13: prefer `?email=`, fall back to legacy `?address=`.
+      // The WS connection identifier is the canonical `<uuid>@<host>` address.
+      // When the caller supplies an email, we resolve it via the agents table.
+      const emailParam = url.searchParams.get('email');
+      const addressParam = url.searchParams.get('address');
 
-      if (!address) {
+      let resolvedAddress: string | null = null;
+      if (addressParam && addressParam.trim()) {
+        resolvedAddress = addressParam.trim();
+      } else if (emailParam && emailParam.trim() && this.bountyDb) {
+        // Resolve email → {id, email, address} via the shared address resolver.
+        const { findAgentByEmailOrAddress } = await import(
+          '../lib/address-resolver.js'
+        );
+        const agent = findAgentByEmailOrAddress(this.bountyDb, emailParam.trim());
+        if (agent) {
+          resolvedAddress = agent.address;
+        }
+      }
+
+      if (!resolvedAddress) {
         return Response.json({
           event: 'error',
-          data: { message: 'Missing required parameter: address' }
+          data: {
+            message: 'Missing required parameter: email or address (v0.13 email-first)',
+          },
         }, { status: 400 });
       }
 
@@ -198,7 +218,7 @@ export class BountyHTTPServer {
       }
 
       const success = server.upgrade(req, {
-        data: { address },
+        data: { address: resolvedAddress },
       });
 
       if (success) {
