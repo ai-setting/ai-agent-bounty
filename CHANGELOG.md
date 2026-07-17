@@ -1,3 +1,20 @@
+## [v0.13.4] - 2026-07-17 - IM Send Canonical Address (PATCH)
+
+### Fixed
+
+- **server/im sendMessage**: `messages.to_address` is now stored as
+  canonical `<uuid>@<host>` (resolved via `findAgentByEmailOrAddress`)
+  when caller passes `to_email=<email>`. Previously the raw email
+  string was persisted, causing `com inbox` to return empty results
+  because the inbox query path normalizes `?email=` to canonical
+  before DB lookup, leading to a key mismatch.
+
+### Behavior
+
+- `to_email=<email>` → resolved to `<uuid>@<host>` before persisting
+- `to=<uuid>@<host>` → unchanged (legacy path preserved)
+- Unknown recipient → fallback to raw input (no silent message loss)
+
 ## [v0.13.3] - 2026-07-17 - Inbox URL Path Fix (PATCH)
 
 ### Fixed
