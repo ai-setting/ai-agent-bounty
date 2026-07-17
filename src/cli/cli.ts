@@ -10,6 +10,7 @@ import { hideBin } from 'yargs/helpers';
 import { bountyConfig } from '../lib/config/bounty-config.js';
 import { setQuietMode } from '@ai-setting/roy-agent-core';
 import { getPackageVersion } from './lib/package-version.js';
+import { profileMiddleware } from './middleware/profile-middleware.js';
 
 // ========== 初始化 Bounty IM EventSource Handler ==========
 // 自动注册 bounty-im handler 到 EventSourceInitHooks
@@ -238,8 +239,18 @@ export async function runBountyCli(): Promise<void> {
         default: true,
         global: true,
       })
+      // 全局 --profile 选项（profile 文件优先于旧 token 文件）
+      .option('profile', {
+        alias: 'P',
+        describe: 'Use the named profile (overrides BOUNTY_PROFILE and active_profile)',
+        type: 'string',
+        requiresArg: true,
+        global: true,
+      })
       // 全局 middleware，在命令执行前设置 quiet 模式
       .middleware(quietModeMiddleware, true)
+      // 在每个命令 handler 前解析 profile 并注入 ProfileContext
+      .middleware((argv) => profileMiddleware(argv as Record<string, unknown>))
       .describe('h', 'show help')
       .alias('h', 'help')
 
