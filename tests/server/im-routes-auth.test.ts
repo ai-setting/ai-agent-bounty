@@ -77,19 +77,26 @@ describe('IM Routes Auth (H2)', () => {
   });
 
   it('GET /api/messages requires Bearer token', async () => {
-    const res = await fetch(`${baseUrl}/api/messages?address=${aliceAgentId}@test.com`);
+    const res = await fetch(`${baseUrl}/api/messages?email=alice@test.com`);
     expect(res.status).toBe(401);
   });
 
   it('GET /api/messages returns 403 when address query does not match requester', async () => {
     const res = await fetch(
-      `${baseUrl}/api/messages?address=${bobAgentId}@test.com`,
+      `${baseUrl}/api/messages?email=bob@test.com`,
       { headers: { Authorization: `Bearer ${aliceToken}` } }
     );
     expect(res.status).toBe(403);
   });
 
   it('GET /api/messages returns only the requester own inbox', async () => {
+    // Set bob's address to the <uuid>@<host> form so the inbox query
+    // (which resolves email → canonical address) can find messages.
+    bountyDb.prepare('UPDATE agents SET address = ? WHERE id = ?')
+      .run(`${bobAgentId}@test.com`, bobAgentId);
+    bountyDb.prepare('UPDATE agents SET address = ? WHERE id = ?')
+      .run(`${aliceAgentId}@test.com`, aliceAgentId);
+
     await fetch(`${baseUrl}/api/messages`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${aliceToken}` },
@@ -101,14 +108,14 @@ describe('IM Routes Auth (H2)', () => {
     });
 
     const aliceInbox = await fetch(
-      `${baseUrl}/api/messages?address=${aliceAgentId}@test.com`,
+      `${baseUrl}/api/messages?email=alice@test.com`,
       { headers: { Authorization: `Bearer ${aliceToken}` } }
     );
     expect(aliceInbox.status).toBe(200);
     expect((await aliceInbox.json() as unknown[]).length).toBe(0);
 
     const bobInbox = await fetch(
-      `${baseUrl}/api/messages?address=${bobAgentId}@test.com`,
+      `${baseUrl}/api/messages?email=bob@test.com`,
       { headers: { Authorization: `Bearer ${bobToken}` } }
     );
     expect(bobInbox.status).toBe(200);
@@ -118,6 +125,12 @@ describe('IM Routes Auth (H2)', () => {
   });
 
   it('GET /api/messages/:id requires Bearer token', async () => {
+    // v0.14: set bob's address so inbox query can find the message.
+    bountyDb.prepare('UPDATE agents SET address = ? WHERE id = ?')
+      .run(`${bobAgentId}@test.com`, bobAgentId);
+    bountyDb.prepare('UPDATE agents SET address = ? WHERE id = ?')
+      .run(`${aliceAgentId}@test.com`, aliceAgentId);
+
     await fetch(`${baseUrl}/api/messages`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${aliceToken}` },
@@ -129,7 +142,7 @@ describe('IM Routes Auth (H2)', () => {
     });
 
     const bobInbox = await fetch(
-      `${baseUrl}/api/messages?address=${bobAgentId}@test.com`,
+      `${baseUrl}/api/messages?email=bob@test.com`,
       { headers: { Authorization: `Bearer ${bobToken}` } }
     );
     const bobMessages = await bobInbox.json() as Array<{ id: string }>;
@@ -143,6 +156,12 @@ describe('IM Routes Auth (H2)', () => {
   it('GET /api/messages/:id returns 403 for non-participants', async () => {
     const mal = await registerVerifyLogin('mallory@test.com', 'Mallory');
 
+    // v0.14: set bob's address so inbox query can find the message.
+    bountyDb.prepare('UPDATE agents SET address = ? WHERE id = ?')
+      .run(`${bobAgentId}@test.com`, bobAgentId);
+    bountyDb.prepare('UPDATE agents SET address = ? WHERE id = ?')
+      .run(`${aliceAgentId}@test.com`, aliceAgentId);
+
     await fetch(`${baseUrl}/api/messages`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${aliceToken}` },
@@ -153,7 +172,7 @@ describe('IM Routes Auth (H2)', () => {
       }),
     });
     const bobInbox = await fetch(
-      `${baseUrl}/api/messages?address=${bobAgentId}@test.com`,
+      `${baseUrl}/api/messages?email=bob@test.com`,
       { headers: { Authorization: `Bearer ${bobToken}` } }
     );
     const bobMessages = await bobInbox.json() as Array<{ id: string }>;
@@ -166,6 +185,12 @@ describe('IM Routes Auth (H2)', () => {
   });
 
   it('GET /api/messages/:id allows sender and recipient', async () => {
+    // v0.14: set bob's address so inbox query can find the message.
+    bountyDb.prepare('UPDATE agents SET address = ? WHERE id = ?')
+      .run(`${bobAgentId}@test.com`, bobAgentId);
+    bountyDb.prepare('UPDATE agents SET address = ? WHERE id = ?')
+      .run(`${aliceAgentId}@test.com`, aliceAgentId);
+
     await fetch(`${baseUrl}/api/messages`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${aliceToken}` },
@@ -176,7 +201,7 @@ describe('IM Routes Auth (H2)', () => {
       }),
     });
     const bobInbox = await fetch(
-      `${baseUrl}/api/messages?address=${bobAgentId}@test.com`,
+      `${baseUrl}/api/messages?email=bob@test.com`,
       { headers: { Authorization: `Bearer ${bobToken}` } }
     );
     const bobMessages = await bobInbox.json() as Array<{ id: string }>;

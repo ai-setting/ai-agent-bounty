@@ -156,35 +156,37 @@ describe('IM Routes — inbox accepts email (v0.13.2 fix)', () => {
     expect(res.status).toBe(401);
   });
 
-  // ==== T4: legacy ?address=<uuid>@<host> still works (back-compat) ====
-  it('T4: GET /api/messages?address=<uuid>@<host> (legacy) still returns 200', async () => {
-    // Resolve alice's canonical address from /api/agents/me.
+  // ==== T4 (rewritten for v0.14 RC-3): legacy ?address=<uuid>@<host> REJECTED 400 ====
+  it('T4: GET /api/messages?address=<uuid>@<host> (legacy) returns 400 in v0.14', async () => {
+    // v0.14 BREAKING (RC-3): legacy ?address= query parameter is REMOVED.
     const meRes = await fetch(`${baseUrl}/api/agents/me`, {
       headers: { Authorization: `Bearer ${aliceToken}` },
     });
     const me = (await meRes.json()) as { address: string };
     const aliceCanonicalAddr = me.address;
 
-    // Send a message to alice's canonical address.
-    await fetch(`${baseUrl}/api/messages`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${bobToken}` },
-      body: JSON.stringify({
-        from: `${bobAgentId}@test.com`,
-        to: aliceCanonicalAddr,
-        content: { type: 'text', body: 'legacy path' },
-      }),
-    });
-
     const res = await fetch(
-      // Use the canonical address that the DB stores under. The server
-      // resolves this via the address column (no email → address lookup).
       `${baseUrl}/api/messages?address=${encodeURIComponent(aliceCanonicalAddr)}`,
       { headers: { Authorization: `Bearer ${aliceToken}` } }
     );
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as { error: string };
+    expect(body.error).toMatch(/use \?email/i);
+  });
+
+  // ==== T4b: v0.14 happy path — ?email=<registered-email> works ====
+  it('T4b: GET /api/messages?email=<registered-email> returns 200 with inbox', async () => {
+    const meRes = await fetch(`${baseUrl}/api/agents/me`, {
+      headers: { Authorization: `Bearer ${aliceToken}` },
+    });
+    const me = (await meRes.json()) as { email: string };
+
+    const res = await fetch(
+      `${baseUrl}/api/messages?email=${encodeURIComponent(me.email)}`,
+      { headers: { Authorization: `Bearer ${aliceToken}` } }
+    );
     expect(res.status).toBe(200);
-    const messages = (await res.json()) as Array<{ content: { body: string } }>;
-    expect(messages.length).toBe(1);
-    expect(messages[0]!.content.body).toBe('legacy path');
+    const inbox = (await res.json()) as unknown[];
+    expect(Array.isArray(inbox)).toBe(true);
   });
 });

@@ -37,7 +37,7 @@ describe('bounty bounty-task grab — 409 friendly message (D.1 client)', () => 
       port: 0,
       // v0.10: seed agent ids must be valid UUIDs so the strict address match works
       seedAgents: [
-        { id: '8de9b6aa-0000-4000-8000-000000000001', email: 'pub@test', name: 'Publisher', credits: 1000 },
+        { id: '8de9b6aa-0000-4000-8000-000000000001', email: 'pub@example.com', name: 'Publisher', credits: 1000 },
         { id: '8de9b6aa-0000-4000-8000-000000000002', email: 'alice@example.com', name: 'Alice', credits: 0 },
         { id: '8de9b6aa-0000-4000-8000-000000000003', email: 'bob@example.com', name: 'Bob', credits: 0 },
       ],
@@ -60,7 +60,7 @@ describe('bounty bounty-task grab — 409 friendly message (D.1 client)', () => 
     const pubRes = await fetch(`${server.baseUrl}/api/tasks`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-Agent-Id': '8de9b6aa-0000-4000-8000-000000000001' },
-      body: JSON.stringify({ title: 'Race test', description: 'd', reward: 100, type: 'coding', publisherAddress: '8de9b6aa-0000-4000-8000-000000000001@host.local' }),
+      body: JSON.stringify({ title: 'Race test', description: 'd', reward: 100, type: 'coding', publisherEmail: 'pub@example.com' }),
     });
     expect(pubRes.status).toBe(201);
     const task = (await pubRes.json()) as { id: string };

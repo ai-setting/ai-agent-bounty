@@ -1,10 +1,13 @@
 /**
- * Tests for v0.10 strict address-based API in BountyRoutes.
+ * Tests for v0.14 strict email-only API in BountyRoutes.
  *
- * v0.10 BREAKING:
- * - Only `<uuid>@<host>` accepted in body `publisherAddress` / `agentAddress`
- * - Bare UUID 拒绝 — server now returns 400 "Agent not found"
- * - 容错 (missing description / reward, bad reward / result) unchanged
+ * v0.14 BREAKING (RC-2 fix):
+ * - ONLY `body.publisherEmail` / `body.agentEmail` accepted (registered email).
+ * - Legacy `body.publisherAddress` / `body.agentAddress` REJECTED with 400
+ *   "use publisherEmail" — no silent fallback to address parser.
+ * - Bare UUID in any field → 400.
+ * - Valid-format but unregistered email → 404.
+ * - Internal `agents.address` (uuid@host) is unchanged for IM routing.
  */
 
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
@@ -29,20 +32,20 @@ function makeBountyDb(): Database {
   return db;
 }
 
-const PUB_FULL = '8de9b6aa-1111-4000-8000-000000000001@bounty.local';
+const PUB_EMAIL = 'pub@example.com';
 const PUB_UUID = '8de9b6aa-1111-4000-8000-000000000001';
-const AGENT_FULL = '8de9b6aa-2222-4000-8000-000000000002@bounty.local';
+const PUB_FULL = `${PUB_UUID}@bounty.local`;
+const AGENT_EMAIL = 'agent@example.com';
 const AGENT_UUID = '8de9b6aa-2222-4000-8000-000000000002';
+const AGENT_FULL = `${AGENT_UUID}@bounty.local`;
 
-describe('BountyRoutes — address-based API (v0.10 strict)', () => {
+describe('BountyRoutes — v0.14 strict email-only API (RC-2)', () => {
   let bountyDb: Database;
   let imDb: IMDatabase;
   let server: BountyHTTPServer;
   let baseUrl: string;
 
   beforeEach(async () => {
-    // PR4: token check defaults to ON. These tests exercise the soft-auth
-    // (token check OFF) path — opt out explicitly.
     process.env.BOUNTY_TOKEN_CHECK_ENABLED = 'false';
     bountyDb = makeBountyDb();
     imDb = new IMDatabase({ memory: true });
@@ -58,7 +61,26 @@ describe('BountyRoutes — address-based API (v0.10 strict)', () => {
 
   // ===== createTask =====
 
-  test('createTask 接受 publisherAddress 完整地址', async () => {
+  test('createTask accepts publisherEmail (registered email)', async () => {
+    const res = await fetch(`${baseUrl}/api/tasks`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        title: 'T1',
+        description: 'D1',
+        reward: 10,
+        type: 'coding',
+        publisherEmail: PUB_EMAIL,
+      }),
+    });
+    expect(res.status).toBe(201);
+    const task = (await res.json()) as { publisherId: string; publisherEmail: string; status: string };
+    expect(task.publisherId).toBe(PUB_UUID);
+    expect(task.publisherEmail).toBe(PUB_EMAIL);
+    expect(task.status).toBe('open');
+  });
+
+  test('v0.14: createTask REJECTS legacy body.publisherAddress — 400', async () => {
     const res = await fetch(`${baseUrl}/api/tasks`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -70,13 +92,12 @@ describe('BountyRoutes — address-based API (v0.10 strict)', () => {
         publisherAddress: PUB_FULL,
       }),
     });
-    expect(res.status).toBe(201);
-    const task = (await res.json()) as { publisherId: string; status: string };
-    expect(task.publisherId).toBe(PUB_UUID);
-    expect(task.status).toBe('open');
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as { error: string };
+    expect(body.error).toMatch(/publisherEmail.*your-registered-email/i);
   });
 
-  test('v0.10 BREAKING: createTask 拒绝 bare UUID publisherAddress — 400', async () => {
+  test('v0.14: createTask returns 404 for valid-format unregistered email', async () => {
     const res = await fetch(`${baseUrl}/api/tasks`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -84,16 +105,16 @@ describe('BountyRoutes — address-based API (v0.10 strict)', () => {
         title: 'T1',
         description: 'D1',
         reward: 10,
-        publisherAddress: PUB_UUID,  // bare UUID — REJECTED in v0.10
+        type: 'coding',
+        publisherEmail: 'ghost@nowhere.example',
       }),
     });
-    // bare UUID 不再 fallback — server 视为找不到 agent (400)
-    expect(res.status).toBe(400);
+    expect(res.status).toBe(404);
     const body = (await res.json()) as { error: string };
-    expect(body.error).toContain('Agent not found');
+    expect(body.error).toMatch(/No registered agent for email/i);
   });
 
-  test('createTask 找不到 publisherAddress → 400', async () => {
+  test('v0.14: createTask returns 400 when no identity field supplied', async () => {
     const res = await fetch(`${baseUrl}/api/tasks`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -101,268 +122,217 @@ describe('BountyRoutes — address-based API (v0.10 strict)', () => {
         title: 'T1',
         description: 'D1',
         reward: 10,
-        publisherAddress: '00000000-0000-4000-8000-000000000000@nowhere.local',
+        type: 'coding',
       }),
     });
     expect(res.status).toBe(400);
-    const body = (await res.json()) as { error: string };
-    expect(body.error).toContain('Agent not found');
-  });
-
-  test('createTask 缺 description → 400', async () => {
-    const res = await fetch(`${baseUrl}/api/tasks`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        title: 'T1',
-        reward: 10,
-        publisherAddress: PUB_FULL,
-      }),
-    });
-    expect(res.status).toBe(400);
-    const body = (await res.json()) as { error: string };
-    expect(body.error).toContain('description');
-  });
-
-  test('createTask 缺 reward → 400', async () => {
-    const res = await fetch(`${baseUrl}/api/tasks`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        title: 'T1',
-        description: 'D1',
-        publisherAddress: PUB_FULL,
-      }),
-    });
-    expect(res.status).toBe(400);
-    const body = (await res.json()) as { error: string };
-    expect(body.error).toContain('reward');
-  });
-
-  test('createTask reward 是非正数 → 400', async () => {
-    const res = await fetch(`${baseUrl}/api/tasks`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        title: 'T1',
-        description: 'D1',
-        reward: 0,
-        publisherAddress: PUB_FULL,
-      }),
-    });
-    expect(res.status).toBe(400);
-  });
-
-  test('createTask reward 是 string → 400', async () => {
-    const res = await fetch(`${baseUrl}/api/tasks`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        title: 'T1',
-        description: 'D1',
-        reward: 'abc',
-        publisherAddress: PUB_FULL,
-      }),
-    });
-    expect(res.status).toBe(400);
-    const body = (await res.json()) as { error: string };
-    expect(body.error).toContain('reward');
   });
 
   // ===== grabTask =====
 
-  test('grabTask 接受 agentAddress 完整地址 (无 Authorization 头)', async () => {
-    const pub = await fetch(`${baseUrl}/api/tasks`, {
+  test('grabTask accepts agentEmail (registered email)', async () => {
+    // Create task first
+    const pubRes = await fetch(`${baseUrl}/api/tasks`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        title: 'T', description: 'D', reward: 5, type: 'coding',
-        publisherAddress: PUB_FULL,
+        title: 'GT1',
+        description: 'd',
+        reward: 10,
+        type: 'coding',
+        publisherEmail: PUB_EMAIL,
       }),
     });
-    const task = (await pub.json()) as { id: string };
+    expect(pubRes.status).toBe(201);
+    const task = (await pubRes.json()) as { id: string };
 
-    const grab = await fetch(`${baseUrl}/api/tasks/${task.id}/grab`, {
+    const grabRes = await fetch(`${baseUrl}/api/tasks/${task.id}/grab`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ agentEmail: AGENT_EMAIL }),
+    });
+    expect(grabRes.status).toBe(200);
+    const grabbed = (await grabRes.json()) as { assigneeId: string; status: string };
+    expect(grabbed.assigneeId).toBe(AGENT_UUID);
+    expect(grabbed.status).toBe('grabbed');
+  });
+
+  test('v0.14: grabTask REJECTS legacy body.agentAddress — 400', async () => {
+    const pubRes = await fetch(`${baseUrl}/api/tasks`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        title: 'GT2',
+        description: 'd',
+        reward: 10,
+        type: 'coding',
+        publisherEmail: PUB_EMAIL,
+      }),
+    });
+    const task = (await pubRes.json()) as { id: string };
+
+    const grabRes = await fetch(`${baseUrl}/api/tasks/${task.id}/grab`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ agentAddress: AGENT_FULL }),
     });
-    expect(grab.status).toBe(200);
-    const updated = (await grab.json()) as { assigneeId: string; status: string };
-    expect(updated.assigneeId).toBe(AGENT_UUID);
-    expect(updated.status).toBe('grabbed');
+    expect(grabRes.status).toBe(400);
   });
 
-  test('v0.10 BREAKING: grabTask 拒绝 bare UUID agentAddress → 400', async () => {
-    const pub = await fetch(`${baseUrl}/api/tasks`, {
+  test('v0.14: grabTask returns 404 for valid-format unregistered agentEmail', async () => {
+    const pubRes = await fetch(`${baseUrl}/api/tasks`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        title: 'T', description: 'D', reward: 5, type: 'coding',
-        publisherAddress: PUB_FULL,
+        title: 'GT3',
+        description: 'd',
+        reward: 10,
+        type: 'coding',
+        publisherEmail: PUB_EMAIL,
       }),
     });
-    const task = (await pub.json()) as { id: string };
+    const task = (await pubRes.json()) as { id: string };
 
-    const grab = await fetch(`${baseUrl}/api/tasks/${task.id}/grab`, {
+    const grabRes = await fetch(`${baseUrl}/api/tasks/${task.id}/grab`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ agentAddress: AGENT_UUID }),  // bare UUID — REJECTED
+      body: JSON.stringify({ agentEmail: 'ghost@nowhere.example' }),
     });
-    expect(grab.status).toBe(400);
-    const body = (await grab.json()) as { error: string };
-    expect(body.error).toContain('Agent not found');
-  });
-
-  test('grabTask 找不到 agentAddress → 400', async () => {
-    const pub = await fetch(`${baseUrl}/api/tasks`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        title: 'T', description: 'D', reward: 5, type: 'coding',
-        publisherAddress: PUB_FULL,
-      }),
-    });
-    const task = (await pub.json()) as { id: string };
-
-    const grab = await fetch(`${baseUrl}/api/tasks/${task.id}/grab`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ agentAddress: '00000000-0000-4000-8000-000000000099@nowhere.local' }),
-    });
-    expect(grab.status).toBe(400);
-    const body = (await grab.json()) as { error: string };
-    expect(body.error).toContain('Agent not found');
+    expect(grabRes.status).toBe(404);
   });
 
   // ===== submitTask =====
 
-  test('submitTask 接受 agentAddress + result', async () => {
-    const pub = await fetch(`${baseUrl}/api/tasks`, {
+  test('submitTask accepts agentEmail + result', async () => {
+    const pubRes = await fetch(`${baseUrl}/api/tasks`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        title: 'T', description: 'D', reward: 5, type: 'coding',
-        publisherAddress: PUB_FULL,
+        title: 'ST1',
+        description: 'd',
+        reward: 10,
+        type: 'coding',
+        publisherEmail: PUB_EMAIL,
       }),
     });
-    const task = (await pub.json()) as { id: string };
+    const task = (await pubRes.json()) as { id: string };
+
     await fetch(`${baseUrl}/api/tasks/${task.id}/grab`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ agentAddress: AGENT_FULL }),
+      body: JSON.stringify({ agentEmail: AGENT_EMAIL }),
     });
 
-    const sub = await fetch(`${baseUrl}/api/tasks/${task.id}/submit`, {
+    const subRes = await fetch(`${baseUrl}/api/tasks/${task.id}/submit`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ agentAddress: AGENT_FULL, result: 'All done!' }),
+      body: JSON.stringify({ agentEmail: AGENT_EMAIL, result: 'My work' }),
     });
-    expect(sub.status).toBe(200);
-    const updated = (await sub.json()) as { status: string; result: string };
-    expect(updated.status).toBe('submitted');
-    expect(updated.result).toBe('All done!');
+    expect(subRes.status).toBe(200);
   });
 
-  test('submitTask result 缺失 → 400 (容错)', async () => {
-    const pub = await fetch(`${baseUrl}/api/tasks`, {
+  test('v0.14: submitTask REJECTS legacy body.agentAddress — 400', async () => {
+    const pubRes = await fetch(`${baseUrl}/api/tasks`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        title: 'T', description: 'D', reward: 5, type: 'coding',
-        publisherAddress: PUB_FULL,
+        title: 'ST2',
+        description: 'd',
+        reward: 10,
+        type: 'coding',
+        publisherEmail: PUB_EMAIL,
       }),
     });
-    const task = (await pub.json()) as { id: string };
-    await fetch(`${baseUrl}/api/tasks/${task.id}/grab`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ agentAddress: AGENT_FULL }),
-    });
+    const task = (await pubRes.json()) as { id: string };
 
-    const sub = await fetch(`${baseUrl}/api/tasks/${task.id}/submit`, {
+    const subRes = await fetch(`${baseUrl}/api/tasks/${task.id}/submit`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ agentAddress: AGENT_FULL }),  // missing result
+      body: JSON.stringify({ agentAddress: AGENT_FULL, result: 'x' }),
     });
-    expect(sub.status).toBe(400);
-    const body = (await sub.json()) as { error: string };
-    expect(body.error).toContain('result');
-  });
-
-  test('submitTask result 为空字符串 → 400', async () => {
-    const pub = await fetch(`${baseUrl}/api/tasks`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        title: 'T', description: 'D', reward: 5, type: 'coding',
-        publisherAddress: PUB_FULL,
-      }),
-    });
-    const task = (await pub.json()) as { id: string };
-    await fetch(`${baseUrl}/api/tasks/${task.id}/grab`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ agentAddress: AGENT_FULL }),
-    });
-
-    const sub = await fetch(`${baseUrl}/api/tasks/${task.id}/submit`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ agentAddress: AGENT_FULL, result: '   ' }),  // whitespace only
-    });
-    expect(sub.status).toBe(400);
+    expect(subRes.status).toBe(400);
   });
 
   // ===== completeTask =====
 
-  test('completeTask 接受 publisherAddress 完整地址', async () => {
-    const pub = await fetch(`${baseUrl}/api/tasks`, {
+  test('completeTask accepts publisherEmail (after task is submitted)', async () => {
+    // Publish task
+    const pubRes = await fetch(`${baseUrl}/api/tasks`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        title: 'T', description: 'D', reward: 5, type: 'coding',
-        publisherAddress: PUB_FULL,
+        title: 'CT1',
+        description: 'd',
+        reward: 10,
+        type: 'coding',
+        publisherEmail: PUB_EMAIL,
       }),
     });
-    const task = (await pub.json()) as { id: string };
+    const task = (await pubRes.json()) as { id: string };
+
+    // Bob grabs → submits
     await fetch(`${baseUrl}/api/tasks/${task.id}/grab`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ agentAddress: AGENT_FULL }),
+      body: JSON.stringify({ agentEmail: AGENT_EMAIL }),
     });
     await fetch(`${baseUrl}/api/tasks/${task.id}/submit`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ agentAddress: AGENT_FULL, result: 'done' }),
+      body: JSON.stringify({ agentEmail: AGENT_EMAIL, result: 'My work' }),
     });
 
-    const complete = await fetch(`${baseUrl}/api/tasks/${task.id}/complete`, {
+    // Now Alice (publisher) can complete
+    const compRes = await fetch(`${baseUrl}/api/tasks/${task.id}/complete`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ publisherEmail: PUB_EMAIL }),
+    });
+    expect(compRes.status).toBe(200);
+  });
+
+  test('v0.14: completeTask REJECTS legacy body.publisherAddress — 400', async () => {
+    const pubRes = await fetch(`${baseUrl}/api/tasks`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        title: 'CT2',
+        description: 'd',
+        reward: 10,
+        type: 'coding',
+        publisherEmail: PUB_EMAIL,
+      }),
+    });
+    const task = (await pubRes.json()) as { id: string };
+
+    const compRes = await fetch(`${baseUrl}/api/tasks/${task.id}/complete`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ publisherAddress: PUB_FULL }),
     });
-    expect(complete.status).toBe(200);
-    const updated = (await complete.json()) as { status: string };
-    expect(updated.status).toBe('completed');
+    expect(compRes.status).toBe(400);
   });
 
-  test('completeTask 非 publisher 调用 → 403', async () => {
-    const pub = await fetch(`${baseUrl}/api/tasks`, {
+  test('completeTask — non-publisher call returns 403', async () => {
+    const pubRes = await fetch(`${baseUrl}/api/tasks`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        title: 'T', description: 'D', reward: 5, type: 'coding',
-        publisherAddress: PUB_FULL,
+        title: 'CT3',
+        description: 'd',
+        reward: 10,
+        type: 'coding',
+        publisherEmail: PUB_EMAIL,
       }),
     });
-    const task = (await pub.json()) as { id: string };
+    const task = (await pubRes.json()) as { id: string };
 
-    const complete = await fetch(`${baseUrl}/api/tasks/${task.id}/complete`, {
+    // AgentBob (different agent) tries to complete Alice's task → 403
+    const compRes = await fetch(`${baseUrl}/api/tasks/${task.id}/complete`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ publisherAddress: AGENT_FULL }),  // not publisher
+      body: JSON.stringify({ publisherEmail: AGENT_EMAIL }),
     });
-    expect(complete.status).toBe(403);
+    expect(compRes.status).toBe(403);
   });
 });

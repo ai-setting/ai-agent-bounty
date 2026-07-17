@@ -74,7 +74,7 @@ describe('Token policy consistency: bounty vs IM (v0.9 audit)', () => {
             description: 'D',
             reward: 1,
             type: 'writing',
-            publisherAddress: '8de9b6aa-1111-4000-8000-0000000000a1@bounty.local',
+            publisherEmail: 'tAlice@example.com',
           }),
         });
         expect(res.status).toBe(401);
@@ -114,7 +114,7 @@ describe('Token policy consistency: bounty vs IM (v0.9 audit)', () => {
             description: 'D',
             reward: 1,
             type: 'writing',
-            publisherAddress: '8de9b6aa-1111-4000-8000-0000000000a1@bounty.local',
+            publisherEmail: 'tAlice@example.com',
           }),
         });
         expect(pub.status).toBe(401);
@@ -138,7 +138,7 @@ describe('Token policy consistency: bounty vs IM (v0.9 audit)', () => {
             description: 'D',
             reward: 1,
             type: 'writing',
-            publisherAddress: '8de9b6aa-1111-4000-8000-0000000000a1@bounty.local',
+            publisherEmail: 'tAlice@example.com',
           }),
         });
         expect(res.status).toBe(201);
@@ -180,7 +180,7 @@ describe('Token policy consistency: bounty vs IM (v0.9 audit)', () => {
             description: 'D',
             reward: 1,
             type: 'writing',
-            publisherAddress: '8de9b6aa-1111-4000-8000-0000000000a1@bounty.local',
+            publisherEmail: 'tAlice@example.com',
           }),
         });
         expect(res.status).toBe(401);
@@ -235,7 +235,7 @@ describe('Token policy consistency: bounty vs IM (v0.9 audit)', () => {
             description: 'D',
             reward: 1,
             type: 'writing',
-            publisherAddress: '8de9b6aa-1111-4000-8000-0000000000a1@bounty.local',
+            publisherEmail: 'tAlice@example.com',
           }),
         });
         expect(bountyRes.status).toBe(401);
