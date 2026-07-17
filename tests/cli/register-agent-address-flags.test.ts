@@ -78,15 +78,31 @@ describe('auth/register-agent email flags and soft auth (v0.14)', () => {
       async fetch(req) {
         const body = await req.json().catch(() => ({}));
         requests.push({ path: new URL(req.url).pathname, method: req.method, body, headers: Object.fromEntries(req.headers.entries()) });
-        return Response.json({ agent_id: '8de9b6aa-1111-4000-8000-000000000001', email: body.email, expires_in: 3600 });
+        return Response.json({ agent_id: '8de9b6aa-1111-4000-8000-000000000001', email: body.email, expires_in: 3600, access_token: 'mock-jwt' });
       },
     });
 
-    const { loginCommand } = await import('../../src/cli/commands/auth/login.js');
-    await (loginCommand as any).handler({
-      'server-url': `http://localhost:${mockServer.port}`,
-      email: EMAIL_A,
-    });
+    const consoleLogSpy = spyOn(console, 'log').mockImplementation(() => {});
+    const consoleErrSpy = spyOn(console, 'error').mockImplementation(() => {});
+    let exitCode: number | undefined;
+    const exitSpy = spyOn(process, 'exit').mockImplementation(((code?: number) => {
+      exitCode = code ?? 0;
+      throw new Error(`EXIT_${code ?? 0}`);
+    }) as any);
+
+    try {
+      const { loginCommand } = await import('../../src/cli/commands/auth/login.js');
+      await (loginCommand as any).handler({
+        'server-url': `http://localhost:${mockServer.port}`,
+        email: EMAIL_A,
+      });
+    } catch (e) {
+      // expected if exit was called
+    } finally {
+      consoleLogSpy.mockRestore?.();
+      consoleErrSpy.mockRestore?.();
+      exitSpy.mockRestore?.();
+    }
 
     expect(requests[0].path).toBe('/api/auth/login');
     expect(requests[0].body.email).toBe(EMAIL_A);

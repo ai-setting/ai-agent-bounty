@@ -73,12 +73,11 @@ describe('bounty bounty-task grab — 409 friendly message (D.1 client)', () => 
     expect(aliceGrab.status).toBe(200);
 
     // 3) Bob tries to grab via CLI → expect 409 → expect friendly hint
-    // v0.10: Bob's BOUNTY_IM_ADDRESS must match a seeded agent (exact uuid@host)
-    process.env.BOUNTY_IM_ADDRESS = '8de9b6aa-0000-4000-8000-000000000003@host.local';
+    // v0.14: --email is the only actor identity input.
     const { grabCommand } = await import('../../src/cli/commands/bounty-task/grab.js');
 
     // Intercept fetch to forward X-Agent-Id header (mock server reads agentId from
-    // header in auth-OFF mode). The body's agentAddress is the canonical source.
+    // header in auth-OFF mode). Body's agentEmail is the canonical source.
     const origFetch = globalThis.fetch;
     (globalThis as any).fetch = async (input: any, init?: any) => {
       const headers = new Headers(init?.headers ?? {});
@@ -90,6 +89,7 @@ describe('bounty bounty-task grab — 409 friendly message (D.1 client)', () => 
     try {
       await (grabCommand as any).handler({
         'task-id': task.id,
+        email: 'bob@example.com',
         'server-url': server.baseUrl,
       });
     } catch (e) {

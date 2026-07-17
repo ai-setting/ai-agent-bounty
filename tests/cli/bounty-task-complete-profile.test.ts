@@ -92,7 +92,7 @@ describe('bounty bounty-task complete - PR7 ProfileContext integration', () => {
     try {
       await completeCommand.handler!({
         'task-id': VALID_TASK_ID,
-        'publisher-address': '00000000-0000-4000-8000-000000000001@local',
+        'publisher-email': 'alice@example.com',
       } as any);
     } finally {
       console.log = origLog;
@@ -136,7 +136,7 @@ describe('bounty bounty-task complete - PR7 ProfileContext integration', () => {
     try {
       await completeCommand.handler!({
         'task-id': VALID_TASK_ID,
-        'publisher-address': '00000000-0000-4000-8000-000000000001@local',
+        'publisher-email': 'alice@example.com',
         'server-url': 'http://127.0.0.1:45555',
       } as any);
     } finally {
@@ -176,7 +176,7 @@ describe('bounty bounty-task complete - PR7 ProfileContext integration', () => {
     try {
       await completeCommand.handler!({
         'task-id': VALID_TASK_ID,
-        'publisher-address': '00000000-0000-4000-8000-000000000001@local',
+        'publisher-email': 'alice@example.com',
       } as any);
     } finally {
       console.log = origLog;
@@ -225,7 +225,7 @@ describe('bounty bounty-task complete - PR7 ProfileContext integration', () => {
     try {
       await completeCommand.handler!({
         'task-id': VALID_TASK_ID,
-        'publisher-address': '00000000-0000-4000-8000-000000000001@local',
+        'publisher-email': 'alice@example.com',
       } as any);
     } finally {
       console.log = origLog;

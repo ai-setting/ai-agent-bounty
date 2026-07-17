@@ -28,15 +28,12 @@ describe('com/send - v0.13 --from-email / --to-email flags', () => {
     expect(src).toMatch(/alias:\s*['"]T['"]/);
   });
 
-  test('--from and --to are no longer demandOption (replaced by .check)', () => {
+  test('v0.14: --from and --to legacy address options REMOVED from send.ts', () => {
     const src = readFileSync(SRC, 'utf-8');
-    // The from/to .option block should NOT have demandOption:true
-    const fromBlock = src.match(/\.option\(\s*['"]from['"]\s*,?\s*\{[\s\S]*?\}\s*\)/);
-    expect(fromBlock).not.toBeNull();
-    expect(fromBlock![0]).not.toMatch(/demandOption:\s*true/);
-    const toBlock = src.match(/\.option\(\s*['"]to['"]\s*,?\s*\{[\s\S]*?\}\s*\)/);
-    expect(toBlock).not.toBeNull();
-    expect(toBlock![0]).not.toMatch(/demandOption:\s*true/);
+    // v0.14 BREAKING: --from and --to are no longer present at all (not even
+    // as no-demandOption options). Only --from-email / -F and --to-email / -T.
+    expect(src).not.toMatch(/\.option\(\s*['"]from['"]/);
+    expect(src).not.toMatch(/\.option\(\s*['"]to['"]/);
   });
 
   test('builds request body with from_email/to_email when supplied', () => {
@@ -170,11 +167,13 @@ describe('register-agent/credits - v0.13 --email flag', () => {
     expect(src).toMatch(/alias:\s*['"]e['"]/);
   });
 
-  test('--agent-address no longer demandOption:true', () => {
+  test('v0.14: --agent-address option REMOVED from register-agent/credits.ts', () => {
     const src = readFileSync(SRC, 'utf-8');
-    const block = src.match(/\.option\(\s*['"]agent-address['"][\s\S]*?\)\s*,/);
-    expect(block).not.toBeNull();
-    expect(block![0]).not.toMatch(/demandOption:\s*true/);
+    // v0.14 BREAKING: --agent-address / -a removed entirely; --email / -e is the only path.
+    expect(src).not.toMatch(/\.option\(\s*['"]agent-address['"]/);
+    expect(src).not.toContain("'agent-address'");
+    // sanity: --email is present.
+    expect(src).toMatch(/\.option\(\s*['"]email['"]/);
   });
 
   test('uses AgentService.getByEmail for the email path', () => {

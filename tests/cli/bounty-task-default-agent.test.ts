@@ -1,17 +1,17 @@
 /**
  * Tests for default agent inference integration in bounty-task commands.
  *
- * Phase: feat/bounty-task-optimize (v0.10 strict refactor)
+ * Phase: refactor/bounty-email-only (v0.14 strict email-only contract)
  *
- * 设计动机: bounty-task/* 的 --publisher-address / --agent-address 在缺省时
- * 应能从 BOUNTY_IM_ADDRESS env 推断，让日常使用免去显式传参。
+ * 设计动机: bounty-task/* 的 --email / --publisher-email 在缺省时
+ * 应能从 active profile (ProfileContext.active.email) 推断，让日常使用
+ * 免去显式传参。
  *
- * v0.10 BREAKING: 全用 `resolveAddressOption` (返回完整 {uuid, host, raw})
- * 不再有 --*-id / deprecatedId alias。
- *
- * 测试场景：
- * 1. publish/grab/submit/complete/cancel: 缺省 address 时从 resolveCurrentAgent() 推断
- * 2. 都没有时友好错误提示 (exit 2 + 明确信息)
+ * v0.14 BREAKING:
+ *   - --agent-address / --publisher-address / --*-id 全部 REMOVED
+ *   - BOUNTY_IM_ADDRESS env fallback REMOVED (Q5 ✅ DELETE)
+ *   - 缺省时显式 fallback: explicit --email > ProfileContext.active.email
+ *   - 都没有时友好错误提示 (exit 1 + 明确信息引导 --xxx-email / profile use)
  */
 
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
@@ -24,7 +24,7 @@ const SRC_SUBMIT = resolve(import.meta.dir, '../../src/cli/commands/bounty-task/
 const SRC_COMPLETE = resolve(import.meta.dir, '../../src/cli/commands/bounty-task/complete.ts');
 const SRC_CANCEL = resolve(import.meta.dir, '../../src/cli/commands/bounty-task/cancel.ts');
 
-describe('bounty bounty-task - default agent inference (v0.10)', () => {
+describe('bounty bounty-task - default agent inference (v0.14 strict email-only)', () => {
   beforeEach(() => {
     delete process.env.BOUNTY_IM_ADDRESS;
   });
@@ -33,57 +33,58 @@ describe('bounty bounty-task - default agent inference (v0.10)', () => {
     delete process.env.BOUNTY_IM_ADDRESS;
   });
 
-  test('publish.ts: --publisher-address fallback to resolveCurrentAgent()', () => {
+  test('publish.ts: --publisher-email fallback via requireEmailFlag → ProfileContext', () => {
     const src = readFileSync(SRC_PUBLISH, 'utf-8');
-    expect(src).toContain('resolveAddressOption');
-    expect(src).toContain("address: argv['publisher-address']");
-    // v0.10 BREAKING: no deprecatedId alias
-    expect(src).not.toContain("deprecatedId: argv['publisher-id']");
-    expect(src).toContain('fallback: resolveCurrentAgentAddress()');
-    expect(src).toContain('Cannot infer publisher address');
+    // v0.14: centralised via requireEmailFlag helper (Phase 4 R-1).
+    expect(src).toContain('requireEmailFlag');
+    // No legacy flags / helpers / env fallback.
+    expect(src).not.toContain('resolveAddressOption');
+    expect(src).not.toContain('resolveCurrentAgentAddress');
+    expect(src).not.toContain('resolveCurrentAgent');
+    expect(src).not.toContain('BOUNTY_IM_ADDRESS');
+    expect(src).not.toContain('.option(\'publisher-address\'');
+    expect(src).not.toContain('.option(\'publisher-id\'');
   });
 
-  test('grab.ts: --agent-address fallback to resolveCurrentAgent()', () => {
+  test('grab.ts: --email fallback via requireEmailFlag → ProfileContext', () => {
     const src = readFileSync(SRC_GRAB, 'utf-8');
-    expect(src).toContain('resolveAddressOption');
-    expect(src).toContain("address: argv['agent-address']");
-    expect(src).not.toContain("deprecatedId: argv['agent-id']");
-    expect(src).toContain('fallback: resolveCurrentAgentAddress()');
-    // v0.13: error message expanded to mention --email as the primary path
-    expect(src).toContain('Cannot infer agent identity');
-    expect(src).toContain('--email');
+    expect(src).toContain('requireEmailFlag');
+    expect(src).not.toContain('resolveAddressOption');
+    expect(src).not.toContain('resolveCurrentAgentAddress');
+    expect(src).not.toContain('resolveCurrentAgent');
+    expect(src).not.toContain('BOUNTY_IM_ADDRESS');
+    expect(src).not.toContain('.option(\'agent-address\'');
+    expect(src).not.toContain('.option(\'agent-id\'');
   });
 
-  test('submit.ts: --agent-address fallback to resolveCurrentAgent()', () => {
+  test('submit.ts: --email fallback via requireEmailFlag → ProfileContext', () => {
     const src = readFileSync(SRC_SUBMIT, 'utf-8');
-    expect(src).toContain('resolveAddressOption');
-    expect(src).toContain("address: argv['agent-address']");
-    expect(src).not.toContain("deprecatedId: argv['agent-id']");
-    expect(src).toContain('fallback: resolveCurrentAgentAddress()');
-    // v0.13: error message expanded to mention --email as the primary path
-    expect(src).toContain('Cannot infer agent identity');
-    expect(src).toContain('--email');
+    expect(src).toContain('requireEmailFlag');
+    expect(src).not.toContain('resolveAddressOption');
+    expect(src).not.toContain('BOUNTY_IM_ADDRESS');
+    expect(src).not.toContain('.option(\'agent-address\'');
+    expect(src).not.toContain('.option(\'agent-id\'');
   });
 
-  test('complete.ts: --publisher-address fallback to resolveCurrentAgent()', () => {
+  test('complete.ts: --publisher-email fallback via requireEmailFlag → ProfileContext', () => {
     const src = readFileSync(SRC_COMPLETE, 'utf-8');
-    expect(src).toContain('resolveAddressOption');
-    expect(src).toContain("address: argv['publisher-address']");
-    expect(src).not.toContain("deprecatedId: argv['publisher-id']");
-    expect(src).toContain('fallback: resolveCurrentAgentAddress()');
-    expect(src).toContain('Cannot infer publisher address');
+    expect(src).toContain('requireEmailFlag');
+    expect(src).not.toContain('resolveAddressOption');
+    expect(src).not.toContain('BOUNTY_IM_ADDRESS');
+    expect(src).not.toContain('.option(\'publisher-address\'');
+    expect(src).not.toContain('.option(\'publisher-id\'');
   });
 
-  test('cancel.ts: --publisher-address fallback to resolveCurrentAgent()', () => {
+  test('cancel.ts: --publisher-email fallback via requireEmailFlag → ProfileContext', () => {
     const src = readFileSync(SRC_CANCEL, 'utf-8');
-    expect(src).toContain('resolveAddressOption');
-    expect(src).toContain("address: argv['publisher-address']");
-    expect(src).not.toContain("deprecatedId: argv['publisher-id']");
-    expect(src).toContain('fallback: resolveCurrentAgentAddress()');
-    expect(src).toContain('Cannot infer publisher address');
+    expect(src).toContain('requireEmailFlag');
+    expect(src).not.toContain('resolveAddressOption');
+    expect(src).not.toContain('BOUNTY_IM_ADDRESS');
+    expect(src).not.toContain('.option(\'publisher-address\'');
+    expect(src).not.toContain('.option(\'publisher-id\'');
   });
 
-  test('v0.10 BREAKING: --*-id flags are removed from bounty-task commands', () => {
+  test('v0.14 BREAKING: --*-id flags are removed from bounty-task commands', () => {
     for (const f of [SRC_PUBLISH, SRC_GRAB, SRC_SUBMIT, SRC_COMPLETE, SRC_CANCEL]) {
       const src = readFileSync(f, 'utf-8');
       expect(src).not.toContain(".option('publisher-id'");
@@ -91,16 +92,16 @@ describe('bounty bounty-task - default agent inference (v0.10)', () => {
     }
   });
 
-  test('resolveCurrentAgent correctly extracts uuid from BOUNTY_IM_ADDRESS (uuid@host)', async () => {
-    process.env.BOUNTY_IM_ADDRESS = '8de9b6aa-5781-4a65-be96-45185fb7c8b1@bounty.example.com';
-    const { resolveCurrentAgent } = await import('../../src/cli/lib/current-agent.js');
-    expect(resolveCurrentAgent()).toBe('8de9b6aa-5781-4a65-be96-45185fb7c8b1');
-  });
-
-  test('v0.10 BREAKING: resolveCurrentAgent rejects bare UUID (no @host) in BOUNTY_IM_ADDRESS', async () => {
-    process.env.BOUNTY_IM_ADDRESS = 'agent-xyz-123';
-    const { resolveCurrentAgent } = await import('../../src/cli/lib/current-agent.js');
-    // v0.10: bare UUID should fail strict parsing → resolveCurrentAgent returns undefined
-    expect(resolveCurrentAgent()).toBeUndefined();
+  test('v0.14 BREAKING: BOUNTY_IM_ADDRESS env is REMOVED (Q5 ✅ DELETE)', () => {
+    // Helper-level: resolveCurrentAgent no longer reads BOUNTY_IM_ADDRESS.
+    const helperSrc = readFileSync(
+      resolve(import.meta.dir, '../../src/cli/lib/current-agent.ts'),
+      'utf-8',
+    );
+    // v0.14: BOUNTY_IM_ADDRESS references are gone from the resolver.
+    // (Tolerant assertion — helper file may still contain documentation
+    // referring to BOUNTY_IM_ADDRESS; check that it isn't *read* any more.)
+    const readsEnv = /process\.env\.BOUNTY_IM_ADDRESS\s*[!=]==?\s*[^?]/;
+    expect(helperSrc).not.toMatch(readsEnv);
   });
 });

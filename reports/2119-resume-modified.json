@@ -1,0 +1,51 @@
+{
+  "schema": "phase-4-resume-modified/v1",
+  "task_id": "2119",
+  "branch": "refactor/bounty-email-only",
+  "worktree": "/home/dzk/work/codework/personal/roy_world/ai-agent-bounty-worktrees/refactor-bounty-email-only",
+  "head_commit": "b07dda5",
+  "captured_at": "2026-07-17T22:35:00+08:00",
+  "operator": "roy-agent phase-4 R-1+R-2+R-3+R-6 in-progress",
+  "auto_merge": false,
+  "summary": {
+    "before": { "pass": 504, "fail": 36, "files": 86, "date": "2026-07-17T22:18:00+08:00" },
+    "after_R1_R2_R3_R6": { "pass": 515, "fail": 37, "files": 88, "date": "2026-07-17T22:35:00+08:00" },
+    "delta": "+11 pass / +1 fail (new file count +2 reflects new tests added)",
+    "typecheck": "exit 0",
+    "build_cli": "exit 0 — dist/cli.js regenerated"
+  },
+  "r1_to_r6_diff": {
+    "R-1_done": "src/cli/lib/email-flag.ts (requireEmailFlag + parseEmailFromArgv + resolveActiveProfileEmail + exitWithEmailFlagError + hintFor re-export). Applied to grab.ts, submit.ts, publish.ts, complete.ts, cancel.ts. 19 helper tests PASS.",
+    "R-2_done": "board.ts supports --publisher-email filter that translates to ?publisherId=<email> on the wire. Strict email validation (rejects bare UUID and <uuid>@<host>). 8 board-publisher-email tests PASS.",
+    "R-3_done": "com/send.ts --server-url alias renamed from `e` to `u` (Q6 ✅). com-send-server-url test updated to match.",
+    "R-6_done": "com/send.ts from-email + to-email now routed through requireEmailFlag helper (Phase 4 R-6). T3 static test updated to check for helper import."
+  },
+  "remaining_failures_top30_audit": {
+    "legacy_contract_tests_to_update": [
+      "bounty-task-default-agent.test.ts ✅ UPDATED to v0.14 contract (7 tests pass)",
+      "bounty-task-address-flags.test.ts ✅ UPDATED to v0.14 contract (6 tests pass)",
+      "register-agent-address-flags.test.ts ← PENDING (next)",
+      "bounty-task-{grab,submit,publish,complete,cancel}-profile.test.ts ← PENDING",
+      "bounty-task-{grab,submit,publish}-http-migration.test.ts ← PENDING",
+      "com-send-v0.13-flag-removal-dynamic.test.ts ← PENDING ('--from and --to no longer demandOption replaced by .check')",
+      "current-agent.test.ts ← PENDING (BOUNTY_IM_ADDRESS removal impact)"
+    ],
+    "non_legacy_regressions_to_fix": [
+      "bounty-task-error-classification.test.ts (6 tests) — grab/publish network/auth/business/server exit codes: needs updated exit code semantics + grab 409 friendly message",
+      "bounty-task-publish-large-payload.test.ts (5 tests) — --description-file handling: needs PublishInput parser to handle description-file",
+      "bounty-task-json-flag.test.ts (4 tests) — --json / --quiet publishing: needs OutputFormatter wired up",
+      "ProfileContext getApiBase throws — needs verification: ProfileContext was changed to return undefined (no-throw)"
+    ],
+    "expected_pass_after_fixes": "525+ pass / 0 fail with typecheck + build passing"
+  },
+  "next_actions": [
+    "R-4a Update remaining legacy-contract tests to v0.14 contract (register-agent-address-flags, profile tests, http-migration, com-send-v0.13-flag-removal-dynamic, current-agent)",
+    "R-5 runtime full-flow tests with HTTP body capture for every migrated command",
+    "R-7 (5) Finish auth/register-agent/profile external identity surfaces (remove --agent-address completely)",
+    "R-8 (6) Finish /api/bounty, /api/tasks, /api/messages, /api/agents/by-email server-side 400/404 contract",
+    "R-9 (7) Delete BOUNTY_IM_ADDRESS env reads (current-agent.ts + cli.ts auto-registration)",
+    "R-10 (8) Bump versions 0.13.4 → 0.14.0 + CHANGELOG + README",
+    "R-11 (9) Strict serial + isolate suites",
+    "Submit final PASS schema once all done"
+  ]
+}

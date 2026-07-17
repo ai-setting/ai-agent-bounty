@@ -42,7 +42,7 @@ describe('bounty bounty-task publish — large-payload handling (D.3)', () => {
     exitCode = null;
     consoleErrorOutput = [];
     received = [];
-    process.env.BOUNTY_IM_ADDRESS = '8de9b6aa-5781-4a65-be96-45185fb7c8b1@host.local';
+    process.env.BOUNTY_IM_ADDRESS = '';
 
     spyOn(console, 'error').mockImplementation((...args: any[]) => {
       consoleErrorOutput.push(args.map(String).join(' '));
@@ -55,7 +55,7 @@ describe('bounty bounty-task publish — large-payload handling (D.3)', () => {
     server = await createBountyTestServer({
       port: 0,
       // v0.10: seed agent id must be a valid UUID so strict uuid@host match works
-      seedAgents: [{ id: '8de9b6aa-5781-4a65-be96-45185fb7c8b1', email: 'test@host', name: 'Test', credits: 500 }],
+      seedAgents: [{ id: '8de9b6aa-5781-4a65-be96-45185fb7c8b1', email: 'test@host.com', name: 'Test', credits: 500 }],
     });
   });
 
@@ -78,6 +78,7 @@ describe('bounty bounty-task publish — large-payload handling (D.3)', () => {
       type: 'coding',
       reward: 100,
       'server-url': server.baseUrl,
+        'publisher-email': 'test@host.com',
     });
 
     // Verify the task was created on the server with the right description
@@ -98,6 +99,7 @@ describe('bounty bounty-task publish — large-payload handling (D.3)', () => {
       type: 'coding',
       reward: 100,
       'server-url': server.baseUrl,
+        'publisher-email': 'test@host.com',
     });
 
     const listRes = await fetch(`${server.baseUrl}/api/tasks`);
@@ -121,6 +123,7 @@ describe('bounty bounty-task publish — large-payload handling (D.3)', () => {
       reward: 100,
       'description-file': filePath,
       'server-url': server.baseUrl,
+        'publisher-email': 'test@host.com',
     });
 
     const listRes = await fetch(`${server.baseUrl}/api/tasks`);
@@ -142,6 +145,7 @@ describe('bounty bounty-task publish — large-payload handling (D.3)', () => {
         reward: 100,
         'description-file': join(tempDir, 'nope.md'),
         'server-url': server.baseUrl,
+        'publisher-email': 'test@host.com',
       });
     } catch (e) {
       thrown = e;
@@ -171,6 +175,7 @@ describe('bounty bounty-task publish — large-payload handling (D.3)', () => {
       reward: 100,
       'description-file': filePath,
       'server-url': server.baseUrl,
+        'publisher-email': 'test@host.com',
     });
 
     const listRes = await fetch(`${server.baseUrl}/api/tasks`);

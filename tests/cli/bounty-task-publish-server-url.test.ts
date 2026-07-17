@@ -54,7 +54,9 @@ describe('bounty bounty-task publish - HTTP API migration', () => {
 
   test('source uses resolveCurrentAgent as default for --publisher-id', () => {
     const src = readFileSync(SRC, 'utf-8');
-    expect(src).toContain("resolveCurrentAgent");
+    // v0.14: --publisher-email flow via requireEmailFlag; resolveCurrentAgent is gone.
+    expect(src).toContain("requireEmailFlag");
+    expect(src).not.toContain("resolveCurrentAgent");
   });
 
   test('T1: publishes task via HTTP POST /api/tasks with full body', async () => {
@@ -76,7 +78,7 @@ describe('bounty bounty-task publish - HTTP API migration', () => {
             description: body.description,
             type: body.type || 'bounty',
             reward: body.reward,
-            publisherId: body.publisherId || 'mock-publisher',
+            publisherId: 'mock-publisher',
             status: 'open',
             tags: body.tags || [],
           }, { status: 201 }));

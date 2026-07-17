@@ -48,8 +48,11 @@ describe('ProfileContext', () => {
     expect(ProfileContext.getApiBase()).toBe('https://bounty.example.com');
   });
 
-  test('getApiBase throws without active profile', () => {
-    expect(() => ProfileContext.getApiBase()).toThrow(/No active profile/);
+  test('getApiBase returns undefined without active profile (v0.13.1+ behavior)', () => {
+    // v0.13.1 BREAKING: `getApiBase()` no longer throws when no profile is
+    // active. Returns `undefined` so callers (com/*) can fall back to
+    // --host/--port or --server-url without crashing on a hard throw.
+    expect(ProfileContext.getApiBase()).toBeUndefined();
   });
 
   test('requireActiveProfile throws without active profile', () => {

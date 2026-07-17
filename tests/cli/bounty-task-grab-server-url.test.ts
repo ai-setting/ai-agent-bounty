@@ -43,9 +43,10 @@ describe('bounty bounty-task grab - HTTP API migration', () => {
     expect(src).toMatch(/method:\s*['"]PUT['"]/);
   });
 
-  test('source uses resolveCurrentAgent as default for --agent-id', () => {
+  test('source uses requireEmailFlag helper (v0.14: resolveCurrentAgent REMOVED)', () => {
     const src = readFileSync(SRC, 'utf-8');
-    expect(src).toContain("resolveCurrentAgent");
+    expect(src).toContain("requireEmailFlag");
+    expect(src).not.toContain("resolveCurrentAgent");
   });
 
   test('T1: grabs task via HTTP PUT /api/tasks/:id/grab', async () => {
@@ -67,7 +68,7 @@ describe('bounty bounty-task grab - HTTP API migration', () => {
       baseUrl: `http://localhost:${mockServer.port}`,
       path: '/api/tasks/task-abc/grab',
       method: 'PUT',
-      body: { agentId: 'mock-agent' },
+      body: { agentEmail: 'mock-agent@example.com' },
     });
 
     expect(task.id).toBe('task-abc');

@@ -163,15 +163,16 @@ describe('bounty com inbox — /api path (v0.13.3 fix)', () => {
 // ============================================================================
 // Source-level sanity check: inbox.ts source uses /api/messages (not /messages)
 // ============================================================================
-describe('bounty com inbox — source-level /api wiring (v0.13.3)', () => {
-  test('inbox.ts source constructs ${baseUrl}/api/messages?email=...', () => {
+describe('bounty com inbox — source-level /api wiring (v0.14)', () => {
+  test('inbox.ts source constructs ${baseUrl}/api/messages?email=... (v0.14: variable name is `email`)', () => {
     const src = readFileSync(INBOX_SRC, 'utf-8');
+    // v0.14: identifier is now a registered email.
     expect(src).toMatch(
-      /\$\{baseUrl\}\/api\/messages\?email=\$\{encodeURIComponent\(identifier\)\}/
+      /\$\{baseUrl\}\/api\/messages\?email=\$\{encodeURIComponent\(email\)\}/
     );
     // Negative assertion: the buggy old path must NOT be present.
     expect(src).not.toMatch(
-      /\$\{baseUrl\}\/messages\?email=\$\{encodeURIComponent\(identifier\)\}/
+      /\$\{baseUrl\}\/messages\?email=\$\{encodeURIComponent\((identifier|email)\)\}/
     );
   });
 });

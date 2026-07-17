@@ -90,8 +90,8 @@ describe('bounty com send - profile.api_base wiring (v0.13.1)', () => {
     try {
       // sendCommand.handler expects yargs-shaped args.
       await sendCommand.handler!({
-        fromEmail: 'a@example.com',
-        toEmail: 'b@example.com',
+        'from-email': 'a@example.com',
+        'to-email': 'b@example.com',
         body: 'hi',
         // NO --server-url; profile should win.
       } as any);
@@ -135,8 +135,8 @@ describe('bounty com send - profile.api_base wiring (v0.13.1)', () => {
     console.log = logSpy as any;
     try {
       await sendCommand.handler!({
-        fromEmail: 'a@example.com',
-        toEmail: 'b@example.com',
+        'from-email': 'a@example.com',
+        'to-email': 'b@example.com',
         body: 'hi',
         serverUrl: 'http://127.0.0.1:45555',
       } as any);
@@ -171,8 +171,8 @@ describe('bounty com send - profile.api_base wiring (v0.13.1)', () => {
     console.log = logSpy as any;
     try {
       await sendCommand.handler!({
-        fromEmail: 'a@example.com',
-        toEmail: 'b@example.com',
+        'from-email': 'a@example.com',
+        'to-email': 'b@example.com',
         body: 'hi',
         host: 'fallback.example.com',
         port: 4999,
