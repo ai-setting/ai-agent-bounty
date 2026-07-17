@@ -48,17 +48,53 @@ export function normalizeAgentIdentifier(input: unknown): string | null {
   return raw || null;
 }
 
+/**
+ * v0.13.2: Callback shape for resolving a user-supplied identifier
+ * (email or `<uuid>@<host>`) to the canonical IM address.
+ *
+ * Used by `IMRoutes.getMessages` so the protected inbox handler can accept
+ * `?email=<email>` without doing its own DB lookup. The server wires this
+ * up to `findAgentByEmailOrAddress(db, …)` at construction time.
+ *
+ * Return value:
+ *   - `<uuid>@<host>` on hit
+ *   - `null` on miss / invalid input
+ */
+export type ResolveIdentifierFn = (input: string) => string | null;
+
 export class IMRoutes {
   private db: IMDatabase;
   private pushCallback: ((address: string, message: Message) => boolean) | null;
+  /**
+   * v0.13.2: optional identifier resolver. When set, `getMessages` will use
+   * it to map `?email=<email>` (or any non-canonical input) to the
+   * canonical `<uuid>@<host>` address before performing the ownership
+   * check and IM DB lookup. The server wires this to
+   * `findAgentByEmailOrAddress(bountyDb, …)` so the IM routes don't need
+   * a direct reference to the bounty DB.
+   */
+  private resolveIdentifier: ResolveIdentifierFn | null;
 
-  constructor(db: IMDatabase, pushCallback?: (address: string, message: Message) => boolean) {
+  constructor(
+    db: IMDatabase,
+    pushCallback?: (address: string, message: Message) => boolean,
+    resolveIdentifier?: ResolveIdentifierFn
+  ) {
     this.db = db;
     this.pushCallback = pushCallback || null;
+    this.resolveIdentifier = resolveIdentifier || null;
   }
 
   setPushCallback(callback: (address: string, message: Message) => boolean): void {
     this.pushCallback = callback;
+  }
+
+  /**
+   * v0.13.2: install or replace the identifier resolver at runtime.
+   * Useful for tests and for late DI wiring from the bounty server.
+   */
+  setResolveIdentifier(fn: ResolveIdentifierFn | null): void {
+    this.resolveIdentifier = fn;
   }
 
   async sendMessage(req: Request, requester?: RequesterInfo): Promise<Response> {
@@ -137,41 +173,66 @@ export class IMRoutes {
 
   getMessages(url: URL, requester: RequesterInfo): Response {
     // v0.13: prefer `?email=`, fall back to `?address=` (legacy).
-    const address =
+    const rawIdentifier =
       normalizeAgentIdentifier(url.searchParams.get('email')) ??
       normalizeAgentIdentifier(url.searchParams.get('address'));
-    if (!address) {
+    if (!rawIdentifier) {
       return Response.json(
         { error: 'Missing required query parameter: email or address' },
         { status: 400 }
       );
     }
-    if (!this.requesterOwnsIdentifier(requester.agentId, address)) {
+
+    // v0.13.2: resolve the identifier to the canonical `<uuid>@<host>` form.
+    // - If the input already matches `<uuid>@<host>` we keep it as-is.
+    // - Otherwise we ask the resolver (wired by the server to
+    //   `findAgentByEmailOrAddress`) to map email → address.
+    // - On miss we return 404 so callers know the identifier is unknown.
+    const address = this.resolveCanonicalAddress(rawIdentifier);
+    if (!address) {
+      return Response.json(
+        { error: `Unknown agent identifier: ${rawIdentifier}` },
+        { status: 404 }
+      );
+    }
+
+    // Ownership: caller JWT.sub must match the UUID part of the resolved
+    // canonical address. With the resolver in place, `address` is always
+    // `<uuid>@<host>` so the comparison is well-defined.
+    if (!this.requesterOwnsAddress(requester.agentId, address)) {
       return Response.json(
         { error: "Forbidden: cannot read another agent's inbox" },
         { status: 403 }
       );
     }
-    // v0.13: when the caller passes an email, we still need the canonical
-    // <uuid>@<host> address that the IM DB stores under. Caller is expected
-    // to pass an address here in the common case; if they pass an email,
-    // we cannot resolve it without a DB lookup, so we fall through to the
-    // inbox-by-email endpoint below.
-    if (address.includes('@') && !/^[0-9a-f-]{36}@/.test(address)) {
-      // Looks like an email (not a uuid@host). The IM DB is keyed by
-      // address only; in practice, the protected inbox handler requires
-      // the caller to send the canonical address. Email-only callers
-      // must resolve through /api/agents/me first.
-      return Response.json(
-        {
-          error:
-            "Email-only inbox not supported on IM store; resolve via /api/agents/me to obtain the address and retry with ?address=<uuid>@<host>.",
-        },
-        { status: 400 }
-      );
-    }
+
     const messages = this.db.getInbox(address);
     return Response.json(messages);
+  }
+
+  /**
+   * v0.13.2: Resolve a user-supplied identifier to the canonical
+   * `<uuid>@<host>` IM address.
+   *
+   * - Inputs that already look like `<uuid>@<host>` are returned as-is
+   *   (no resolver round-trip needed — preserves the legacy fast path).
+   * - Other inputs (e.g. emails) are dispatched through the configured
+   *   resolver, which is wired by the server to
+   *   `findAgentByEmailOrAddress(bountyDb, …)`.
+   * - Returns `null` when the resolver is missing or returns null. Callers
+   *   should treat this as an unknown identifier and return 404.
+   */
+  private resolveCanonicalAddress(input: string): string | null {
+    const UUID_HOST = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}@/i;
+    if (UUID_HOST.test(input)) {
+      return input;
+    }
+    if (!this.resolveIdentifier) {
+      // No resolver wired: we cannot map email → address. Treat as unknown
+      // so the handler returns 404 instead of mis-attributing ownership.
+      return null;
+    }
+    return this.resolveIdentifier(input);
   }
 
   /**
@@ -254,29 +315,15 @@ export class IMRoutes {
    * same agent can read messages addressed to any deployment-specific
    * domain (`bounty.local`, `secure.com`, etc.).
    *
-   * v0.13: callers may now pass an email instead of an address. Email-only
-   * callers cannot be matched by local-part alone — they must resolve to
-   * an address via `/api/agents/me` first. This helper still validates
-   * `<local>@<host>` shape and falls back to `false` for email-shaped input.
+   * v0.13.2: `getMessages` now resolves `?email=` to a canonical
+   * `<uuid>@<host>` BEFORE calling this helper, so we always compare
+   * the UUID-prefixed address against `requester.agentId`. The old
+   * `requesterOwnsIdentifier` helper (which tolerated email-shaped input
+   * by conservatively returning false) is no longer used and has been
+   * removed.
    */
   private requesterOwnsAddress(agentId: string, address: string): boolean {
     const [local] = address.split('@');
     return local === agentId;
-  }
-
-  /**
-   * v0.13 variant of `requesterOwnsAddress` that accepts either an address
-   * (`<uuid>@<host>`) or an email (`alice@example.com`). For an email we
-   * conservatively return `false` — the protected inbox handler is keyed by
-   * the canonical IM address, so the caller is expected to have resolved
-   * email → address via the agents API before reaching this point.
-   */
-  private requesterOwnsIdentifier(agentId: string, identifier: string): boolean {
-    const [local] = identifier.split('@');
-    if (local !== agentId) return false;
-    // Distinguish email-shaped (alice@example.com — local is short) from
-    // uuid-shaped address: if the local part is a UUID, treat as address;
-    // otherwise (email), the inbox is not directly addressable here.
-    return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(local);
   }
 }

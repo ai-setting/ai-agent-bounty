@@ -19,6 +19,7 @@ import type { Message } from '../../im/types';
 import { AuthRoutes } from './auth-routes.js';
 import { BountyRoutes } from './bounty-routes.js';
 import { IMRoutes } from './im-routes.js';
+import { findAgentByEmailOrAddress } from '../lib/address-resolver.js';
 
 export interface BountyServerConfig {
   /** IM Database instance */
@@ -89,7 +90,19 @@ export class BountyHTTPServer {
       this.authRoutes = new AuthRoutes(this.bountyDb);
       this.bountyRoutes = new BountyRoutes(this.bountyDb);
     }
-    this.imRoutes = new IMRoutes(this.imDb, (to, msg) => this.pushCallback?.(to, msg) ?? false);
+    this.imRoutes = new IMRoutes(
+      this.imDb,
+      (to, msg) => this.pushCallback?.(to, msg) ?? false,
+      // v0.13.2: wire the identifier resolver so the protected inbox
+      // handler can accept `?email=<email>` and map it to the canonical
+      // `<uuid>@<host>` for ownership check + IM DB lookup. The resolver
+      // is a server-level closure so `IMRoutes` doesn't need a direct
+      // reference to the bounty DB.
+      this.bountyDb
+        ? (rawIdentifier: string) =>
+            findAgentByEmailOrAddress(this.bountyDb!, rawIdentifier)?.address ?? null
+        : undefined,
+    );
 
     // PR4: Token check defaults to ON for production safety.
     // 设为 true (env 未设 或 BOUNTY_TOKEN_CHECK_ENABLED=true/1): 强制 JWT 验证
