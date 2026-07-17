@@ -1,8 +1,9 @@
 /**
  * Phase 4 — soft auth + address body integration tests (v0.10).
  *
- * Verifies the combined behavior:
- *   - Default: BOUNTY_TOKEN_CHECK_ENABLED is unset → token check off
+ * Verifies the combined behavior (PR4 update — token check default flipped to ON):
+ *   - Default: BOUNTY_TOKEN_CHECK_ENABLED is unset → token check ON (401 without header)
+ *   - BOUNTY_TOKEN_CHECK_ENABLED=false → token check off (soft auth bypass)
  *   - With soft auth, callers can omit Authorization header
  *   - Requests must supply `publisherAddress` / `agentAddress` (full uuid@host)
  *     in body to identify actor (v0.10 BREAKING: bare UUID REJECTED)
@@ -23,9 +24,14 @@ describe('Soft auth + address body (v0.10 strict)', () => {
   let imDb: IMDatabase;
   let server: BountyHTTPServer;
   let baseUrl: string;
+  let originalTokenEnv: string | undefined;
 
   beforeEach(async () => {
-    delete process.env.BOUNTY_TOKEN_CHECK_ENABLED;
+    // PR4: default token check is ON. Tests that exercise the soft-auth
+    // bypass path explicitly opt out by setting BOUNTY_TOKEN_CHECK_ENABLED=false.
+    originalTokenEnv = process.env.BOUNTY_TOKEN_CHECK_ENABLED;
+    process.env.BOUNTY_TOKEN_CHECK_ENABLED = 'false';
+
     bountyDb = new Database({ memory: true });
     imDb = new IMDatabase({ memory: true });
     const now = Date.now();
@@ -38,9 +44,16 @@ describe('Soft auth + address body (v0.10 strict)', () => {
     baseUrl = `http://localhost:${server.getPort()}`;
   });
 
-  afterEach(() => server.stop());
+  afterEach(() => {
+    server.stop();
+    if (originalTokenEnv === undefined) {
+      delete process.env.BOUNTY_TOKEN_CHECK_ENABLED;
+    } else {
+      process.env.BOUNTY_TOKEN_CHECK_ENABLED = originalTokenEnv;
+    }
+  });
 
-  test('默认 (env 未设): tokenCheckEnabled = false', () => {
+  test('BOUNTY_TOKEN_CHECK_ENABLED=false 时: tokenCheckEnabled = false', () => {
     expect((server as any).tokenCheckEnabled).toBe(false);
   });
 

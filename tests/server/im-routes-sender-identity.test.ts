@@ -63,7 +63,8 @@ describe('IM Routes sender identity (HTTP-level regression)', () => {
     if (tokenCheck) {
       process.env.BOUNTY_TOKEN_CHECK_ENABLED = 'true';
     } else {
-      delete process.env.BOUNTY_TOKEN_CHECK_ENABLED;
+      // PR4: explicit opt-out — token check defaults to ON.
+      process.env.BOUNTY_TOKEN_CHECK_ENABLED = 'false';
     }
     imDb = new IMDatabase({ memory: true });
     bountyDb = new Database({ memory: true });

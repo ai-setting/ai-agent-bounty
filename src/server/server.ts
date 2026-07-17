@@ -41,9 +41,17 @@ async function main() {
   console.log(`   Health: http://localhost:${port}/health`);
   // Phase 4: Token check 状态
   const tokenCheck = process.env.BOUNTY_TOKEN_CHECK_ENABLED;
-  console.log(`   Token check: ${tokenCheck === "true" || tokenCheck === "1"
-    ? "✅ ENABLED (BOUNTY_TOKEN_CHECK_ENABLED=true)"
-    : "❌ DISABLED (set BOUNTY_TOKEN_CHECK_ENABLED=true to enable)"}`);
+  console.log(`   Token check: ${tokenCheck === undefined
+    ? "✅ ENABLED (default; set BOUNTY_TOKEN_CHECK_ENABLED=false to disable)"
+    : tokenCheck === "true" || tokenCheck === "1"
+      ? "✅ ENABLED (BOUNTY_TOKEN_CHECK_ENABLED=true)"
+      : "❌ DISABLED (BOUNTY_TOKEN_CHECK_ENABLED=" + tokenCheck + ")"}`);
+  console.log(
+    `   WS auth:     ${process.env.BOUNTY_WS_AUTH_REQUIRED === "true" ||
+      process.env.BOUNTY_WS_AUTH_REQUIRED === "1"
+      ? "✅ ENABLED (BOUNTY_WS_AUTH_REQUIRED=true)"
+      : "❌ DISABLED (default; set BOUNTY_WS_AUTH_REQUIRED=true to enable)"}`,
+  );
 
   // Graceful shutdown
   const shutdown = () => {

@@ -27,6 +27,18 @@ export interface BountyServerConfig {
   bountyDb?: Database;
   /** Server port, default: 4000 */
   port?: number;
+  /**
+   * PR4 DI seam: 强制覆盖 BOUNTY_TOKEN_CHECK_ENABLED env。
+   * - undefined: 读 env (默认 ON)
+   * - true/false: 显式覆盖 env
+   */
+  tokenCheckEnabled?: boolean;
+  /**
+   * PR4 DI seam: 强制覆盖 BOUNTY_WS_AUTH_REQUIRED env。
+   * - undefined: 读 env (默认 OFF)
+   * - true/false: 显式覆盖 env
+   */
+  wsAuthRequired?: boolean;
 }
 
 /**
@@ -53,13 +65,20 @@ export class BountyHTTPServer {
   private imRoutes: IMRoutes | null = null;
   /**
    * Token check toggle (Phase 4 — 用户请求):
-   * - 默认 false: API 端点不强制 token (任何 caller 都能访问 /api/messages)
-   * - 设为 true (env BOUNTY_TOKEN_CHECK_ENABLED=true): 强制 JWT 验证
+   * - PR4 默认 (env 未设): tokenCheckEnabled = **true** (生产安全姿态)
+   * - 显式设 false: BOUNTY_TOKEN_CHECK_ENABLED=false/0 → 跳过 checkAuth
+   * - 设为 true/1: BOUNTY_TOKEN_CHECK_ENABLED=true/1 → 强制 JWT 验证
    *
-   * 设计动机: 内部/dev 测试不需要 token, 但生产部署可开启。
-   * 部署时设 true 可以提供最小访问控制。
+   * 设计动机: 部署时无需额外配置即获得最小访问控制; dev/test 场景可显式关闭。
    */
   private tokenCheckEnabled: boolean;
+  /**
+   * WebSocket auth feature flag (PR4):
+   * - 默认 false (保守): WS upgrade 不检查 token (向后兼容)
+   * - 设 BOUNTY_WS_AUTH_REQUIRED=true: WS upgrade 需 Authorization Bearer header
+   *   通过 verifyToken 校验; 失败 → 拒绝 upgrade。
+   */
+  private wsAuthRequired: boolean = false;
 
   constructor(config: BountyServerConfig) {
     this.imDb = config.imDb;
@@ -72,9 +91,29 @@ export class BountyHTTPServer {
     }
     this.imRoutes = new IMRoutes(this.imDb, (to, msg) => this.pushCallback?.(to, msg) ?? false);
 
-    // 读环境变量; 默认禁用 (token check off)
-    const envFlag = process.env.BOUNTY_TOKEN_CHECK_ENABLED;
-    this.tokenCheckEnabled = envFlag === "true" || envFlag === "1";
+    // PR4: Token check defaults to ON for production safety.
+    // 设为 true (env 未设 或 BOUNTY_TOKEN_CHECK_ENABLED=true/1): 强制 JWT 验证
+    // 显式关闭: BOUNTY_TOKEN_CHECK_ENABLED=false/0
+    //
+    // 部署时无需额外配置即获得最小访问控制; dev/test 场景可显式设 false 关闭。
+    if (config.tokenCheckEnabled !== undefined) {
+      // DI seam 优先于 env
+      this.tokenCheckEnabled = config.tokenCheckEnabled;
+    } else {
+      const envFlag = process.env.BOUNTY_TOKEN_CHECK_ENABLED;
+      this.tokenCheckEnabled = envFlag === undefined
+        ? true
+        : envFlag === "true" || envFlag === "1";
+    }
+
+    // PR4: WebSocket auth is OFF by default (conservative — no breaking change).
+    // Opt-in with BOUNTY_WS_AUTH_REQUIRED=true to require token at WS upgrade.
+    if (config.wsAuthRequired !== undefined) {
+      this.wsAuthRequired = config.wsAuthRequired;
+    } else {
+      const wsFlag = process.env.BOUNTY_WS_AUTH_REQUIRED;
+      this.wsAuthRequired = wsFlag === "true" || wsFlag === "1";
+    }
   }
 
   setPushCallback(callback: PushCallback): void {
@@ -124,12 +163,38 @@ export class BountyHTTPServer {
     // Handle WebSocket upgrade for /ws endpoint
     if (path === '/ws') {
       const address = url.searchParams.get('address');
-      
+
       if (!address) {
         return Response.json({
           event: 'error',
           data: { message: 'Missing required parameter: address' }
         }, { status: 400 });
+      }
+
+      // PR4: when wsAuthRequired is true, validate the Authorization header
+      // (if present) BEFORE accepting the upgrade. Reject with 401 on missing /
+      // invalid token. When wsAuthRequired is false (default), accept any
+      // caller — preserving the existing dev/test behaviour.
+      if (this.wsAuthRequired) {
+        const authHeader = req.headers.get('authorization');
+        if (!authHeader || !authHeader.startsWith('Bearer ')) {
+          return Response.json({
+            event: 'error',
+            data: { message: 'Authorization header required (BOUNTY_WS_AUTH_REQUIRED=true)' },
+          }, { status: 401 });
+        }
+        const token = authHeader.slice(7);
+        try {
+          // Lazy import to avoid loading auth dep on the cold path when WS
+          // auth is disabled.
+          const { verifyToken } = await import('../../auth/jwt');
+          await verifyToken(token);
+        } catch {
+          return Response.json({
+            event: 'error',
+            data: { message: 'Invalid token' },
+          }, { status: 401 });
+        }
       }
 
       const success = server.upgrade(req, {
