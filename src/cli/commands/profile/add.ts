@@ -27,7 +27,6 @@ interface AddOptions {
   name?: string;
   'api-base'?: string;
   token?: string;
-  'agent-id'?: string;
   email?: string;
 }
 
@@ -58,12 +57,6 @@ function resolveApiBase(value: string | undefined): string {
   return candidate.replace(/\/+$/, '');
 }
 
-function validateUuid(value: string, flag: string): void {
-  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value)) {
-    throw new Error(`${flag} must be a valid UUID (received: ${value})`);
-  }
-}
-
 function validateEmail(value: string, flag: string): void {
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
     throw new Error(`${flag} must be a valid email address (received: ${value})`);
@@ -88,13 +81,12 @@ export const addCommand: CommandModule<object, AddOptions> = {
         type: 'string',
         description: 'JWT access token (run `bounty auth login` first if omitted)',
       })
-      .option('agent-id', {
-        type: 'string',
-        description: 'Agent UUID bound to this profile',
-      })
       .option('email', {
+        alias: 'e',
         type: 'string',
-        description: 'Agent email bound to this profile',
+        description:
+          'Agent email bound to this profile (v0.14 STRICT only). ' +
+          '<uuid>@<host> / bare UUID are REJECTED.',
       }),
 
   handler: async (argv) => {
@@ -126,8 +118,13 @@ export const addCommand: CommandModule<object, AddOptions> = {
       exitWith(1, err instanceof Error ? err.message : String(err));
     }
 
-    if (argv['agent-id']) validateUuid(argv['agent-id'], '--agent-id');
-    if (argv.email) validateEmail(argv.email, '--email');
+    if (argv.email && typeof argv.email === 'string') {
+      try {
+        validateEmail(argv.email, '--email');
+      } catch (err) {
+        exitWith(1, err instanceof Error ? err.message : String(err));
+      }
+    }
 
     const now = Math.floor(Date.now() / 1000);
     const profile: BountyProfile = {
@@ -137,9 +134,8 @@ export const addCommand: CommandModule<object, AddOptions> = {
       created_at: now,
       updated_at: now,
     };
-    if (argv.token) profile.auth.access_token = argv.token;
-    if (argv['agent-id']) profile.agent_id = argv['agent-id'];
-    if (argv.email) profile.email = argv.email;
+    if (argv.token && typeof argv.token === 'string') profile.auth.access_token = argv.token;
+    if (argv.email && typeof argv.email === 'string') profile.email = argv.email;
 
     try {
       saveProfile(profile, opts);

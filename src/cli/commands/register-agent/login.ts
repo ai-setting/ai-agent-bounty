@@ -1,8 +1,10 @@
 /**
  * agent login command
- * Login to get auth token
+ * Login to get auth token.
  *
- * v0.10 BREAKING: --agent-id REMOVED. Use --agent-address <uuid>@<host>.
+ * v0.14 STRICT email-only:
+ *   - Actor identity input is `--email / -e` ONLY.
+ *   - `--agent-address / -a` (`<uuid>@<host>`) is REMOVED.
  */
 
 import type { CommandModule } from 'yargs';
@@ -11,65 +13,47 @@ import { API_BASE } from '../../config.js';
 import { saveToken } from '../../storage.js';
 // v0.5.0: TLS skip default — use bountyFetch wrapper
 import { bountyFetch } from '../../lib/fetch-helper.js';
-import { resolveAddressOption } from '../../lib/address-parser.js';
 
 import {
   addServerUrlOption,
   resolveServerUrl,
 } from '../../lib/server-url-option.js';
+import {
+  requireEmailFlag,
+  exitWithEmailFlagError,
+} from '../../lib/email-flag.js';
 
 interface LoginOptions {
   email?: string;
-  'agent-address'?: string;
   'server-url'?: string;
 }
 
 export const loginCommand: CommandModule<object, LoginOptions> = {
   command: 'login',
-  describe: 'Login to get auth token',
+  describe: 'Login to get auth token (v0.14 STRICT: --email only).',
 
   builder: (yargs) =>
     addServerUrlOption(
-      yargs
-        .option('email', {
-          alias: 'e',
-          type: 'string',
-          description: 'Agent email',
-        })
-        .option('agent-address', {
-          alias: 'a',
-          type: 'string',
-          description:
-            'Agent address in <uuid>@<host> format (REQUIRED). ' +
-            'Bare UUID is REJECTED in v0.10.',
-        })
+      yargs.option('email', {
+        alias: 'e',
+        type: 'string',
+        description:
+          'Agent email (v0.14 ONLY input). <uuid>@<host> and bare UUIDs are REJECTED.',
+      })
     ),
 
   handler: async (argv) => {
-    if (!argv.email && !argv['agent-address']) {
-      console.error(chalk.red('\n✗ Error: --email or --agent-address is required\n'));
-      console.error('Usage: bounty register-agent login --agent-address <uuid>@<host>');
-      process.exit(1);
+    const parsed = requireEmailFlag(
+      'email',
+      argv as Record<string, unknown>,
+    );
+    if (!parsed.ok) {
+      exitWithEmailFlagError(parsed);
     }
-
-    const resolvedAgent = argv['agent-address']
-      ? resolveAddressOption({
-          address: argv['agent-address'],
-          addressFlag: '--agent-address',
-          missingMessage: '✗ --agent-address is required (<uuid>@<host> format).',
-        })
-      : undefined;
-
-    if (resolvedAgent && !resolvedAgent.ok) {
-      console.error(chalk.red(`\n${resolvedAgent.error}\n`));
-      process.exit(2);
-    }
+    const email = parsed.value;
 
     try {
-      const body: { email?: string; agent_id?: string } = {};
-      if (argv.email) body.email = argv.email;
-      // v0.10: only send uuid (server login keeps agent_id semantics)
-      if (resolvedAgent?.ok) body.agent_id = resolvedAgent.value.uuid;
+      const body: { email: string } = { email };
 
       const baseUrl = resolveServerUrl(argv['server-url'], API_BASE);
 
@@ -79,7 +63,7 @@ export const loginCommand: CommandModule<object, LoginOptions> = {
         body: JSON.stringify(body),
       });
 
-      const data = await response.json() as {
+      const data = (await response.json()) as {
         token?: string;
         agent_id?: string;
         email?: string;
