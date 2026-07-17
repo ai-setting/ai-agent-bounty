@@ -5,6 +5,97 @@ All notable changes to ai-agent-bounty are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v0.13.0] - Email-First Identity (BREAKING-friendly)
+
+### Summary
+
+v0.13.0 introduces **email-first agent identity** as the primary lookup key
+for server endpoints and CLI commands. The legacy `<uuid>@<host>` address
+remains a fully-supported secondary path, so this release is a
+**soft-breaking** change: existing scripts continue to work, but new code
+should send the agent's registered email.
+
+### Added
+
+- **`findAgentByEmail(db, email)`** server helper in `src/server/lib/address-resolver.ts`
+- **`findAgentByEmailOrAddress(db, input)`** server helper — email-first,
+  address-fallback resolver
+- **`POST /api/messages`** accepts `from_email` / `to_email` body fields
+  (in addition to legacy `from` / `to`)
+- **`GET /api/messages`** accepts `?email=<addr>` query parameter
+  (in addition to legacy `?address=<addr>`)
+- **`GET /api/agents/by-email?email=<email>`** — lookup agent by registered email
+- **`DELETE /api/agents/by-email?email=<email>`** — delete agent by email
+- **`GET /api/agents?email=<email>`** — filter list endpoint by email
+- **WebSocket `/ws?email=<email>`** — server resolves email to canonical
+  `<uuid>@<host>` address via `findAgentByEmailOrAddress`
+- **CLI `--email` flag** on 14 commands:
+  - `bounty com send --from-email/-F`, `--to-email/-T`
+  - `bounty com inbox --email/-e`
+  - `bounty com connect --email/-e`
+  - `bounty com disconnect --email/-e`
+  - `bounty com addresses --email/-e` (help-time hint)
+  - `bounty register-agent credits --email/-e`
+  - `bounty register-agent get --email/-e`
+  - `bounty register-agent delete --email/-e`
+  - `bounty bounty-task grab --email/-e`
+  - `bounty bounty-task submit --email/-e`
+
+  Note: `auth login`, `register-agent login`, `register-agent info`,
+  `profile add` already accepted `--email` in earlier releases.
+- **`normalizeAgentIdentifier(input)`** server helper exported from
+  `src/server/http/im-routes.ts` for consistent email/address normalisation
+- 21 new server tests (`tests/server/{bounty-routes-email-first,im-routes-email-first,ws-email-upgrade}.test.ts`)
+- 21 new CLI tests (`tests/cli/v0.13-email-flags.test.ts`)
+
+### Changed
+
+- **`resolveActor(db, body, field, authId)`** in `src/server/http/bounty-routes.ts`
+  now checks `body[${field}Email]` first, then falls back to
+  `body[${field}Address]` (the previous v0.10 primary path).
+- **Error messages** for `createTask`, `grabTask`, `submitTask`, `completeTask`,
+  `cancelTask` updated to mention both `*Email` and `*Address` keys
+- **WS upgrade** error message updated to "Missing required parameter:
+  email or address (v0.13 email-first)"
+
+### Backward Compatibility
+
+- **All v0.10 / v0.12 CLI commands continue to work**. The legacy
+  `--agent-address` / `--from` / `--to` flags still resolve via the
+  secondary `findAgentByAddress` path.
+- **All pre-v0.13 server requests still work**. Endpoints that previously
+  expected `agentAddress` now also accept `agentEmail` (or both).
+- **Bare UUID rejection** (v0.10) is unchanged — `agentAddress` still
+  must be `<uuid>@<host>`; only the email field is a soft relaxation.
+
+### Migration Guide
+
+**Before (v0.10/v0.12)**:
+```bash
+bounty bounty-task grab --task-id <uuid> \
+  --agent-address 8de9b6aa-5781-4000-8000-000000000001@bounty.local
+```
+
+**After (v0.13.0 — preferred)**:
+```bash
+bounty bounty-task grab --task-id <uuid> \
+  --email alice@example.com
+```
+
+The legacy form continues to work — migration can be done incrementally.
+
+### Breaking Changes
+
+🟡 **Soft-breaking**: error messages for missing identity fields now mention
+`--email` (v0.13) before `--agent-address` (legacy). Any caller that
+matched on the previous wording (e.g. "agentAddress required") should be
+updated to also accept the new wording (`agentEmail or agentAddress required`).
+
+🟢 **No hard breaking changes**: existing client code and scripts continue
+to function without modification.
+
+---
+
 ## [Unreleased] - Profile 机制 (PR1-PR6)
 
 
