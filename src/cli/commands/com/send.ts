@@ -129,11 +129,15 @@ export const sendCommand: CommandModule<object, SendOptions> = {
         return true;
       }),
   handler: async (args) => {
-    const { from, to, fromEmail, toEmail, body, host, port, serverUrl, tlsVerify } = args;
+    const { from, to, body, host, port, serverUrl, tlsVerify } = args;
+    // yargs camelCases `--from-email` into `fromEmail`; tolerate both shapes
+    // for handler-invocation paths (tests, internal callers).
+    const fromEmailRaw = args.fromEmail ?? args['from-email'];
+    const toEmailRaw = args.toEmail ?? args['to-email'];
 
     // v0.13: email fields win over address fields when both are provided.
-    const resolvedFrom = (typeof fromEmail === 'string' && fromEmail.trim()) ? fromEmail.trim() : from;
-    const resolvedTo = (typeof toEmail === 'string' && toEmail.trim()) ? toEmail.trim() : to;
+    const resolvedFrom = (typeof fromEmailRaw === 'string' && fromEmailRaw.trim()) ? fromEmailRaw.trim() : from;
+    const resolvedTo = (typeof toEmailRaw === 'string' && toEmailRaw.trim()) ? toEmailRaw.trim() : to;
 
     // v0.5.0: TLS mode decision
     // --tls-verify → 开启验证（反向开关）
