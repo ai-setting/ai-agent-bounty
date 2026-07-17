@@ -99,7 +99,10 @@ export const inboxCommand: CommandModule<object, InboxOptions> = {
     }
     // v0.13: prefer `?email=`; legacy callers may still send `?address=`.
     // The server resolves either form via findAgentByEmailOrAddress.
-    const url = `${baseUrl}/messages?email=${encodeURIComponent(identifier)}`;
+    // v0.13.3: prepend `/api` so the URL works against the production
+    // hostname (k8s nginx ingress routes `/messages` to the SPA HTML
+    // fallback). Matches the `/api/messages` path used by `com send`.
+    const url = `${baseUrl}/api/messages?email=${encodeURIComponent(identifier)}`;
 
     try {
       // v0.13.2: attach Bearer JWT so the server's token check (default ON

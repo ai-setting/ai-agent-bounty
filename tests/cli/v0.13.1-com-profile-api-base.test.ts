@@ -320,7 +320,10 @@ describe('bounty com inbox - profile.api_base wiring (v0.13.1)', () => {
     }
 
     expect(calledUrl).not.toBeNull();
-    expect(String(calledUrl).startsWith('http://fallback.example.com:4998/messages')).toBe(true);
+    // v0.13.3: legacy fallback now also uses /api/messages (was /messages
+    // pre-v0.13.3 — the k8s-ingress + production-hostname path now needs
+    // /api). See tests/cli/v0.13.3-inbox-api-path.test.ts for the bug fix.
+    expect(String(calledUrl).startsWith('http://fallback.example.com:4998/api/messages')).toBe(true);
   });
 });
 
