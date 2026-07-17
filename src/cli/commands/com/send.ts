@@ -1,26 +1,13 @@
 /**
- * com send command
- * Send message via Agent IM
+ * com send command — v0.14 strict email-only contract.
  *
- * v0.13 changes:
- * - 新增 --from-email / -F 和 --to-email / -T 选项（推荐用 email 替代 address）。
- * - 仍保留 --from / -f 和 --to / -t（address）作为兼容选项；user 不应混用 email 和 address。
- * - 邮箱优先级：--from-email > --from；--to-email > --to。
- *
- * v0.5.0 changes:
- * - 默认开启 TLS 跳过（无需 -k / --insecure flag），通过 fetch-helper.ts 实现
- * - 新增 --tls-verify flag 让用户重新开启 TLS 验证（反向开关）
- * - --insecure / -k 保留为 deprecated 向后兼容（设置 NODE_TLS_REJECT_UNAUTHORIZED=0）
- * - fetch 调用改用 bountyFetch() helper，自动应用 TLS skip
- *
- * Phase feat/com-send-server-url (v0.4.3):
- * - 新增 --server-url / -e 选项：直接指定 IM API base URL（带 scheme，如 https://bounty.example.com:443）。
- *   这对于自签名证书的远程 server 特别有用，避免被 host/port 拼接出错的 scheme。
- * - --server-url 优先级最高：若提供，host/port 被忽略。
- *
- * Roy-Agent 集成：roy-agent 内置 bounty-im handler 现在通过 buildDefaultBountyIMSystemPrompt
- * 把 --server-url 写进 default systemPrompt，从而 agent 在处理 bounty-IM 消息时知道正确的
- * IM API endpoint，无需记忆 host/port 细节。
+ * v0.13: --from-email / -F and --to-email / -T added (email-first);
+ *        --from / -f and --to / -t retained as legacy compat.
+ * v0.14 BREAKING:
+ *   - --from / -f and --to / -t REMOVED (legacy address form).
+ *   - --from-email / -F is the ONLY sender input.
+ *   - --to-email / -T is the ONLY recipient input.
+ *   - HTTP body uses {from_email, to_email} ONLY (no `from` / `to` keys).
  */
 
 import type { CommandModule } from 'yargs';
@@ -29,12 +16,11 @@ import { bountyConfig } from '../../../lib/config/bounty-config.js';
 import { bountyFetch, setTlsVerifyMode } from '../../lib/fetch-helper.js';
 import { readAuthToken } from '../../lib/auth-token.js';
 import { ProfileContext } from '../../config/context.js';
+import { parseEmail } from '../../../lib/email-resolver.js';
 // Backward compat: existing tests (com-send-auth-insecure.test.ts) import readAuthToken from here
 export { readAuthToken };
 
 interface SendOptions {
-  from?: string;
-  to?: string;
   fromEmail?: string;
   toEmail?: string;
   body: string;
@@ -50,29 +36,17 @@ export const sendCommand: CommandModule<object, SendOptions> = {
   describe: 'Send a message via Agent IM (bounty IM)',
   builder: (yargs) =>
     yargs
-      .option('from', {
-        alias: 'f',
-        type: 'string',
-        description:
-          'Sender address (format: agent-id@host) [LEGACY: prefer --from-email in v0.13]',
-      })
       .option('from-email', {
         alias: 'F',
         type: 'string',
         description:
-          'Sender email (v0.13 primary; preferred over --from)',
-      })
-      .option('to', {
-        alias: 't',
-        type: 'string',
-        description:
-          'Recipient address (format: agent-id@host) [LEGACY: prefer --to-email in v0.13]',
+          'Sender email (v0.14 ONLY input). <uuid>@<host> and bare UUIDs REJECTED.',
       })
       .option('to-email', {
         alias: 'T',
         type: 'string',
         description:
-          'Recipient email (v0.13 primary; preferred over --to)',
+          'Recipient email (v0.14 ONLY input). <uuid>@<host> and bare UUIDs REJECTED.',
       })
       .option('body', {
         alias: 'b',
@@ -115,50 +89,35 @@ export const sendCommand: CommandModule<object, SendOptions> = {
         type: 'number',
         description: 'IM server port (default uses BOUNTY_PORT env or 4000). Ignored when --server-url is set.',
         default: bountyConfig.port,
-      })
-      .check((argv) => {
-        const fromEmail = argv['from-email'];
-        const fromAddr = argv.from;
-        const toEmail = argv['to-email'];
-        const toAddr = argv.to;
-        if (!fromEmail && !fromAddr) {
-          throw new Error('Either --from-email/-F or --from/-f is required (v0.13 email-first).');
-        }
-        if (!toEmail && !toAddr) {
-          throw new Error('Either --to-email/-T or --to/-t is required (v0.13 email-first).');
-        }
-        return true;
       }),
   handler: async (args) => {
-    const { from, to, body, host, port, serverUrl, tlsVerify } = args;
-    // yargs camelCases `--from-email` into `fromEmail`; tolerate both shapes
-    // for handler-invocation paths (tests, internal callers).
-    const fromEmailRaw = args.fromEmail ?? args['from-email'];
-    const toEmailRaw = args.toEmail ?? args['to-email'];
+    const { body, host, port, serverUrl, tlsVerify } = args;
 
-    // v0.13: email fields win over address fields when both are provided.
-    const resolvedFrom = (typeof fromEmailRaw === 'string' && fromEmailRaw.trim()) ? fromEmailRaw.trim() : from;
-    const resolvedTo = (typeof toEmailRaw === 'string' && toEmailRaw.trim()) ? toEmailRaw.trim() : to;
+    // v0.14 strict: --from-email / --to-email are the ONLY actor inputs.
+    const fromParsed = parseEmail(args.fromEmail ?? args['from-email'], 'fromEmail', 'cli');
+    if (!fromParsed.ok) {
+      console.error(chalk.red(`\n${fromParsed.error}\n`));
+      process.exit(1);
+    }
+    const toParsed = parseEmail(args.toEmail ?? args['to-email'], 'toEmail', 'cli');
+    if (!toParsed.ok) {
+      console.error(chalk.red(`\n${toParsed.error}\n`));
+      process.exit(1);
+    }
 
     // v0.5.0: TLS mode decision
-    // --tls-verify → 开启验证（反向开关）
-    // 默认 → 跳过 TLS 验证（setTlsVerifyMode('off') 由 fetch-helper.ts 初始化时已设）
     if (tlsVerify) {
       setTlsVerifyMode('on');
     } else {
       setTlsVerifyMode('off');
     }
 
-    // Authorization header：自动从 ~/.config/bounty/token 加载（如果存在）
     const authToken = readAuthToken();
 
     // 优先级：--server-url > profile.api_base > --host/--port
-    // --server-url 必须带 scheme（http:// 或 https://），且不含尾斜杠
-    // v0.13.1: 新增 profile.api_base 兜底，与 auth/*, bounty-task/* 行为一致
     let url: string;
     if (serverUrl) {
       const trimmed = serverUrl.replace(/\/+$/, '');
-      // 安全检查：必须以 http:// 或 https:// 开头
       if (!/^https?:\/\//.test(trimmed)) {
         console.error(
           chalk.red(`\n✗ Invalid --server-url: "${serverUrl}". Must start with http:// or https://\n`)
@@ -167,13 +126,11 @@ export const sendCommand: CommandModule<object, SendOptions> = {
       }
       url = `${trimmed}/api/messages`;
     } else {
-      // v0.13.1: 先尝试 active profile 的 api_base
       const profileApiBase = ProfileContext.getApiBase();
       if (profileApiBase) {
         const trimmed = profileApiBase.replace(/\/+$/, '');
         url = `${trimmed}/api/messages`;
       } else {
-        // 回退：--host/--port 拼接（默认 http://，legacy /messages 路径）
         url = `http://${host}:${port}/messages`;
       }
     }
@@ -185,18 +142,11 @@ export const sendCommand: CommandModule<object, SendOptions> = {
       if (authToken) {
         authHeaders['Authorization'] = `Bearer ${authToken}`;
       }
-      // v0.5.0: 用 bountyFetch helper（自动应用 TLS skip 默认值）
       const requestBody: Record<string, unknown> = {
         content: { type: 'text', body },
+        from_email: fromParsed.value,
+        to_email: toParsed.value,
       };
-      // v0.13: pass email fields when caller supplied them so server can
-      // resolve via findAgentByEmailOrAddress. Otherwise fall back to
-      // legacy from/to (treated as <uuid>@<host> addresses).
-      if (resolvedFrom) requestBody.from_email = resolvedFrom;
-      if (resolvedTo) requestBody.to_email = resolvedTo;
-      // Always include legacy fields as well so old servers continue to work.
-      if (resolvedFrom) requestBody.from = resolvedFrom;
-      if (resolvedTo) requestBody.to = resolvedTo;
 
       const response = await bountyFetch(url, {
         method: 'POST',
