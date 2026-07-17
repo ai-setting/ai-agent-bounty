@@ -55,7 +55,7 @@ export function readAuthToken(tokenPath: string = DEFAULT_TOKEN_PATH): string | 
   //    every command runs. When a profile has an access_token, that wins
   //    over any on-disk token file left over from a previous login flow.
   const ctxToken = ProfileContext.getAccessToken();
-  if (ctxToken) return ctxToken;
+  if (ctxToken) return ctxToken.trim() || undefined;
 
   // 2. Legacy on-disk token file. Kept for back-compat with bounty-http,
   //    soft-auth, and callers that pass their own tokenPath.
