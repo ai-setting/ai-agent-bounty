@@ -1,6 +1,6 @@
 {
   "name": "@ai-setting/agent-bounty",
-  "version": "0.10.0",
+  "version": "0.12.0",
   "type": "module",
   "description": "AI Agent Bounty System — Task publishing, grabbing, and communication platform. v0.10.0 BREAKING: address unification (<uuid>@<host> required, --*-id flags REMOVED). See CHANGELOG for upgrade guide.",
   "main": "./dist/index.js",
