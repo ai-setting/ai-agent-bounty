@@ -60,6 +60,15 @@ describe("parseEmail (v0.14 strict)", () => {
     expect(parseEmail({}, "email").ok).toBe(false);
   });
 
+  test("REJECTS surrounding whitespace (no implicit trim)", () => {
+    // v0.14 strict: boundary must reject, not normalize.
+    expect(parseEmail(" alice@example.com", "email").ok).toBe(false);
+    expect(parseEmail("alice@example.com ", "email").ok).toBe(false);
+    expect(parseEmail(" alice@example.com ", "email").ok).toBe(false);
+    expect(parseEmail("\talice@example.com", "email").ok).toBe(false);
+    expect(parseEmail("alice@example.com\n", "email").ok).toBe(false);
+  });
+
   test("REJECTS malformed emails (no @, no dot, leading @, trailing @)", () => {
     for (const bad of ["alice@", "@example.com", "alice.example.com", "alice@@b.com"]) {
       const r = parseEmail(bad, "email");
@@ -67,9 +76,57 @@ describe("parseEmail (v0.14 strict)", () => {
     }
   });
 
+  test("REJECTS empty / consecutive / leading / trailing dots in domain", () => {
+    // Each domain label MUST be non-empty.
+    expect(parseEmail("alice@.example.com", "email").ok).toBe(false); // leading dot
+    expect(parseEmail("alice@example..com", "email").ok).toBe(false); // consecutive dots
+    expect(parseEmail("alice@example.com.", "email").ok).toBe(false); // trailing dot
+    expect(parseEmail("alice@.com", "email").ok).toBe(false);         // empty first label
+    expect(parseEmail("alice@example.", "email").ok).toBe(false);      // empty TLD
+    expect(parseEmail("alice@.", "email").ok).toBe(false);            // empty domain
+    expect(parseEmail("alice@..", "email").ok).toBe(false);           // all-empty domain
+  });
+
   test("REJECTS inputs that exceed DNS 254-char length cap", () => {
     const huge = "a".repeat(250) + "@example.com"; // 261 chars
     expect(parseEmail(huge, "email").ok).toBe(false);
+  });
+
+  test("exact remediation hint present for every rejection", () => {
+    const cases = [
+      "",
+      "alice@",
+      "8de9b6aa-5781-4000-8000-000000000001@bounty.local",
+      " alice@example.com",
+      "alice@example.com.",
+      null,
+    ];
+    for (const bad of cases) {
+      const r = parseEmail(bad as unknown, "email");
+      expect(r.ok).toBe(false);
+      if (!r.ok) {
+        expect(r.error).toMatch(/use --email <your-registered-email>/);
+      }
+    }
+  });
+
+  test("HTTP-field hint produces HTTP-shaped remediation, not CLI-shaped", () => {
+    const r = parseEmail("alice@", "publisherEmail", "http");
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      // HTTP field hint must NOT prefix CLI-style '--' on camelCase field names.
+      expect(r.error).not.toMatch(/--publisherEmail/);
+      // HTTP field hint uses surface-appropriate phrasing instead.
+      expect(r.error).toMatch(/use publisherEmail: <your-registered-email>/);
+    }
+  });
+
+  test("CLI-surface hint defaults to '--<field>' form", () => {
+    const r = parseEmail("alice@", "email"); // default surface = "cli"
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(r.error).toMatch(/use --email <your-registered-email>/);
+    }
   });
 });
 
@@ -121,6 +178,20 @@ describe("findAgentByEmail (v0.14 strict)", () => {
     expect(
       findAgentByEmail(db, "8de9b6aa-5781-4000-8000-000000000001"),
     ).toBeNull();
+  });
+
+  test("REJECTS surrounding whitespace (no silent trim)", () => {
+    // The lookup helper MUST NOT silently trim and find alice@example.com
+    // when the caller actually passed " alice@example.com ".
+    expect(findAgentByEmail(db, " alice@example.com")).toBeNull();
+    expect(findAgentByEmail(db, "alice@example.com ")).toBeNull();
+    expect(findAgentByEmail(db, " alice@example.com ")).toBeNull();
+  });
+
+  test("REJECTS malformed domain (consecutive / leading / trailing dot)", () => {
+    expect(findAgentByEmail(db, "alice@.example.com")).toBeNull();
+    expect(findAgentByEmail(db, "alice@example..com")).toBeNull();
+    expect(findAgentByEmail(db, "alice@example.com.")).toBeNull();
   });
 });
 
