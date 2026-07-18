@@ -168,8 +168,13 @@ export const sendCommand: CommandModule<object, SendOptions> = {
         const message = (await response.json()) as any;
         console.log(chalk.green('\n✓ Message sent successfully\n'));
         console.log(chalk.cyan('  ID:'), message.id);
-        console.log(chalk.cyan('  From:'), message.from);
-        console.log(chalk.cyan('  To:'), message.to);
+        // v0.14.1: prefer the registered email (`from_email` / `to_email`)
+        // for human-readable display; fall back to canonical `from` / `to`
+        // when the server response predates v0.14.1 (no enrichment).
+        const fromDisplay = (typeof message.from_email === 'string' && message.from_email) || message.from;
+        const toDisplay = (typeof message.to_email === 'string' && message.to_email) || message.to;
+        console.log(chalk.cyan('  From:'), fromDisplay);
+        console.log(chalk.cyan('  To:'), toDisplay);
         console.log();
       } else {
         const error = await response.text();

@@ -1,3 +1,46 @@
+## [v0.14.1] - 2026-07-18 - Email Display Surface (PATCH)
+
+> **Display-only patch** — no API contract changes, no CLI flag changes.
+> Fixes the user-facing problem that `bounty com send` / `bounty com inbox`
+> showed the canonical `<uuid>@authenticated` instead of the registered
+> email. Companion fix for the `roy-agent` event source so the LLM sees
+> `gddzhaokun@126.com` instead of `767a3275-...@authenticated`.
+
+### Added
+
+- **HTTP response enrichment**: `POST /api/messages` and `GET /api/messages`
+  responses now include `from_email` / `to_email` (registered emails)
+  alongside the canonical `from` / `to` storage fields.
+- **WS push payload enrichment**: WebSocket pushes include `fromEmail` /
+  `toEmail` so receiving agents can surface the registered email in the
+  LLM-visible message.
+- **Resolver**: server wires an `agents`-table-aware resolver that handles
+  three input shapes:
+  1. `<uuid>@authenticated` → strip suffix, look up by `agents.id`
+  2. `<uuid>@<host>` → look up by `agents.address`
+  3. bare email → look up by `agents.email`
+
+### CLI behaviour
+
+- `bounty com send` response display: `From:` / `To:` now show registered
+  email (`message.from_email ?? message.from`); canonical falls back when
+  the server predates v0.14.1.
+- `bounty com inbox` items: same enrichment (`msg.from_email ?? msg.from`).
+
+### Compatibility
+
+- Canonical `from` / `to` fields are unchanged (storage format preserved).
+- v0.14.0 servers (without enrichment) still work — CLI gracefully falls
+  back to canonical display.
+
+### Tests
+
+- 13 new tests covering: POST /api/messages response enrichment, inbox
+  enrichment, resolver wiring, CLI display fallback, WS push enrichment.
+- Baseline 917 → 930 pass, 0 regressions.
+
+---
+
 ## [v0.14.0] - 2026-07-17 - Strict Email-Only Refactor (BREAKING MINOR)
 
 > **🚨 BREAKING**: This release deletes every CLI flag and HTTP body field that

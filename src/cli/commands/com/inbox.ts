@@ -111,8 +111,13 @@ export const inboxCommand: CommandModule<object, InboxOptions> = {
 
           displayMessages.forEach((msg: any) => {
             const statusIcon = msg.status === 'acked' ? '✓' : msg.status === 'delivered' ? '●' : '○';
-            console.log(chalk.cyan(`[${statusIcon}] From: ${msg.from}`));
-            console.log(chalk.cyan(`    To: ${msg.to}`));
+            // v0.14.1: prefer the registered email (`from_email` / `to_email`)
+            // for human-readable display; fall back to canonical `from` / `to`
+            // when the server response predates v0.14.1 (no enrichment).
+            const fromDisplay = (typeof msg.from_email === 'string' && msg.from_email) || msg.from;
+            const toDisplay = (typeof msg.to_email === 'string' && msg.to_email) || msg.to;
+            console.log(chalk.cyan(`[${statusIcon}] From: ${fromDisplay}`));
+            console.log(chalk.cyan(`    To: ${toDisplay}`));
             if (msg.content?.type === 'text') {
               const preview = msg.content.body.substring(0, 100).replace(/\n/g, ' ');
               console.log(chalk.gray(`    ${preview}...`));
