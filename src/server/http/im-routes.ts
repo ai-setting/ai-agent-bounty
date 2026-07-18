@@ -62,6 +62,23 @@ export function normalizeAgentIdentifier(input: unknown): string | null {
  */
 export type ResolveIdentifierFn = (input: string) => string | null;
 
+/**
+ * v0.14.1: Callback shape for resolving a user-supplied identifier
+ * (email or `<uuid>@<host>`) to the **registered email** of the agent.
+ *
+ * Used by `IMRoutes.sendMessage` / `getMessages` to surface `from_email` /
+ * `to_email` in HTTP responses. The server wires this to
+ * `findAgentByEmailOrAddress(db, …)?.email` at construction time.
+ *
+ * Return value:
+ *   - registered email on hit (e.g. `alice@example.com`)
+ *   - the raw input string when no mapping is found (so the response is
+ *     still useful — CLI sees the original email even when the agent is
+ *     unknown / unregistered)
+ *   - `null` only when the input is blank
+ */
+export type ResolveEmailFn = (input: string) => string | null;
+
 export class IMRoutes {
   private db: IMDatabase;
   private pushCallback: ((address: string, message: Message) => boolean) | null;
@@ -74,15 +91,23 @@ export class IMRoutes {
    * a direct reference to the bounty DB.
    */
   private resolveIdentifier: ResolveIdentifierFn | null;
+  /**
+   * v0.14.1: optional email resolver. When set, `sendMessage` / `getMessages`
+   * will surface the registered email alongside the canonical `from` / `to`.
+   * The server wires this to `findAgentByEmailOrAddress(db, …)?.email`.
+   */
+  private resolveEmail: ResolveEmailFn | null;
 
   constructor(
     db: IMDatabase,
     pushCallback?: (address: string, message: Message) => boolean,
-    resolveIdentifier?: ResolveIdentifierFn
+    resolveIdentifier?: ResolveIdentifierFn,
+    resolveEmail?: ResolveEmailFn
   ) {
     this.db = db;
     this.pushCallback = pushCallback || null;
     this.resolveIdentifier = resolveIdentifier || null;
+    this.resolveEmail = resolveEmail || null;
   }
 
   setPushCallback(callback: (address: string, message: Message) => boolean): void {
@@ -95,6 +120,14 @@ export class IMRoutes {
    */
   setResolveIdentifier(fn: ResolveIdentifierFn | null): void {
     this.resolveIdentifier = fn;
+  }
+
+  /**
+   * v0.14.1: install or replace the email resolver at runtime.
+   * Useful for tests and for late DI wiring from the bounty server.
+   */
+  setResolveEmail(fn: ResolveEmailFn | null): void {
+    this.resolveEmail = fn;
   }
 
   async sendMessage(req: Request, requester?: RequesterInfo): Promise<Response> {
@@ -180,7 +213,53 @@ export class IMRoutes {
       }
     }
 
-    return Response.json(message, { status: 201 });
+    // v0.14.1: enrich response with registered emails so the CLI can show
+    // "From: alice@example.com" instead of "<uuid>@authenticated".
+    // - from_email: resolve the canonical `from` field (e.g. `<uuid>@authenticated`
+    //   or the raw `fromExplicit` value)
+    // - to_email: resolve the canonical `to` field (after normalization)
+    // - resolver fallback: raw input string when the resolver is missing
+    //   or returns null (unknown / external recipient)
+    const fromEmail = this.resolveEmailForResponse(from, fromExplicit);
+    const toEmail = this.resolveEmailForResponse(to, toRaw);
+
+    return Response.json(
+      { ...message, from_email: fromEmail, to_email: toEmail },
+      { status: 201 }
+    );
+  }
+
+  /**
+   * v0.14.1: Resolve a canonical/raw agent identifier to the registered
+   * email for response enrichment.
+   *
+   * Strategy:
+   * 1. Try the wired `resolveEmail` (which uses `findAgentByEmailOrAddress`).
+   * 2. If that returns null, fall back to the **raw** identifier (the value
+   *    the user submitted). This keeps the response shape stable when
+   *    recipients are unknown / external systems.
+   */
+  private resolveEmailForResponse(canonical: string, rawFallback: string | null): string {
+    if (this.resolveEmail) {
+      const resolved = this.resolveEmail(canonical);
+      if (resolved) return resolved;
+    }
+    // Fallback: prefer the canonical value (may look like `<uuid>@<host>`
+    // for authenticated senders — but that's better than nothing). When the
+    // canonical is the @authenticated form (i.e. the sender), the resolver
+    // already returned null in the test path because there's no registered
+    // email keyed by `<uuid>@authenticated`; fall back to `rawFallback`
+    // (the body.from_email / body.from that the client submitted) instead.
+    if (canonical && canonical !== 'anonymous@server.com') {
+      // Try resolver one more time on the raw fallback (e.g. user submitted
+      // a real email that wasn't pre-resolved into `to`).
+      if (rawFallback && rawFallback !== canonical && this.resolveEmail) {
+        const r = this.resolveEmail(rawFallback);
+        if (r) return r;
+      }
+      return canonical;
+    }
+    return rawFallback || canonical;
   }
 
   getMessages(url: URL, requester: RequesterInfo): Response {
@@ -225,7 +304,16 @@ export class IMRoutes {
     }
 
     const messages = this.db.getInbox(address);
-    return Response.json(messages);
+    // v0.14.1: enrich each message with from_email / to_email so the CLI can
+    // display registered emails instead of canonical addresses. We resolve
+    // each canonical address via the wired resolver; on miss we fall back
+    // to the canonical itself so the response shape stays stable.
+    const enriched = messages.map((m) => ({
+      ...m,
+      from_email: this.resolveEmail?.(m.from) ?? m.from,
+      to_email: this.resolveEmail?.(m.to) ?? m.to,
+    }));
+    return Response.json(enriched);
   }
 
   /**

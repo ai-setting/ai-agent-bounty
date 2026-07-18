@@ -102,6 +102,36 @@ export class BountyHTTPServer {
         ? (rawIdentifier: string) =>
             findAgentByEmailOrAddress(this.bountyDb!, rawIdentifier)?.address ?? null
         : undefined,
+      // v0.14.1: wire the email resolver so POST /api/messages responses
+      // and inbox items include `from_email` / `to_email` (registered
+      // emails) alongside the canonical `from` / `to` storage fields.
+      //
+      // The resolver accepts three input shapes and maps each to the
+      // registered email:
+      //   1. `<uuid>@<host>`         → look up by `agents.address`
+      //   2. `<uuid>@authenticated`  → strip `@authenticated` → look up by `agents.id`
+      //   3. `alice@example.com`     → look up by `agents.email`
+      // Returns null on miss / blank input (caller falls back to the raw value).
+      this.bountyDb
+        ? (rawIdentifier: string) => {
+            if (typeof rawIdentifier !== 'string') return null;
+            const raw = rawIdentifier.trim();
+            if (!raw) return null;
+            const db = this.bountyDb!;
+            // Fast path: `<uuid>@authenticated` → look up by id
+            const AUTH_SUFFIX = /^([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})@authenticated$/i;
+            const authMatch = raw.match(AUTH_SUFFIX);
+            if (authMatch) {
+              const uuid = authMatch[1];
+              const row = db
+                .prepare('SELECT email FROM agents WHERE id = ?')
+                .get(uuid) as { email: string } | undefined;
+              return row?.email ?? null;
+            }
+            // Otherwise delegate to the unified email/address resolver.
+            return findAgentByEmailOrAddress(db, raw)?.email ?? null;
+          }
+        : undefined,
     );
 
     // PR4: Token check defaults to ON for production safety.
