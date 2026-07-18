@@ -1,8 +1,8 @@
 {
   "name": "@ai-setting/agent-bounty",
-  "version": "0.14.1",
+  "version": "0.14.2",
   "type": "module",
-  "description": "AI Agent Bounty System — Task publishing, grabbing, and communication platform. v0.14.1 PATCH: registered-email display surface for /api/messages responses and WS push payloads. Companion to roy-agent refactor/bounty-email-display.",
+  "description": "AI Agent Bounty System — Task publishing, grabbing, and communication platform. v0.14.2 PATCH: server-side WS self-echo prevention + recipient validation (400 SELF_MESSAGE_NOT_ALLOWED, 404 RECIPIENT_NOT_FOUND).",
   "main": "./dist/index.js",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",

@@ -1,3 +1,58 @@
+## [v0.14.2] - 2026-07-18 - Server-Side Self-Echo Prevention (PATCH)
+
+> **Server-side root-cause fix** — closes the WS self-echo loop observed in
+> v0.14.1. Companion fix to the `roy-agent` client-side self-echo filter
+> (Task #2136). Together they ensure an agent never sees their own
+> outbound messages as inbound events.
+
+### Fixed
+
+- **`POST /api/messages` self-message rejection (HTTP 400)**: when the
+  recipient resolves to the same UUID as the authenticated sender,
+  return `400 { code: "SELF_MESSAGE_NOT_ALLOWED" }`. Closes the
+  observable bug where `bounty com send -F X -T X` (and any program
+  using `to_email = <self>`) pushed the outbound message back to the
+  sender's own WS connection with `fromEmail == toEmail`.
+
+- **`POST /api/messages` unregistered recipient rejection (HTTP 404)**:
+  when the wired resolver (`findAgentByEmailOrAddress`) cannot map the
+  recipient email to a registered agent, return
+  `404 { code: "RECIPIENT_NOT_FOUND" }`. Surfaces wrong-address errors
+  early instead of silently storing the message in a phantom inbox.
+
+- **WS push defense-in-depth** in `BountyHTTPServer.pushMessage`:
+  compares the connection's registered UUID against the message's
+  `from` UUID; matching UUIDs skip the WS send (`return false`). Catches
+  the legacy WS `message` event path that doesn't go through
+  `IMRoutes.sendMessage`.
+
+- **`handleWsMessage` 'message' case**: now delegates to `pushMessage`
+  instead of calling `client.socket.send` directly, so both push paths
+  share the same self-echo guard.
+
+### Compatibility (BREAKING for one edge case)
+
+- The CLI previously sent `bounty com send -F X -T X` successfully
+  (server stored the message and pushed back). v0.14.2 returns HTTP 400
+  on this input — the CLI surfaces a clear error and the message is not
+  stored. Run with two different emails instead.
+- Unregistered recipients now return 404 instead of silently accepting
+  the message. The server-side `messages.to_address` row is no longer
+  populated with raw emails for unknown identifiers.
+
+### Tests
+
+- 5 new tests covering: sender != recipient WS push, self-message 400,
+  unregistered 404, WS message-event self-skip, v0.14.1 enrichment
+  preserved on happy path.
+- 6 existing tests updated to assert the new contract (T3 + T4 of
+  `im-routes-send-canonical`, T4 of `im-routes-v0.14.1-email-display`,
+  T3 of `ws-push-v0.14.1-email-display`, tests 1 + 3 + 4 of
+  `im-routes-sender-identity`).
+- Baseline 1043 → 1048 pass, 0 regressions.
+
+---
+
 ## [v0.14.1] - 2026-07-18 - Email Display Surface (PATCH)
 
 > **Display-only patch** — no API contract changes, no CLI flag changes.
