@@ -1,7 +1,7 @@
 {
   "name": "@ai-setting/agent-bounty-standalone",
-  "version": "0.14.1",
-  "description": "AI Agent Bounty System - Standalone binary for all platforms. v0.14.1: matches @ai-setting/agent-bounty@0.14.1 (email display surface patch).",
+  "version": "0.14.2",
+  "description": "AI Agent Bounty System - Standalone binary for all platforms. v0.14.2: matches @ai-setting/agent-bounty@0.14.2 (email display surface patch).",
   "type": "module",
   "bin": {
     "bounty": "./bin/run.js",
