@@ -13,8 +13,9 @@
  *   T1: Response includes `from_email` (sender's registered email)
  *   T2: Response includes `to_email` (recipient's registered email)
  *   T3: Response still includes canonical `from` / `to` (backward compat)
- *   T4: When `to_email` is unknown, `to_email` falls back to the raw email
- *       (not undefined) — keeps the response shape stable
+ *   T4: When `to_email` is unknown, the request returns HTTP 404
+ *       RECIPIENT_NOT_FOUND (v0.14.2 supersedes the v0.14.1 raw-fallback
+ *       — unregistered recipients are surfaced as a clear error)
  *   T5: CLI inbox endpoint also surfaces `from_email` / `to_email` on
  *       returned messages (so the `com inbox` CLI can display emails)
  */
@@ -39,7 +40,6 @@ describe('IM Routes — POST /api/messages response includes from_email / to_ema
   let aliceAgentId: string;
   let aliceEmail: string;
   let bobToken: string;
-  let bobAgentId: string;
   let bobEmail: string;
 
   async function registerVerifyLogin(email: string): Promise<{ token: string; agentId: string }> {
@@ -90,7 +90,6 @@ describe('IM Routes — POST /api/messages response includes from_email / to_ema
 
     const bob = await registerVerifyLogin(bobEmail);
     bobToken = bob.token;
-    bobAgentId = bob.agentId;
   });
 
   afterEach(() => {
@@ -157,8 +156,11 @@ describe('IM Routes — POST /api/messages response includes from_email / to_ema
     expect(body.to).not.toBe(bobEmail); // canonical, not raw email
   });
 
-  // ==== T4: unknown recipient → to_email falls back to raw email ====
-  it('T4: POST /api/messages with unknown to_email → to_email falls back to raw', async () => {
+  // ==== T4: unknown recipient → 404 RECIPIENT_NOT_FOUND (v0.14.2 contract) ====
+  it('T4: POST /api/messages with unknown to_email → 404 RECIPIENT_NOT_FOUND', async () => {
+    // v0.14.2 supersedes the v0.14.1 raw-fallback: unregistered recipients
+    // are surfaced as a clear HTTP error instead of being silently stored
+    // in a phantom inbox keyed by the raw email string.
     const unknownEmail = 'ghost.v0141@unregistered.example.com';
     const send = await fetch(`${baseUrl}/api/messages`, {
       method: 'POST',
@@ -168,13 +170,12 @@ describe('IM Routes — POST /api/messages response includes from_email / to_ema
       },
       body: JSON.stringify({
         to_email: unknownEmail,
-        content: { type: 'text', body: 'T4 v0.14.1 unknown-to' },
+        content: { type: 'text', body: 'T4 v0.14.2 unknown-to' },
       }),
     });
-    expect(send.status).toBe(201);
+    expect(send.status).toBe(404);
     const body = (await send.json()) as Record<string, unknown>;
-    expect(body.to_email).toBe(unknownEmail);
-    expect(body.to).toBe(unknownEmail); // raw fallback
+    expect(body.code).toBe('RECIPIENT_NOT_FOUND');
   });
 
   // ==== T5: GET /api/messages (inbox) items include from_email / to_email ====
