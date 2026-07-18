@@ -546,18 +546,21 @@ export class BountyHTTPServer {
               status: 'pending',
               createdAt: new Date().toISOString(),
             };
-            
+
             this.imDb.saveMessage(imMessage);
-            
-            // Send to recipient if online
-            const recipient = this.clients.get(msg.data.to);
-            if (recipient) {
-              this.imDb.updateMessageStatus(imMessage.id, 'delivered');
-              recipient.socket.send(JSON.stringify({
-                event: 'message',
-                data: { ...imMessage, status: 'delivered' },
-              }));
-            }
+
+            // v0.14.2: route through `pushMessage` so the self-echo skip
+            // (defense-in-depth) applies to both the HTTP POST /api/messages
+            // path AND the legacy WS-message-event path. Pre-v0.14.2 this
+            // code did `this.clients.get(...)?.socket.send(...)` directly,
+            // bypassing the resolver and the self-echo guard.
+            //
+            // `pushMessage` returns `true` when the recipient was online and
+            // the message was actually pushed (status transitions to
+            // 'delivered' inside pushMessage itself). When it returns
+            // `false` the message stays 'pending' in the DB and is retried
+            // when the recipient reconnects.
+            this.pushMessage(msg.data.to, imMessage);
           }
           break;
 
@@ -619,6 +622,31 @@ export class BountyHTTPServer {
   pushMessage(address: string, message: Message): boolean {
     const client = this.clients.get(address);
     if (client) {
+      // v0.14.2: Defense-in-depth — skip WS push when the recipient connection
+      // and the message sender resolve to the same agent UUID.
+      //
+      // Why this matters even though POST /api/messages rejects self-message
+      // at HTTP 400: the legacy WS message-event path (`handleWsMessage` case
+      // 'message') doesn't go through `IMRoutes.sendMessage`, so it bypasses
+      // the route-level SELF_MESSAGE_NOT_ALLOWED check. A peer connecting
+      // with their own address and sending `{event:'message', data:{to: <own>}}`
+      // would otherwise receive their own push, exactly the symptom observed
+      // in v0.14.1 (fromEmail == toEmail == self email in the WS event).
+      //
+      // Strategy: compare the UUID part of the connection's registered
+      // address against the UUID part of the message's `from` field. If they
+      // match, the push is a self-echo and we skip silently (return false so
+      // the caller's status update logic treats this as "not online").
+      const connectionUuid = (client.address || '').split('@')[0] || '';
+      const fromUuid = (message.from || '').split('@')[0] || '';
+      if (
+        connectionUuid &&
+        fromUuid &&
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(connectionUuid) &&
+        connectionUuid.toLowerCase() === fromUuid.toLowerCase()
+      ) {
+        return false;
+      }
       try {
         // Update status to delivered before sending
         if (message.status === 'pending') {

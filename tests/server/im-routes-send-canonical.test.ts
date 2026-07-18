@@ -13,12 +13,14 @@
  * v0.13.4 expected behaviour:
  *   T1: POST with `to_email=<registered-email>` → IM DB row stores canonical
  *   T2: POST with `to=<uuid>@<host>` (legacy) → IM DB row stores the input as-is
- *   T3: POST with `to_email=<unknown-email>` → fallback: store raw email
- *       (preserves the pre-v0.13 behavior of accepting arbitrary recipient
- *       strings, so we don't silently drop messages addressed to external
- *       systems / unregistered identifiers).
- *   T4: Integration — agent sends to self via `to_email` then reads its own
- *       inbox via `?email=` → sees the just-sent message (end-to-end).
+ *   T3: POST with `to_email=<unknown-email>` → 404 RECIPIENT_NOT_FOUND
+ *       (v0.14.2 supersedes the v0.13.4 raw-fallback behaviour; unknown
+ *       recipients are surfaced as a clear error instead of silently
+ *       dropping into a phantom inbox).
+ *   T4: Agent sends to self via `to_email` → 400 SELF_MESSAGE_NOT_ALLOWED
+ *       (v0.14.2 supersedes the v0.13.4 self-send path; self-message is
+ *       explicitly rejected to avoid the WS self-echo loop observed in
+ *       v0.14.1).
  *   T5: Regression — `from_address` is still `${agentId}@authenticated`,
  *       untouched by the new canonicalization logic.
  */
@@ -155,8 +157,8 @@ describe('IM Routes — sendMessage stores canonical address (v0.13.4 fix)', () 
     expect(inbox[0]!.to).toBe(aliceAddress);
   });
 
-  // ==== T3: unknown email → fallback stores raw email (no silent drop) ====
-  it('T3: POST /api/messages with to_email=<unknown> falls back to raw input', async () => {
+  // ==== T3: unknown email → 404 RECIPIENT_NOT_FOUND (v0.14.2 contract) ====
+  it('T3: POST /api/messages with to_email=<unknown> returns 404', async () => {
     const unknownEmail = 'ghost.v0134@unregistered.example.com';
 
     const send = await fetch(`${baseUrl}/api/messages`, {
@@ -167,21 +169,25 @@ describe('IM Routes — sendMessage stores canonical address (v0.13.4 fix)', () 
       },
       body: JSON.stringify({
         to_email: unknownEmail,
-        content: { type: 'text', body: 'T3 v0.13.4 unknown-recipient' },
+        content: { type: 'text', body: 'T3 v0.14.2 unknown-recipient' },
       }),
     });
-    expect(send.status).toBe(201);
+    // v0.14.2 supersedes the v0.13.4 raw-fallback behaviour: unregistered
+    // recipients are now surfaced as HTTP 404 RECIPIENT_NOT_FOUND instead
+    // of being silently dropped into a phantom inbox keyed by the raw email.
+    expect(send.status).toBe(404);
+    const body = (await send.json()) as { code?: string; error?: string };
+    expect(body.code).toBe('RECIPIENT_NOT_FOUND');
 
-    // The resolver returns null for unknown identifiers, so we keep the raw
-    // input. getInbox(rawEmail) returns the message (no silent drop).
-    const inbox = imDb.getInbox(unknownEmail);
-    expect(inbox.length).toBe(1);
-    expect(inbox[0]!.to).toBe(unknownEmail);
+    // The IM DB must NOT have stored a phantom message for the unknown recipient.
+    expect(imDb.getInbox(unknownEmail).length).toBe(0);
   });
 
-  // ==== T4: end-to-end — send-by-email → read-inbox-by-email ====
-  it('T4: agent sends to self via to_email, then reads inbox via ?email=', async () => {
-    // Alice sends to herself (by email).
+  // ==== T4: self-message → 400 SELF_MESSAGE_NOT_ALLOWED (v0.14.2 contract) ====
+  it('T4: agent sends to self via to_email → 400 SELF_MESSAGE_NOT_ALLOWED', async () => {
+    // Alice tries to send to herself (by email). v0.14.2 closes this path
+    // because it would otherwise push the message back to the sender's own
+    // WS connection (the observable v0.14.1 self-echo bug).
     const send = await fetch(`${baseUrl}/api/messages`, {
       method: 'POST',
       headers: {
@@ -190,24 +196,15 @@ describe('IM Routes — sendMessage stores canonical address (v0.13.4 fix)', () 
       },
       body: JSON.stringify({
         to_email: aliceEmail,
-        content: { type: 'text', body: 'T4 self-send v0.13.4' },
+        content: { type: 'text', body: 'T4 self-send v0.14.2' },
       }),
     });
-    expect(send.status).toBe(201);
+    expect(send.status).toBe(400);
+    const body = (await send.json()) as { code?: string; error?: string };
+    expect(body.code).toBe('SELF_MESSAGE_NOT_ALLOWED');
 
-    // Alice reads her own inbox by email. v0.13.2 inbox resolver maps the
-    // email to canonical, so this should now find the just-sent message
-    // (pre-v0.13.4 this returned [] because to_address was stored as the
-    // raw email string).
-    const inbox = await fetch(
-      `${baseUrl}/api/messages?email=${encodeURIComponent(aliceEmail)}`,
-      { headers: { Authorization: `Bearer ${aliceToken}` } }
-    );
-    expect(inbox.status).toBe(200);
-    const messages = (await inbox.json()) as Array<{ to: string; content: { body: string } }>;
-    expect(messages.length).toBe(1);
-    expect(messages[0]!.to).toBe(aliceAddress);
-    expect(messages[0]!.content.body).toBe('T4 self-send v0.13.4');
+    // No self-message is stored.
+    expect(imDb.getInbox(aliceAddress).length).toBe(0);
   });
 
   // ==== T5: from_address regression — still ${agentId}@authenticated ====

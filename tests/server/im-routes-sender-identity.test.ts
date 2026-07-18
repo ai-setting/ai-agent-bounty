@@ -107,8 +107,17 @@ describe('IM Routes sender identity (HTTP-level regression)', () => {
     return { token: loginBody.token, agentId: loginBody.agent_id };
   }
 
-  test('1. No Auth + tokenCheckOff → from = body.from (legacy path)', async () => {
+  test('1. No Auth + tokenCheckOff → from = body.from (legacy path, registered recipient)', async () => {
     await setupServer(false);
+
+    // v0.14.2 note: recipients MUST be registered agents (404 RECIPIENT_NOT_FOUND
+    // is returned for unregistered emails). We register the recipient so the
+    // test exercises the legacy from-sourcing path under the new contract.
+    const { token: recipientToken } = await registerVerifyLogin(
+      'recipient@legacy.example.com',
+      'recipient'
+    );
+    expect(recipientToken).toBeTruthy();
 
     const body = {
       from: 'caller@legacy.example.com',
@@ -149,6 +158,11 @@ describe('IM Routes sender identity (HTTP-level regression)', () => {
 
     const { token, agentId } = await registerVerifyLogin('alice@test.com', 'Alice');
 
+    // v0.14.2: the recipient MUST be a registered agent (404 RECIPIENT_NOT_FOUND
+    // is returned for unregistered emails). Register the recipient so the test
+    // exercises the authenticated send path under the new contract.
+    await registerVerifyLogin('bob@recipient.test.com', 'Bob');
+
     const res = await fetch(`${baseUrl}/api/messages`, {
       method: 'POST',
       headers: {
@@ -169,6 +183,11 @@ describe('IM Routes sender identity (HTTP-level regression)', () => {
 
   test('4. Contract-lock: tokenCheckOff calls sendMessage WITHOUT requester arg', async () => {
     await setupServer(false);
+
+    // v0.14.2: the recipient MUST be a registered agent. Register one so
+    // the request reaches sendMessage (otherwise it short-circuits at 404
+    // RECIPIENT_NOT_FOUND before the requester argument is observable).
+    await registerVerifyLogin('recipient@contract.test', 'Recipient');
 
     // Spy on imRoutes.sendMessage to capture the actual requester argument
     // passed by the HTTP server. The fix must call sendMessage with

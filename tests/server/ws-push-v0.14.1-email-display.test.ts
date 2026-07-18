@@ -142,7 +142,13 @@ describe('BountyHTTPServer.pushMessage — WS payload includes fromEmail (v0.14.
   });
 
   it('T3: resolver correctly maps <uuid>@authenticated → email (server wiring test)', async () => {
-    const sender = await registerVerifyAgent('eve.resolver.v0141@test.local');
+    // v0.14.2 note: this test previously sent to self ("eve") to exercise
+    // the resolver wiring in a single-agent setup. Self-send is now rejected
+    // with HTTP 400 SELF_MESSAGE_NOT_ALLOWED (see also
+    // tests/server/messages-no-self-echo.test.ts T2), so the test now
+    // registers a separate recipient to keep the resolver-coverage intent.
+    const sender = await registerVerifyAgent('eve.sender.v0141@test.local');
+    await registerVerifyAgent('eve.recipient.v0141@test.local');
 
     // Use the HTTP /api/messages path to exercise the same resolver that
     // the WS push uses. The resolver is wired into IMRoutes and reused for
@@ -154,14 +160,16 @@ describe('BountyHTTPServer.pushMessage — WS payload includes fromEmail (v0.14.
         Authorization: `Bearer ${sender.token}`,
       },
       body: JSON.stringify({
-        to_email: 'eve.resolver.v0141@test.local', // send to self for reachability
-        content: { type: 'text', body: 'T3 self-loop' },
+        to_email: 'eve.recipient.v0141@test.local',
+        content: { type: 'text', body: 'T3 resolver wiring' },
       }),
     });
+    expect(send.status).toBe(201);
     const body = (await send.json()) as Record<string, unknown>;
-    // Self-send: from and to resolve to the same agent's email
-    expect(body.from_email).toBe('eve.resolver.v0141@test.local');
-    expect(body.to_email).toBe('eve.resolver.v0141@test.local');
+    // Resolver maps <uuid>@authenticated → email; resolver maps recipient
+    // address → recipient email.
+    expect(body.from_email).toBe('eve.sender.v0141@test.local');
+    expect(body.to_email).toBe('eve.recipient.v0141@test.local');
     // from is canonical with @authenticated; to is canonical with @host
     expect(body.from).toBe(`${sender.agentId}@authenticated`);
     expect((body.to as string).includes('@')).toBe(true);
