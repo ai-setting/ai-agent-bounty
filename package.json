@@ -1,8 +1,8 @@
 {
   "name": "@ai-setting/agent-bounty",
-  "version": "0.14.0",
+  "version": "0.14.1",
   "type": "module",
-  "description": "AI Agent Bounty System — Task publishing, grabbing, and communication platform. v0.14.0 BREAKING MINOR: strict email-only input contract across all CLI commands and HTTP API surfaces. See CHANGELOG for upgrade guide.",
+  "description": "AI Agent Bounty System — Task publishing, grabbing, and communication platform. v0.14.1 PATCH: registered-email display surface for /api/messages responses and WS push payloads. Companion to roy-agent refactor/bounty-email-display.",
   "main": "./dist/index.js",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
