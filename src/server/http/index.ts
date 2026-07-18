@@ -624,9 +624,21 @@ export class BountyHTTPServer {
         if (message.status === 'pending') {
           this.imDb.updateMessageStatus(message.id, 'delivered');
         }
+        // v0.14.1: enrich WS push payload with `fromEmail` / `toEmail`
+        // so the receiving agent (roy-agent bounty-im event source) can
+        // surface the registered email to the LLM via `metadata.senderEmail`.
+        // The resolver is the same one wired into IMRoutes for HTTP response
+        // enrichment (it handles `<uuid>@authenticated`, `<uuid>@<host>`,
+        // and bare emails). On miss we fall back to the canonical value.
+        const enrichedData = {
+          ...message,
+          status: 'delivered' as const,
+          fromEmail: this.resolvePushEmail(message.from) ?? message.from,
+          toEmail: this.resolvePushEmail(message.to) ?? message.to,
+        };
         client.socket.send(JSON.stringify({
           event: 'message',
-          data: { ...message, status: 'delivered' },
+          data: enrichedData,
         }));
         return true;
       } catch (err) {
@@ -634,5 +646,30 @@ export class BountyHTTPServer {
       }
     }
     return false;
+  }
+
+  /**
+   * v0.14.1: Resolver used by `pushMessage` to enrich WS payloads with
+   * the registered email. Mirrors the resolver wired into IMRoutes.
+   */
+  private resolvePushEmail(rawIdentifier: string): string | null {
+    if (typeof rawIdentifier !== 'string') return null;
+    const raw = rawIdentifier.trim();
+    if (!raw) return null;
+    // `<uuid>@authenticated` → look up by id
+    const AUTH_SUFFIX = /^([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})@authenticated$/i;
+    const authMatch = raw.match(AUTH_SUFFIX);
+    if (authMatch) {
+      const uuid = authMatch[1];
+      const row = this.bountyDb
+        ?.prepare('SELECT email FROM agents WHERE id = ?')
+        .get(uuid) as { email: string } | undefined;
+      return row?.email ?? null;
+    }
+    // Otherwise delegate to the unified email/address resolver.
+    if (this.bountyDb) {
+      return findAgentByEmailOrAddress(this.bountyDb, raw)?.email ?? null;
+    }
+    return null;
   }
 }
