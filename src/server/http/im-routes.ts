@@ -179,6 +179,87 @@ export class IMRoutes {
     // unregistered identifiers) so we don't silently drop messages.
     const to = this.resolveCanonicalAddress(toRaw) ?? toRaw;
 
+    // v0.14.2: Reject self-message at HTTP level. Compares the UUID part of
+    // the resolved recipient `to` against the authenticated sender's UUID
+    // (from `requester.agentId`). When the caller's JWT identifies them as
+    // `requesterAgentId`, the server's `from` field is forced to
+    // `${requesterAgentId}@authenticated`. If `to`'s UUID matches, it's a
+    // self-send — return HTTP 400 SELF_MESSAGE_NOT_ALLOWED.
+    //
+    // For non-authenticated callers (token check OFF, requester undefined),
+    // we still compute a `from` UUID so we can defend even when the CLI
+    // passes `from_email=<self-email>` in the body. The raw input's UUID
+    // extraction is best-effort; if it doesn't look like a UUID-prefixed
+    // address, the check passes through and we let the legacy path handle it.
+    //
+    // Why HTTP 400, not 4xx-with-warning: Plan C explicitly chose to reject
+    // self-message at the API surface to avoid the phantom echo in client
+    // inbox. The CLI now surfaces a clear error rather than silently dropping
+    // the message.
+    const requesterAgentIdForCheck = requester?.agentId as string | undefined;
+    const fromUuid =
+      requesterAgentIdForCheck ??
+      // For unauthenticated callers, best-effort fallback: use the UUID part
+      // of `fromExplicit` if it looks like `<uuid>@<host>` (legacy address form).
+      (typeof fromExplicit === 'string' && /^[0-9a-f]{8}-/i.test(fromExplicit.split('@')[0] ?? '')
+        ? fromExplicit.split('@')[0]
+        : null);
+    const toUuidPart = to.split('@')[0] ?? '';
+    if (
+      fromUuid &&
+      toUuidPart &&
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(toUuidPart) &&
+      toUuidPart.toLowerCase() === fromUuid.toLowerCase()
+    ) {
+      return Response.json(
+        {
+          error: 'Cannot send to self',
+          code: 'SELF_MESSAGE_NOT_ALLOWED',
+        },
+        { status: 400 }
+      );
+    }
+
+    // v0.14.2: Reject unregistered recipient. When a `resolver` (the
+    // `resolveIdentifier` wired by the server to `findAgentByEmailOrAddress`)
+    // is available, use it to confirm `to` resolves to a registered agent.
+    //
+    // Resolution cases:
+    //   - `toRaw` is an email and resolves to a known agent → keep canonical `to`
+    //   - `toRaw` is an email and DOES NOT resolve → 404 RECIPIENT_NOT_FOUND
+    //   - `toRaw` is already `<uuid>@<host>` → trust the format (UUID match
+    //     above already validated the format; we don't re-query the DB here
+    //     to keep the fast path for legacy callers)
+    //   - No resolver wired (e.g. server running without bountyDb) →
+    //     pass-through (preserves pre-v0.14.2 behavior of accepting arbitrary
+    //     strings for external systems)
+    //
+    // Why 404 instead of accepting the message: the canonical `to` already
+    // gets resolved to `<recipient>@<host>` for the push path; if the
+    // recipient isn't registered, the message would be silently stored
+    // unread forever. Surfacing the error early gives the CLI a clear
+    // signal to retry with a corrected address.
+    if (this.resolveIdentifier && !to.includes('@authenticated')) {
+      const lookedUp = this.resolveIdentifier(toRaw);
+      if (lookedUp == null) {
+        // Only reject if `toRaw` looks like an email/identifier the resolver
+        // is supposed to handle. If it looks like a UUID-host address, the
+        // caller probably has internal machinery we can't validate against;
+        // pass-through preserves legacy compatibility for that path.
+        const isUuidHost =
+          /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}@/i.test(toRaw);
+        if (!isUuidHost) {
+          return Response.json(
+            {
+              error: `Recipient email not registered: ${toRaw}`,
+              code: 'RECIPIENT_NOT_FOUND',
+            },
+            { status: 404 }
+          );
+        }
+      }
+    }
+
     // Phase 4 (token check toggle): from 来源策略
     // - 检查 requester.agentId (有值) → 该 agent 的 agent_id 是 authoritative sender
     //   (用 `@authenticated` suffix 让 server 端能 push 到正确的 ws client)
